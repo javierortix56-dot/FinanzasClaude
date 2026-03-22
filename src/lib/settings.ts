@@ -29,12 +29,12 @@ function rowToSettings(row: Record<string, any>): Settings {
       : DEFAULT_SETTINGS.tipoCambio
   return {
     tipoCambio,
-    historialTipoCambio: row.monthly_rates ?? DEFAULT_SETTINGS.historialTipoCambio,
-    categoriasGasto: row.transaction_cats ?? DEFAULT_SETTINGS.categoriasGasto,
-    categoriasIngreso: row.categories ?? DEFAULT_SETTINGS.categoriasIngreso,
-    tiposActivo: accountCats.tiposActivo ?? DEFAULT_SETTINGS.tiposActivo,
-    tiposPasivo: accountCats.tiposPasivo ?? DEFAULT_SETTINGS.tiposPasivo,
-    mesesCerrados: row.closed_months ?? [],
+    historialTipoCambio: Array.isArray(row.monthly_rates) ? row.monthly_rates : DEFAULT_SETTINGS.historialTipoCambio,
+    categoriasGasto: Array.isArray(row.transaction_cats) ? row.transaction_cats : DEFAULT_SETTINGS.categoriasGasto,
+    categoriasIngreso: Array.isArray(row.categories) ? row.categories : DEFAULT_SETTINGS.categoriasIngreso,
+    tiposActivo: Array.isArray(accountCats.tiposActivo) ? accountCats.tiposActivo : DEFAULT_SETTINGS.tiposActivo,
+    tiposPasivo: Array.isArray(accountCats.tiposPasivo) ? accountCats.tiposPasivo : DEFAULT_SETTINGS.tiposPasivo,
+    mesesCerrados: Array.isArray(row.closed_months) ? row.closed_months : [],
   }
 }
 
