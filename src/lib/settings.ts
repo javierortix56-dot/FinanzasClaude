@@ -19,8 +19,16 @@ export const DEFAULT_SETTINGS: Settings = {
 function rowToSettings(row: Record<string, any>): Settings {
   const appSettings = row.app_settings ?? {}
   const accountCats = row.account_cats ?? {}
+  const monthlyRates = row.monthly_rates ?? []
+  // tipoCambio may be in app_settings, or we fall back to the latest monthly_rates entry
+  const latestRate = monthlyRates.length > 0 ? monthlyRates[monthlyRates.length - 1] : null
+  const tipoCambio = (appSettings.tipoCambio && typeof appSettings.tipoCambio.ARS_USD === 'number')
+    ? appSettings.tipoCambio
+    : latestRate
+      ? { ARS_USD: latestRate.ARS_USD, COP_USD: latestRate.COP_USD }
+      : DEFAULT_SETTINGS.tipoCambio
   return {
-    tipoCambio: appSettings.tipoCambio ?? DEFAULT_SETTINGS.tipoCambio,
+    tipoCambio,
     historialTipoCambio: row.monthly_rates ?? DEFAULT_SETTINGS.historialTipoCambio,
     categoriasGasto: row.transaction_cats ?? DEFAULT_SETTINGS.categoriasGasto,
     categoriasIngreso: row.categories ?? DEFAULT_SETTINGS.categoriasIngreso,

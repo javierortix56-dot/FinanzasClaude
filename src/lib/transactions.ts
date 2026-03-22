@@ -8,12 +8,17 @@ function rowToTx(row: Record<string, any>): Transaction {
   // DB may store 'inc'/'exp' (old app) or 'ingreso'/'egreso' (new)
   const rawType = row.type as string
   const tipo = rawType === 'inc' ? 'ingreso' : rawType === 'exp' ? 'egreso' : rawType as 'ingreso' | 'egreso'
+  // Migrated Firebase rows: amount = pre-converted ARS value, orig_amt = original currency value.
+  // When orig_amt differs from amount, amount is already in ARS — use it directly.
+  const origAmt = row.orig_amt as number | null
+  const amount = row.amount as number
+  const isPreConverted = origAmt != null && Math.abs(origAmt - amount) > 0.01
   return {
     id: row.id as string,
     userId: 'shared',
     tipo,
-    monto: row.amount as number,
-    moneda: row.currency as 'ARS' | 'COP' | 'USD',
+    monto: amount,
+    moneda: (isPreConverted ? 'ARS' : row.currency) as 'ARS' | 'COP' | 'USD',
     categoria: (row.category as string) ?? '',
     descripcion: (row.description as string) ?? '',
     nota: extra.nota ?? '',
@@ -31,6 +36,7 @@ function txToRow(tx: Omit<Transaction, 'id'>) {
     user_id: SHARED_UUID,
     type: tx.tipo,
     amount: tx.monto,
+    orig_amt: tx.monto,  // same as amount for new transactions (no pre-conversion)
     currency: tx.moneda,
     category: tx.categoria,
     description: tx.descripcion,
