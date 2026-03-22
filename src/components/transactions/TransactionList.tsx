@@ -1,39 +1,29 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { collection, getDocs } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { useEffect } from 'react'
 import { useTransactionStore } from '@/store/useTransactionStore'
 import { subscribeToTransactions } from '@/lib/transactions'
 import SwipeableItem from './SwipeableItem'
 import { Transaction } from '@/types'
-import { getCategoryById } from '@/lib/constants'
+import { getCategoryById, SHARED_USERS } from '@/lib/constants'
 
 interface Props {
   filter?: 'all' | 'ingreso' | 'egreso'
   search?: string
 }
 
+const USER_NAMES: Record<string, string> = Object.fromEntries(
+  SHARED_USERS.map((u) => [u.id, u.nombre])
+)
+
 export default function TransactionList({ filter = 'all', search = '' }: Props) {
   const { transactions, currentMonth, setTransactions, isLoading } = useTransactionStore()
-  const [userNames, setUserNames] = useState<Record<string, string>>({})
 
   // Subscribe to Firestore on month change
   useEffect(() => {
     const unsub = subscribeToTransactions(currentMonth, setTransactions)
     return () => unsub()
   }, [currentMonth, setTransactions])
-
-  // Fetch user names once
-  useEffect(() => {
-    getDocs(collection(db, 'users')).then((snap) => {
-      const map: Record<string, string> = {}
-      snap.docs.forEach((d) => {
-        map[d.id] = (d.data() as { nombre: string }).nombre
-      })
-      setUserNames(map)
-    })
-  }, [])
 
   const filtered: Transaction[] = transactions
     .filter((t) => filter === 'all' || t.tipo === filter)
@@ -45,7 +35,7 @@ export default function TransactionList({ filter = 'all', search = '' }: Props) 
         t.descripcion.toLowerCase().includes(q) ||
         cat?.nombre.toLowerCase().includes(q) ||
         t.moneda.toLowerCase().includes(q) ||
-        (userNames[t.creadoPor] ?? '').toLowerCase().includes(q) ||
+        (USER_NAMES[t.creadoPor] ?? '').toLowerCase().includes(q) ||
         t.tags?.some((tag) => tag.toLowerCase().includes(q))
       )
     })
@@ -72,7 +62,7 @@ export default function TransactionList({ filter = 'all', search = '' }: Props) 
   return (
     <div className="divide-y divide-gray-50">
       {filtered.map((tx) => (
-        <SwipeableItem key={tx.id} tx={tx} userName={userNames[tx.creadoPor]} />
+        <SwipeableItem key={tx.id} tx={tx} userName={USER_NAMES[tx.creadoPor]} />
       ))}
     </div>
   )
