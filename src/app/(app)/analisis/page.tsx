@@ -17,23 +17,25 @@ export default function AnalisisPage() {
     <div className="flex flex-col min-h-full bg-gray-50">
 
       {/* ── Header ── */}
-      <div className="bg-[#534AB7] px-4 pt-10 pb-5">
-        <h1 className="text-xl font-bold text-white mb-4">Análisis</h1>
+      <div className="bg-white px-4 pt-10 pb-3 shadow-sm">
         <div className="flex items-center justify-between">
-          <button onClick={prevMonth} className="p-1.5 rounded-full hover:bg-white/10 transition-colors">
-            <ChevronLeft size={18} className="text-white/80" />
-          </button>
-          <span className="text-white font-semibold text-sm capitalize">
-            {monthLabel(currentMonth)}
-          </span>
-          <button onClick={nextMonth} className="p-1.5 rounded-full hover:bg-white/10 transition-colors">
-            <ChevronRight size={18} className="text-white/80" />
-          </button>
+          <h1 className="text-gray-800 font-bold text-xl">Análisis</h1>
+          <div className="flex items-center gap-1">
+            <button onClick={prevMonth} className="p-1.5 border border-gray-200 rounded-full">
+              <ChevronLeft size={13} className="text-gray-500" />
+            </button>
+            <span className="text-gray-600 text-xs font-medium px-2 capitalize">
+              {monthLabel(currentMonth)}
+            </span>
+            <button onClick={nextMonth} className="p-1.5 border border-gray-200 rounded-full">
+              <ChevronRight size={13} className="text-gray-500" />
+            </button>
+          </div>
         </div>
       </div>
 
       {/* ── Main card ── */}
-      <div className="flex-1 bg-white rounded-t-3xl -mt-3 overflow-hidden flex flex-col">
+      <div className="flex-1 bg-white overflow-hidden flex flex-col">
 
         {/* Tabs */}
         <div className="flex border-b border-gray-100 px-4 pt-1">

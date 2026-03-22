@@ -58,6 +58,20 @@ export default function AjustesPage() {
 
   const s = settings
 
+  if (!s) {
+    return (
+      <div className="flex flex-col min-h-full bg-gray-50">
+        <div className="bg-white px-4 pt-10 pb-4 shadow-sm">
+          <h1 className="text-gray-800 font-bold text-xl">Ajustes</h1>
+          <p className="text-gray-400 text-xs mt-0.5">Javier &amp; Mary</p>
+        </div>
+        <div className="flex items-center justify-center flex-1">
+          <div className="w-6 h-6 border-2 border-[#534AB7] border-t-transparent rounded-full animate-spin" />
+        </div>
+      </div>
+    )
+  }
+
   function toggle(section: Section) {
     setOpenSection((prev) => (prev === section ? null : section))
   }
@@ -209,13 +223,13 @@ export default function AjustesPage() {
   return (
     <div className="flex flex-col min-h-full bg-gray-50">
       {/* Header */}
-      <div className="bg-[#534AB7] px-4 pt-10 pb-5">
-        <h1 className="text-xl font-bold text-white">Ajustes</h1>
-        <p className="text-white/60 text-xs mt-0.5">Javier &amp; Mary</p>
+      <div className="bg-white px-4 pt-10 pb-4 shadow-sm">
+        <h1 className="text-gray-800 font-bold text-xl">Ajustes</h1>
+        <p className="text-gray-400 text-xs mt-0.5">Javier &amp; Mary</p>
       </div>
 
       {/* Card */}
-      <div className="flex-1 bg-white rounded-t-3xl -mt-3 overflow-y-auto">
+      <div className="flex-1 bg-white overflow-y-auto">
         <div className="px-4 pt-4 pb-24 space-y-1">
 
           {/* ── Tipos de cambio ── */}

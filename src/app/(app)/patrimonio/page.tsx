@@ -65,31 +65,31 @@ export default function PatrimonioPage() {
     <div className="flex flex-col min-h-full bg-gray-50">
 
       {/* ── Header ── */}
-      <div className="bg-[#534AB7] px-4 pt-10 pb-6">
-        <div className="flex items-center justify-between mb-5">
-          <h1 className="text-xl font-bold text-white">Patrimonio</h1>
+      <div className="bg-white px-4 pt-10 pb-4 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-gray-800 font-bold text-xl">Patrimonio</h1>
           <button
             onClick={openAdd}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#534AB7]/10 hover:bg-[#534AB7]/20 transition-colors"
           >
-            <Plus size={15} className="text-white" />
-            <span className="text-white text-xs font-semibold">Cuenta</span>
+            <Plus size={15} className="text-[#534AB7]" />
+            <span className="text-[#534AB7] text-xs font-semibold">Cuenta</span>
           </button>
         </div>
 
         {/* Summary cards */}
         <div className="grid grid-cols-3 gap-2">
-          <div className="bg-white/10 rounded-xl px-3 py-3 text-center">
-            <p className="text-white/60 text-[10px] mb-1">Activos</p>
-            <p className="text-white text-sm font-bold">{formatAmount(totalActivosUSD, 'USD')}</p>
+          <div className="bg-green-50 rounded-xl px-3 py-3 text-center">
+            <p className="text-gray-400 text-[10px] mb-1">Activos</p>
+            <p className="text-green-700 text-sm font-bold">{formatAmount(totalActivosUSD, 'USD')}</p>
           </div>
-          <div className="bg-white/10 rounded-xl px-3 py-3 text-center">
-            <p className="text-white/60 text-[10px] mb-1">Pasivos</p>
-            <p className="text-red-300 text-sm font-bold">{formatAmount(totalPasivosUSD, 'USD')}</p>
+          <div className="bg-red-50 rounded-xl px-3 py-3 text-center">
+            <p className="text-gray-400 text-[10px] mb-1">Pasivos</p>
+            <p className="text-red-500 text-sm font-bold">{formatAmount(totalPasivosUSD, 'USD')}</p>
           </div>
-          <div className="bg-white/20 rounded-xl px-3 py-3 text-center border border-white/20">
-            <p className="text-white/60 text-[10px] mb-1">Neto</p>
-            <p className={`text-sm font-bold ${netoUSD >= 0 ? 'text-white' : 'text-red-300'}`}>
+          <div className="bg-[#534AB7]/10 rounded-xl px-3 py-3 text-center border border-[#534AB7]/20">
+            <p className="text-gray-400 text-[10px] mb-1">Neto</p>
+            <p className={`text-sm font-bold ${netoUSD >= 0 ? 'text-[#534AB7]' : 'text-red-500'}`}>
               {formatAmount(netoUSD, 'USD')}
             </p>
           </div>
@@ -97,7 +97,7 @@ export default function PatrimonioPage() {
       </div>
 
       {/* ── Main card ── */}
-      <div className="flex-1 bg-white rounded-t-3xl -mt-3 overflow-hidden flex flex-col">
+      <div className="flex-1 bg-white overflow-hidden flex flex-col">
 
         {/* Chart */}
         {assets.length > 0 && (

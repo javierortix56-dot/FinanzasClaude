@@ -37,10 +37,11 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
   const total = [...catMap.values()].reduce((a, b) => a + b, 0)
 
   // Build slices sorted by amount desc
+  const allSettingsCats = [...settings.categoriasGasto, ...settings.categoriasIngreso]
   const slices: (DonutSlice & { nombre: string; amount: number; percent: number })[] = [...catMap.entries()]
     .sort((a, b) => b[1] - a[1])
     .map(([id, amount]) => {
-      const cat = getCategoryById(id) ?? defaultCats.find((c) => c.id === id)
+      const cat = allSettingsCats.find((c) => c.id === id) ?? getCategoryById(id) ?? defaultCats.find((c) => c.id === id)
       return {
         id,
         nombre: cat?.nombre ?? id,
@@ -128,7 +129,7 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
                     <div key={tx.id} className="flex items-center gap-2">
                       <div
                         className="w-2 h-2 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: cat?.color ?? '#6B7280' }}
+                        style={{ backgroundColor: (allSettingsCats.find((c) => c.id === tx.categoria) ?? getCategoryById(tx.categoria))?.color ?? '#6B7280' }}
                       />
                       <span className="flex-1 text-sm text-gray-700 truncate">
                         {tx.descripcion || cat?.nombre || tx.categoria}
