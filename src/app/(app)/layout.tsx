@@ -1,9 +1,7 @@
 'use client'
 
-import { useEffect } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { useAuthStore } from '@/store/useAuthStore'
 import { useUIStore } from '@/store/useUIStore'
 import TransactionModal from '@/components/transactions/TransactionModal'
 import { LayoutDashboard, Wallet, BarChart2, Settings, Plus } from 'lucide-react'
@@ -16,24 +14,8 @@ const NAV_ITEMS = [
 ]
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuthStore()
   const { openAddModal } = useUIStore()
-  const router = useRouter()
   const pathname = usePathname()
-
-  useEffect(() => {
-    if (!loading && !user) router.replace('/login')
-  }, [user, loading, router])
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="w-8 h-8 border-2 border-[#534AB7] border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
-
-  if (!user) return null
 
   const leftNav  = NAV_ITEMS.slice(0, 2)
   const rightNav = NAV_ITEMS.slice(2)

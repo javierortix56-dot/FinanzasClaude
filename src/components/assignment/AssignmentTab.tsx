@@ -1,14 +1,13 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { collection, getDocs } from 'firebase/firestore'
 import { Zap, X } from 'lucide-react'
 import { useTransactionStore } from '@/store/useTransactionStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAuthStore } from '@/store/useAuthStore'
 import { updateTransaction } from '@/lib/transactions'
 import { DEFAULT_SETTINGS } from '@/lib/settings'
-import { db } from '@/lib/firebase'
+import { SHARED_USERS } from '@/lib/constants'
 import { Transaction, Currency } from '@/types'
 import AssignmentGroup from './AssignmentGroup'
 import ReassignModal from './ReassignModal'
@@ -24,16 +23,7 @@ export default function AssignmentTab() {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['unassigned']))
   const [reassignOpen, setReassignOpen]   = useState(false)
   const [autoLoading, setAutoLoading]     = useState(false)
-  const [userNames, setUserNames]         = useState<Record<string, string>>({})
-
-  // Fetch user names once
-  useEffect(() => {
-    getDocs(collection(db, 'users')).then((snap) => {
-      const map: Record<string, string> = {}
-      snap.docs.forEach((d) => { map[d.id] = (d.data() as { nombre: string }).nombre })
-      setUserNames(map)
-    })
-  }, [])
+  const userNames = Object.fromEntries(SHARED_USERS.map((u) => [u.id, u.nombre]))
 
   const ingresos = useMemo(
     () => transactions.filter((t) => t.tipo === 'ingreso').sort(

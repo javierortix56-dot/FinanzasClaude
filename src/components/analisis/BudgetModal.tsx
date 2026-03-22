@@ -3,10 +3,9 @@
 import { useState, useEffect } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { X, Trash2 } from 'lucide-react'
-import { useAuthStore } from '@/store/useAuthStore'
 import { useBudgetStore } from '@/store/useBudgetStore'
 import { upsertBudget, deleteBudget } from '@/lib/budgets'
-import { getCategoryById } from '@/lib/constants'
+import { getCategoryById, SHARED_USER_ID } from '@/lib/constants'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -20,7 +19,6 @@ interface Props {
 const CURRENCIES = ['ARS', 'COP', 'USD']
 
 export default function BudgetModal({ open, onClose, categoria, mes }: Props) {
-  const { user } = useAuthStore()
   const { getBudget } = useBudgetStore()
   const existing = getBudget(categoria)
   const cat = getCategoryById(categoria)
@@ -41,10 +39,10 @@ export default function BudgetModal({ open, onClose, categoria, mes }: Props) {
   }, [open, existing])
 
   async function handleSave() {
-    if (!limite || !user) return
+    if (!limite) return
     setSaving(true)
     try {
-      await upsertBudget(user.uid, mes, categoria, parseFloat(limite), moneda, existing?.id)
+      await upsertBudget(SHARED_USER_ID, mes, categoria, parseFloat(limite), moneda, existing?.id)
       onClose()
     } finally { setSaving(false) }
   }

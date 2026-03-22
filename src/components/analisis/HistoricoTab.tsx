@@ -8,7 +8,7 @@ import { useBudgetStore } from '@/store/useBudgetStore'
 import { subscribeToBudgets } from '@/lib/budgets'
 import { fetchMonthTransactions, fetchLastNMonths } from '@/lib/analytics'
 import { DEFAULT_SETTINGS } from '@/lib/settings'
-import { shiftMonth, monthLabel } from '@/lib/constants'
+import { shiftMonth, monthLabel, SHARED_USER_ID } from '@/lib/constants'
 import { toBase } from '@/lib/currency'
 import { Transaction, Currency } from '@/types'
 import SummaryComparison from './SummaryComparison'
@@ -20,7 +20,7 @@ const MONTH_ABBR = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct',
 export default function HistoricoTab() {
   const { transactions, currentMonth } = useTransactionStore()
   const { settings } = useSettingsStore()
-  const { user, monedaBase } = useAuthStore()
+  const { monedaBase } = useAuthStore()
   const { setBudgets } = useBudgetStore()
   const s    = settings ?? DEFAULT_SETTINGS
   const base = monedaBase as Currency
@@ -46,10 +46,9 @@ export default function HistoricoTab() {
 
   // Subscribe to budgets for current month
   useEffect(() => {
-    if (!user) return
-    const unsub = subscribeToBudgets(user.uid, currentMonth, setBudgets)
+    const unsub = subscribeToBudgets(SHARED_USER_ID, currentMonth, setBudgets)
     return () => unsub()
-  }, [user, currentMonth, setBudgets])
+  }, [currentMonth, setBudgets])
 
   // Build line chart series (last 6 months)
   const chartMonths: string[] = []

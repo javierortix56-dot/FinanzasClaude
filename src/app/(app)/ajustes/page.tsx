@@ -1,14 +1,10 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { signOut } from 'firebase/auth'
-import { doc, updateDoc } from 'firebase/firestore'
 import {
-  LogOut, ChevronRight, Plus, Pencil, ChevronDown, ChevronUp,
+  ChevronRight, Plus, Pencil, ChevronDown, ChevronUp,
   Copy, RotateCcw, Lock, Trash2, Check, Download, Upload,
 } from 'lucide-react'
-import { auth, db } from '@/lib/firebase'
-import { useAuthStore } from '@/store/useAuthStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useTransactionStore } from '@/store/useTransactionStore'
 import { updateSettings } from '@/lib/settings'
@@ -18,22 +14,16 @@ import {
   createRecurringTransactions,
 } from '@/lib/transactions'
 import { exportBackup, downloadBackup, importBackup, parseBackupFile } from '@/lib/backup'
-import { monthLabel } from '@/lib/constants'
+import { monthLabel, SHARED_USER_ID } from '@/lib/constants'
 import { Category } from '@/types'
 import CategoryModal from '@/components/ajustes/CategoryModal'
 
-type Section = 'perfil' | 'cambio' | 'categorias' | 'tipos' | 'mes' | 'datos' | null
+type Section = 'cambio' | 'categorias' | 'tipos' | 'mes' | 'datos' | null
 
 export default function AjustesPage() {
-  const { user } = useAuthStore()
   const { settings, setSettings } = useSettingsStore()
   const { currentMonth } = useTransactionStore()
   const [openSection, setOpenSection] = useState<Section>(null)
-
-  // Perfil
-  const [nombre, setNombre] = useState('')
-  const [nombreEditing, setNombreEditing] = useState(false)
-  const [savingNombre, setSavingNombre] = useState(false)
 
   // Tipos de cambio
   const [arsRate, setArsRate] = useState(String(settings?.tipoCambio.ARS_USD ?? 1200))
@@ -72,28 +62,16 @@ export default function AjustesPage() {
     setOpenSection((prev) => (prev === section ? null : section))
   }
 
-  // ── Perfil ──
-  async function saveNombre() {
-    if (!user || !nombre.trim()) return
-    setSavingNombre(true)
-    try {
-      await updateDoc(doc(db, 'users', user.uid), { nombre: nombre.trim() })
-      setNombreEditing(false)
-    } finally {
-      setSavingNombre(false)
-    }
-  }
-
   // ── Tipos de cambio ──
   async function saveRates() {
-    if (!user || !s) return
+    if (!s) return
     setSavingRate(true)
     try {
       const ARS_USD = parseFloat(arsRate)
       const COP_USD = parseFloat(copRate)
       if (isNaN(ARS_USD) || isNaN(COP_USD)) return
       const updated = { ...s, tipoCambio: { ARS_USD, COP_USD } }
-      await updateSettings(user.uid, { tipoCambio: { ARS_USD, COP_USD } })
+      await updateSettings(SHARED_USER_ID, { tipoCambio: { ARS_USD, COP_USD } })
       setSettings(updated)
       setRateSaved(true)
       setTimeout(() => setRateSaved(false), 2000)
@@ -104,55 +82,55 @@ export default function AjustesPage() {
 
   // ── Categorías ──
   async function handleSaveCategory(cat: Category, tipo: 'gasto' | 'ingreso') {
-    if (!user || !s) return
+    if (!s) return
     const key = tipo === 'gasto' ? 'categoriasGasto' : 'categoriasIngreso'
     const list = tipo === 'gasto' ? [...s.categoriasGasto] : [...s.categoriasIngreso]
     const idx = list.findIndex((c) => c.id === cat.id)
     if (idx >= 0) list[idx] = cat
     else list.push(cat)
     const partial = { [key]: list }
-    await updateSettings(user.uid, partial)
+    await updateSettings(SHARED_USER_ID, partial)
     setSettings({ ...s, ...partial })
     setCatModal({ open: false, tipo: 'gasto', category: null })
   }
 
   async function handleDeleteCategory(id: string, tipo: 'gasto' | 'ingreso') {
-    if (!user || !s) return
+    if (!s) return
     const key = tipo === 'gasto' ? 'categoriasGasto' : 'categoriasIngreso'
     const list = (tipo === 'gasto' ? s.categoriasGasto : s.categoriasIngreso).filter((c) => c.id !== id)
     const partial = { [key]: list }
-    await updateSettings(user.uid, partial)
+    await updateSettings(SHARED_USER_ID, partial)
     setSettings({ ...s, ...partial })
     setCatModal({ open: false, tipo: 'gasto', category: null })
   }
 
   // ── Tipos activo/pasivo ──
   async function saveTiposActivo() {
-    if (!user || !s) return
+    if (!s) return
     const filtered = tiposActivo.filter(Boolean)
-    await updateSettings(user.uid, { tiposActivo: filtered })
+    await updateSettings(SHARED_USER_ID, { tiposActivo: filtered })
     setSettings({ ...s, tiposActivo: filtered })
     setEditingTipoActivo(false)
   }
 
   async function saveTiposPasivo() {
-    if (!user || !s) return
+    if (!s) return
     const filtered = tiposPasivo.filter(Boolean)
-    await updateSettings(user.uid, { tiposPasivo: filtered })
+    await updateSettings(SHARED_USER_ID, { tiposPasivo: filtered })
     setSettings({ ...s, tiposPasivo: filtered })
     setEditingTipoPasivo(false)
   }
 
   // ── Acciones de mes ──
   async function handleCerrarMes() {
-    if (!user || !s) return
+    if (!s) return
     setMesAction('cerrando')
     try {
       const ARS_USD = s.tipoCambio.ARS_USD
       const COP_USD = s.tipoCambio.COP_USD
       const hist = [...(s.historialTipoCambio ?? []).filter((h) => h.mes !== currentMonth), { mes: currentMonth, ARS_USD, COP_USD }]
       const cerrados = [...(s.mesesCerrados ?? []).filter((m) => m !== currentMonth), currentMonth]
-      await updateSettings(user.uid, { historialTipoCambio: hist, mesesCerrados: cerrados })
+      await updateSettings(SHARED_USER_ID, { historialTipoCambio: hist, mesesCerrados: cerrados })
       setSettings({ ...s, historialTipoCambio: hist, mesesCerrados: cerrados })
       setMesResult(`Mes ${monthLabel(currentMonth)} cerrado. Tipo de cambio guardado.`)
     } finally {
@@ -161,7 +139,6 @@ export default function AjustesPage() {
   }
 
   async function handleClonarMes() {
-    if (!user) return
     setMesAction('clonando')
     try {
       const { shiftMonth } = await import('@/lib/constants')
@@ -174,7 +151,6 @@ export default function AjustesPage() {
   }
 
   async function handleCrearRecurrentes() {
-    if (!user) return
     setMesAction('creando')
     try {
       const { shiftMonth } = await import('@/lib/constants')
@@ -187,7 +163,6 @@ export default function AjustesPage() {
   }
 
   async function handleBorrarMes() {
-    if (!user) return
     if (!deleteMonthConfirm) { setDeleteMonthConfirm(true); return }
     setMesAction('borrando')
     try {
@@ -203,10 +178,9 @@ export default function AjustesPage() {
 
   // ── Export/Import ──
   async function handleExport() {
-    if (!user) return
     setBackupAction('exportando')
     try {
-      const data = await exportBackup(user.uid)
+      const data = await exportBackup(SHARED_USER_ID)
       downloadBackup(data)
       setBackupResult(`Backup exportado: ${data.transactions.length} movimientos, ${data.assets.length} activos.`)
     } catch (e) {
@@ -218,11 +192,11 @@ export default function AjustesPage() {
 
   async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
-    if (!file || !user) return
+    if (!file) return
     setBackupAction('importando')
     try {
       const data = await parseBackupFile(file)
-      const result = await importBackup(user.uid, data)
+      const result = await importBackup(SHARED_USER_ID, data)
       setBackupResult(`Importados: ${result.transactions} movimientos, ${result.assets} activos.`)
     } catch (err) {
       setBackupResult('Error: ' + String(err))
@@ -237,66 +211,12 @@ export default function AjustesPage() {
       {/* Header */}
       <div className="bg-[#534AB7] px-4 pt-10 pb-5">
         <h1 className="text-xl font-bold text-white">Ajustes</h1>
-        <p className="text-white/60 text-xs mt-0.5">
-          {user?.email}
-        </p>
+        <p className="text-white/60 text-xs mt-0.5">Javier &amp; Mary</p>
       </div>
 
       {/* Card */}
       <div className="flex-1 bg-white rounded-t-3xl -mt-3 overflow-y-auto">
         <div className="px-4 pt-4 pb-24 space-y-1">
-
-          {/* ── Perfil ── */}
-          <Section
-            label="Perfil"
-            open={openSection === 'perfil'}
-            onToggle={() => toggle('perfil')}
-          >
-            <div className="space-y-3 pt-2">
-              {nombreEditing ? (
-                <div className="flex gap-2">
-                  <input
-                    autoFocus
-                    value={nombre}
-                    onChange={(e) => setNombre(e.target.value)}
-                    placeholder="Tu nombre"
-                    className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#534AB7]"
-                  />
-                  <button
-                    onClick={saveNombre}
-                    disabled={savingNombre}
-                    className="px-4 py-2 bg-[#534AB7] text-white text-sm font-semibold rounded-lg"
-                  >
-                    {savingNombre ? '...' : 'Guardar'}
-                  </button>
-                  <button
-                    onClick={() => setNombreEditing(false)}
-                    className="px-3 py-2 text-sm text-gray-400 rounded-lg border border-gray-200"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setNombreEditing(true)}
-                  className="w-full flex items-center justify-between py-2 text-sm text-gray-700"
-                >
-                  <span>Editar nombre</span>
-                  <Pencil size={14} className="text-gray-400" />
-                </button>
-              )}
-              <div className="py-2 text-sm text-gray-400">
-                Email: {user?.email}
-              </div>
-              <button
-                onClick={() => signOut(auth)}
-                className="w-full flex items-center justify-between py-2.5 text-sm font-medium text-red-500"
-              >
-                <span>Cerrar sesión</span>
-                <LogOut size={15} />
-              </button>
-            </div>
-          </Section>
 
           {/* ── Tipos de cambio ── */}
           <Section

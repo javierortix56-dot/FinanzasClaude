@@ -2,15 +2,13 @@
 
 import { useState, useEffect, KeyboardEvent } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { Timestamp, collection, getDocs } from 'firebase/firestore'
+import { Timestamp } from 'firebase/firestore'
 import { X, Trash2, Tag } from 'lucide-react'
-import { useAuthStore } from '@/store/useAuthStore'
 import { useUIStore } from '@/store/useUIStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { addTransaction, updateTransaction, deleteTransaction } from '@/lib/transactions'
-import { DEFAULT_GASTO_CATEGORIES, DEFAULT_INGRESO_CATEGORIES } from '@/lib/constants'
+import { DEFAULT_GASTO_CATEGORIES, DEFAULT_INGRESO_CATEGORIES, SHARED_USER_ID, SHARED_USERS } from '@/lib/constants'
 import { DEFAULT_SETTINGS } from '@/lib/settings'
-import { db } from '@/lib/firebase'
 import { Transaction, Currency, TransactionType } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,7 +21,6 @@ interface UserOption {
 }
 
 export default function TransactionModal() {
-  const { user } = useAuthStore()
   const { isTransactionModalOpen, editingTransaction, closeTransactionModal } = useUIStore()
   const { settings } = useSettingsStore()
   const s = settings ?? DEFAULT_SETTINGS
@@ -44,12 +41,8 @@ export default function TransactionModal() {
   const [saving, setSaving] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
 
-  // Fetch users once
-  useEffect(() => {
-    getDocs(collection(db, 'users')).then((snap) => {
-      setUsers(snap.docs.map((d) => ({ id: d.id, nombre: (d.data() as { nombre: string }).nombre })))
-    })
-  }, [])
+  // Hardcoded users
+  useEffect(() => { setUsers(SHARED_USERS) }, [])
 
   // Populate form on open
   useEffect(() => {
@@ -80,11 +73,11 @@ export default function TransactionModal() {
       setTags([])
       setTagInput('')
       setFecha(new Date().toISOString().split('T')[0])
-      setCreadoPor(user?.uid ?? '')
+      setCreadoPor('')
       setEjecutado(false)
       setRecurrente(false)
     }
-  }, [isTransactionModalOpen, editingTransaction, user])
+  }, [isTransactionModalOpen, editingTransaction])
 
   const gastoCategories = s.categoriasGasto.length > 0 ? s.categoriasGasto : DEFAULT_GASTO_CATEGORIES.map((c) => ({ ...c, activa: true }))
   const ingresoCategories = s.categoriasIngreso.length > 0 ? s.categoriasIngreso : DEFAULT_INGRESO_CATEGORIES.map((c) => ({ ...c, activa: true }))
@@ -110,11 +103,11 @@ export default function TransactionModal() {
   }
 
   async function handleSave() {
-    if (!monto || !categoria || !user) return
+    if (!monto || !categoria) return
     setSaving(true)
     try {
       const data: Omit<Transaction, 'id'> = {
-        userId: user.uid,
+        userId: SHARED_USER_ID,
         tipo,
         monto: parseFloat(monto.replace(',', '.')),
         moneda,
@@ -125,7 +118,7 @@ export default function TransactionModal() {
         fecha: Timestamp.fromDate(new Date(fecha + 'T12:00:00')),
         ejecutado,
         asignadoA: editingTransaction?.asignadoA ?? null,
-        creadoPor: creadoPor || user.uid,
+        creadoPor: creadoPor || SHARED_USER_ID,
         recurrente,
       }
       if (editingTransaction?.id) {

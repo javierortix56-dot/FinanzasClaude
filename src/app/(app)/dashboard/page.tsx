@@ -16,7 +16,7 @@ type MainTab = 'movimientos' | 'asignacion'
 type SubTab  = 'egreso' | 'ingreso'
 
 export default function DashboardPage() {
-  const { user, monedaBase } = useAuthStore()
+  const { monedaBase } = useAuthStore()
   const { settings, hideAmounts, toggleHideAmounts } = useSettingsStore()
   const { transactions, currentMonth, prevMonth, nextMonth } = useTransactionStore()
 
@@ -27,9 +27,6 @@ export default function DashboardPage() {
 
   const s = settings ?? DEFAULT_SETTINGS
   const base = monedaBase as Currency
-
-  const firstName = user?.email?.split('@')[0] ?? 'Usuario'
-  const initials  = firstName.slice(0, 1).toUpperCase()
 
   // Compute totals in base currency
   const totalIngresos = transactions
@@ -55,11 +52,11 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center">
-              <span className="text-white font-bold text-sm">{initials}</span>
+              <span className="text-white font-bold text-sm">J&M</span>
             </div>
             <div>
               <p className="text-white/70 text-xs">Hola,</p>
-              <p className="text-white font-semibold text-sm capitalize leading-tight">{firstName}</p>
+              <p className="text-white font-semibold text-sm leading-tight">Javier & Mary</p>
             </div>
           </div>
           <button

@@ -4,10 +4,10 @@ import { useState, useEffect } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Timestamp } from 'firebase/firestore'
 import { X, Trash2 } from 'lucide-react'
-import { useAuthStore } from '@/store/useAuthStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { addAsset, updateAsset, deleteAsset } from '@/lib/assets'
 import { DEFAULT_SETTINGS } from '@/lib/settings'
+import { SHARED_USER_ID } from '@/lib/constants'
 import { Asset, Currency } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,7 +22,6 @@ interface Props {
 }
 
 export default function AssetModal({ open, onClose, editing }: Props) {
-  const { user } = useAuthStore()
   const { settings } = useSettingsStore()
   const s = settings ?? DEFAULT_SETTINGS
 
@@ -71,11 +70,11 @@ export default function AssetModal({ open, onClose, editing }: Props) {
   }, [clase])
 
   async function handleSave() {
-    if (!nombre || !saldo || !user) return
+    if (!nombre || !saldo) return
     setSaving(true)
     try {
       const data: Omit<Asset, 'id'> = {
-        userId: user.uid,
+        userId: SHARED_USER_ID,
         nombre: nombre.trim(),
         clase,
         tipo,

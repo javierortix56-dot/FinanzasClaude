@@ -1,3 +1,10 @@
+export const SHARED_USER_ID = 'shared'
+
+export const SHARED_USERS = [
+  { id: 'javier', nombre: 'Javier' },
+  { id: 'mary',   nombre: 'Mary'   },
+]
+
 export const DEFAULT_GASTO_CATEGORIES = [
   { id: 'vivienda',        nombre: 'Vivienda',        color: '#8B5CF6' },
   { id: 'alimentacion',   nombre: 'Alimentación',    color: '#10B981' },
