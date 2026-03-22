@@ -59,8 +59,8 @@ export function subscribeToTransactions(
     const { data, error } = await supabase
       .from('movimientos')
       .select('*')
-      .gte('date', start)
-      .lte('date', end)
+      .filter('date', 'gte', start)
+      .filter('date', 'lte', end)
       .order('date', { ascending: false })
 
     if (error) {
