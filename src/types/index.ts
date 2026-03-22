@@ -30,7 +30,7 @@ export interface Asset {
   id?: string
   userId: string
   nombre: string
-  tipo: 'banco' | 'efectivo' | 'cripto' | 'inversiones' | 'ahorro'
+  tipo: string   // activo: 'banco'|'efectivo'|'cripto'|'inversiones'|'ahorro'; pasivo: tiposPasivo string
   clase: 'activo' | 'pasivo'
   moneda: Currency
   saldo: number
