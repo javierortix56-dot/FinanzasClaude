@@ -8,7 +8,7 @@ function rowToTx(row: Record<string, unknown>): Transaction {
   return {
     id: row.id as string,
     userId: 'shared',
-    tipo: row.type as 'ingreso' | 'egreso',
+    tipo: (row.type === 'inc' ? 'ingreso' : row.type === 'exp' ? 'egreso' : row.type) as 'ingreso' | 'egreso',
     monto: row.amount as number,
     moneda: row.currency as 'ARS' | 'COP' | 'USD',
     categoria: (row.category as string) ?? '',

@@ -5,18 +5,21 @@ import { Transaction } from '@/types'
 function rowToTx(row: Record<string, any>): Transaction {
   const dateStr = row.date as string
   const extra = row.children ?? {}
+  // DB may store 'inc'/'exp' (old app) or 'ingreso'/'egreso' (new)
+  const rawType = row.type as string
+  const tipo = rawType === 'inc' ? 'ingreso' : rawType === 'exp' ? 'egreso' : rawType as 'ingreso' | 'egreso'
   return {
     id: row.id as string,
     userId: 'shared',
-    tipo: row.type as 'ingreso' | 'egreso',
+    tipo,
     monto: row.amount as number,
     moneda: row.currency as 'ARS' | 'COP' | 'USD',
-    categoria: row.category as string ?? '',
-    descripcion: row.description as string ?? '',
+    categoria: (row.category as string) ?? '',
+    descripcion: (row.description as string) ?? '',
     nota: extra.nota ?? '',
     tags: extra.tags ?? [],
     fecha: { toDate: () => new Date(dateStr + 'T12:00:00') },
-    ejecutado: row.executed as boolean ?? false,
+    ejecutado: (row.executed as boolean) ?? false,
     asignadoA: extra.asignadoA ?? null,
     creadoPor: extra.creadoPor ?? 'shared',
     recurrente: extra.recurrente ?? false,
@@ -56,7 +59,6 @@ export function subscribeToTransactions(
     const { data, error } = await supabase
       .from('movimientos')
       .select('*')
-      .is('deleted_at', null)
       .gte('date', start)
       .lte('date', end)
       .order('date', { ascending: false })
@@ -100,7 +102,6 @@ export async function updateTransaction(id: string, data: Partial<Omit<Transacti
   if (data.ejecutado !== undefined) partial.executed = data.ejecutado
   if (data.fecha !== undefined) partial.date = data.fecha.toDate().toISOString().slice(0, 10)
 
-  // merge children fields
   const childrenFields: Record<string, unknown> = {}
   if (data.nota !== undefined) childrenFields.nota = data.nota
   if (data.tags !== undefined) childrenFields.tags = data.tags
@@ -109,7 +110,6 @@ export async function updateTransaction(id: string, data: Partial<Omit<Transacti
   if (data.recurrente !== undefined) childrenFields.recurrente = data.recurrente
 
   if (Object.keys(childrenFields).length > 0) {
-    // fetch current children then merge
     const { data: current } = await supabase
       .from('movimientos').select('children').eq('id', id).single()
     partial.children = { ...(current?.children ?? {}), ...childrenFields }
@@ -120,18 +120,12 @@ export async function updateTransaction(id: string, data: Partial<Omit<Transacti
 }
 
 export async function deleteTransaction(id: string) {
-  const { error } = await supabase
-    .from('movimientos')
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('id', id)
+  const { error } = await supabase.from('movimientos').delete().eq('id', id)
   if (error) throw error
 }
 
 export async function markEjecutado(id: string, ejecutado: boolean) {
-  const { error } = await supabase
-    .from('movimientos')
-    .update({ executed: ejecutado })
-    .eq('id', id)
+  const { error } = await supabase.from('movimientos').update({ executed: ejecutado }).eq('id', id)
   if (error) throw error
 }
 
@@ -144,21 +138,19 @@ export async function deleteMonthTransactions(month: string): Promise<number> {
   const { data, error } = await supabase
     .from('movimientos')
     .select('id')
-    .is('deleted_at', null)
     .gte('date', start)
     .lte('date', end)
 
   if (error) throw error
   if (!data || data.length === 0) return 0
 
-  const ids = data.map((r) => r.id)
   const { error: delErr } = await supabase
     .from('movimientos')
-    .update({ deleted_at: new Date().toISOString() })
-    .in('id', ids)
+    .delete()
+    .in('id', data.map((r) => r.id))
 
   if (delErr) throw delErr
-  return ids.length
+  return data.length
 }
 
 export async function cloneMonthTransactions(fromMonth: string, toMonth: string): Promise<number> {
@@ -171,7 +163,6 @@ export async function cloneMonthTransactions(fromMonth: string, toMonth: string)
   const { data, error } = await supabase
     .from('movimientos')
     .select('*')
-    .is('deleted_at', null)
     .gte('date', startF)
     .lte('date', endF)
 
@@ -182,10 +173,7 @@ export async function cloneMonthTransactions(fromMonth: string, toMonth: string)
     const origDate = new Date(row.date + 'T12:00:00')
     const day = Math.min(origDate.getDate(), new Date(ty, tm, 0).getDate())
     const newDate = `${ty}-${String(tm).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-    return {
-      ...txToRow({ ...rowToTx(row), ejecutado: false, asignadoA: null }),
-      date: newDate,
-    }
+    return { ...txToRow({ ...rowToTx(row), ejecutado: false, asignadoA: null }), date: newDate }
   })
 
   const { error: insErr } = await supabase.from('movimientos').insert(inserts)
@@ -205,7 +193,6 @@ export async function createRecurringTransactions(toMonth: string): Promise<numb
   const { data, error } = await supabase
     .from('movimientos')
     .select('*')
-    .is('deleted_at', null)
     .gte('date', startF)
     .lte('date', endF)
 
@@ -217,10 +204,7 @@ export async function createRecurringTransactions(toMonth: string): Promise<numb
     const origDate = new Date(row.date + 'T12:00:00')
     const day = Math.min(origDate.getDate(), new Date(ty, tm, 0).getDate())
     const newDate = `${ty}-${String(tm).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-    return {
-      ...txToRow({ ...rowToTx(row), ejecutado: false, asignadoA: null }),
-      date: newDate,
-    }
+    return { ...txToRow({ ...rowToTx(row), ejecutado: false, asignadoA: null }), date: newDate }
   })
 
   const { error: insErr } = await supabase.from('movimientos').insert(inserts)
