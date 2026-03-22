@@ -6,6 +6,7 @@ import { useAuthStore } from '@/store/useAuthStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useTransactionStore } from '@/store/useTransactionStore'
 import TransactionList from '@/components/transactions/TransactionList'
+import AssignmentTab from '@/components/assignment/AssignmentTab'
 import { monthLabel, formatAmount } from '@/lib/constants'
 import { toBase } from '@/lib/currency'
 import { DEFAULT_SETTINGS } from '@/lib/settings'
@@ -204,10 +205,7 @@ export default function DashboardPage() {
             </div>
           </>
         ) : (
-          /* Asignación placeholder — paso 5 */
-          <div className="flex flex-col items-center justify-center flex-1 py-16 text-center px-6">
-            <p className="text-gray-400 text-sm">Asignación disponible en el siguiente paso</p>
-          </div>
+          <AssignmentTab />
         )}
       </div>
     </div>
