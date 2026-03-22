@@ -3,29 +3,20 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
 export default function TestCurrencyPage() {
-  const [config, setConfig] = useState<Record<string, unknown> | null>(null)
-  const [march, setMarch] = useState<Record<string, unknown>[]>([])
+  const [rows, setRows] = useState<Record<string, unknown>[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function run() {
-      // Fetch config
-      const { data: configData } = await supabase
-        .from('configuracion')
-        .select('*')
-        .maybeSingle()
-      setConfig(configData)
-
-      // Fetch March transactions (not deleted)
-      const { data: txData } = await supabase
+      const { data } = await supabase
         .from('movimientos')
-        .select('id,date,amount,currency,type,category')
+        .select('*')
         .is('deleted_at', null)
         .gte('date', '2026-03-01')
         .lte('date', '2026-03-31')
-        .eq('type', 'inc')
-        .order('amount', { ascending: false })
-      setMarch(txData ?? [])
+        .order('date', { ascending: false })
+        .limit(15)
+      setRows(data ?? [])
       setLoading(false)
     }
     run()
@@ -33,68 +24,49 @@ export default function TestCurrencyPage() {
 
   if (loading) return <div className="p-8">Cargando...</div>
 
-  const tipoCambio = (config?.app_settings as Record<string, unknown> | null)?.tipoCambio as Record<string, number> | null
-  const arsUsd = tipoCambio?.ARS_USD ?? 1200
-  const copUsd = tipoCambio?.COP_USD ?? 4100
-
-  // Group by currency
-  const byCurrency: Record<string, { count: number; total: number }> = {}
-  let totalARS = 0
-  for (const tx of march) {
-    const cur = tx.currency as string
-    const amt = tx.amount as number
-    byCurrency[cur] = byCurrency[cur] ?? { count: 0, total: 0 }
-    byCurrency[cur].count++
-    byCurrency[cur].total += amt
-    // convert to ARS
-    let inARS = 0
-    if (cur === 'ARS') inARS = amt
-    else if (cur === 'USD') inARS = amt * arsUsd
-    else if (cur === 'COP') inARS = (amt / copUsd) * arsUsd
-    totalARS += inARS
-  }
+  // Get all unique column names
+  const cols = rows.length > 0 ? Object.keys(rows[0]) : []
 
   return (
-    <div className="p-8 font-mono text-sm space-y-6">
-      <h1 className="text-xl font-bold">Diagnóstico de moneda</h1>
+    <div className="p-4 font-mono text-xs space-y-6 overflow-x-auto">
+      <h1 className="text-lg font-bold">Esquema completo — movimientos (marzo, no eliminados)</h1>
+      <p className="text-gray-500">Columnas detectadas: {cols.join(', ')}</p>
 
-      <section>
-        <h2 className="font-bold text-base mb-2">tipoCambio en DB</h2>
-        <pre className="bg-gray-100 p-4 rounded">
-          {JSON.stringify(tipoCambio ?? 'no encontrado', null, 2)}
-        </pre>
-        <p className="mt-2">ARS_USD usado: {arsUsd} | COP_USD usado: {copUsd}</p>
-        <p className="text-xs text-gray-500 mt-1">app_settings raw: {JSON.stringify(config?.app_settings)}</p>
-      </section>
-
-      <section>
-        <h2 className="font-bold text-base mb-2">Ingresos de Marzo — por moneda</h2>
-        {Object.entries(byCurrency).map(([cur, v]) => (
-          <div key={cur} className="bg-gray-50 p-3 rounded mb-2">
-            <p><strong>{cur}</strong>: {v.count} transacciones, total bruto = {v.total.toLocaleString()}</p>
-            {cur === 'ARS' && <p className="text-green-700">→ en ARS: {v.total.toLocaleString()}</p>}
-            {cur === 'USD' && <p className="text-blue-700">→ en ARS: {(v.total * arsUsd).toLocaleString()} ({v.total} × {arsUsd})</p>}
-            {cur === 'COP' && <p className="text-purple-700">→ en ARS: {((v.total / copUsd) * arsUsd).toLocaleString()} ({v.total} ÷ {copUsd} × {arsUsd})</p>}
-          </div>
-        ))}
-        <p className="font-bold mt-2">Total convertido a ARS: {totalARS.toLocaleString()}</p>
-      </section>
-
-      <section>
-        <h2 className="font-bold text-base mb-2">Top 10 ingresos de Marzo (bruto)</h2>
-        <table className="text-xs border-collapse">
-          <thead><tr><th className="border p-1">fecha</th><th className="border p-1">monto</th><th className="border p-1">moneda</th><th className="border p-1">categoría</th></tr></thead>
-          <tbody>
-            {march.slice(0, 10).map((tx) => (
-              <tr key={tx.id as string}>
-                <td className="border p-1">{tx.date as string}</td>
-                <td className="border p-1 text-right">{(tx.amount as number).toLocaleString()}</td>
-                <td className="border p-1">{tx.currency as string}</td>
-                <td className="border p-1">{tx.category as string}</td>
-              </tr>
+      <table className="border-collapse text-xs">
+        <thead>
+          <tr>
+            {cols.map((c) => (
+              <th key={c} className="border border-gray-300 p-1 bg-gray-100 whitespace-nowrap">{c}</th>
             ))}
-          </tbody>
-        </table>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+              {cols.map((c) => {
+                const val = row[c]
+                const display = val === null ? <span className="text-gray-400">null</span>
+                  : typeof val === 'object' ? <span className="text-blue-600">{JSON.stringify(val).slice(0, 40)}</span>
+                  : String(val).slice(0, 30)
+                return <td key={c} className="border border-gray-200 p-1 whitespace-nowrap max-w-[200px] overflow-hidden">{display}</td>
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <section>
+        <h2 className="font-bold text-base mb-2">Comparación amount vs orig_amt (COP y USD)</h2>
+        {rows
+          .filter((r) => r.currency !== 'ARS')
+          .map((r, i) => (
+            <div key={i} className="bg-yellow-50 border border-yellow-200 rounded p-3 mb-2">
+              <p><strong>{r.currency as string}</strong> | fecha: {r.date as string} | categoría: {r.category as string}</p>
+              <p>amount = <strong>{String(r.amount)}</strong></p>
+              <p>orig_amt = <strong>{String(r.orig_amt)}</strong></p>
+              <p className="text-gray-500 text-xs mt-1">type: {r.type as string}</p>
+            </div>
+          ))}
       </section>
     </div>
   )
