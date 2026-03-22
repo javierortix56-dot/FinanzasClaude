@@ -7,7 +7,7 @@ import TransactionModal from '@/components/transactions/TransactionModal'
 import { LayoutDashboard, Wallet, BarChart2, Settings, Plus } from 'lucide-react'
 
 const NAV_ITEMS = [
-  { href: '/dashboard',  icon: LayoutDashboard, label: 'Inicio'    },
+  { href: '/dashboard',  icon: LayoutDashboard, label: 'Resumen'   },
   { href: '/patrimonio', icon: Wallet,           label: 'Cuentas'  },
   { href: '/analisis',   icon: BarChart2,        label: 'Análisis' },
   { href: '/ajustes',    icon: Settings,         label: 'Ajustes'  },
