@@ -1,10 +1,22 @@
-export default function Home() {
+'use client'
+
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuthStore } from '@/store/useAuthStore'
+
+export default function RootPage() {
+  const { user, loading } = useAuthStore()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (!loading) {
+      router.replace(user ? '/dashboard' : '/login')
+    }
+  }, [user, loading, router])
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold text-[#534AB7] mb-2">Finanzas J&amp;M</h1>
-        <p className="text-gray-500 text-sm">Configurando...</p>
-      </div>
-    </main>
+    <div className="min-h-screen flex items-center justify-center bg-white">
+      <div className="w-8 h-8 border-3 border-[#534AB7] border-t-transparent rounded-full animate-spin" />
+    </div>
   )
 }
