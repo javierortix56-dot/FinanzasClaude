@@ -1,4 +1,4 @@
-const CACHE_NAME = 'finanzas-jm-v1'
+const CACHE_NAME = 'finanzas-jm-v3'
 
 // Assets to cache on install (app shell)
 const PRECACHE_URLS = [
@@ -67,7 +67,7 @@ self.addEventListener('fetch', (event) => {
             caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
             return response
           })
-      )
+      ).catch(() => fetch(request))
     )
     return
   }

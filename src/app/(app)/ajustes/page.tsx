@@ -15,8 +15,9 @@ import {
 } from '@/lib/transactions'
 import { exportBackup, downloadBackup, importBackup, parseBackupFile } from '@/lib/backup'
 import { monthLabel, SHARED_USER_ID } from '@/lib/constants'
+import dynamic from 'next/dynamic'
 import { Category } from '@/types'
-import CategoryModal from '@/components/ajustes/CategoryModal'
+const CategoryModal = dynamic(() => import('@/components/ajustes/CategoryModal'), { ssr: false })
 
 type Section = 'cambio' | 'categorias' | 'tipos' | 'mes' | 'datos' | null
 
