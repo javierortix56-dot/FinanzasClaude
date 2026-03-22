@@ -1,11 +1,4 @@
-import {
-  collection,
-  getDocs,
-  writeBatch,
-  doc,
-  Timestamp,
-} from 'firebase/firestore'
-import { db } from './firebase'
+import { supabase } from './supabase'
 import { Transaction, Asset, Settings, Budget } from '@/types'
 
 export interface BackupData {
@@ -18,67 +11,87 @@ export interface BackupData {
   settings: object
 }
 
-function serializeTimestamp(ts: Timestamp): string {
-  return ts.toDate().toISOString()
-}
-
-function deserializeTimestamp(iso: string): Timestamp {
-  return Timestamp.fromDate(new Date(iso))
-}
-
 function serializeTx(tx: Transaction & { id?: string }): object {
   return {
     ...tx,
-    fecha: serializeTimestamp(tx.fecha),
-  }
-}
-
-function deserializeTx(raw: Record<string, unknown>): Omit<Transaction, 'id'> {
-  return {
-    ...(raw as Omit<Transaction, 'id' | 'fecha'>),
-    fecha: deserializeTimestamp(raw.fecha as string),
+    fecha: tx.fecha.toDate().toISOString(),
   }
 }
 
 function serializeAsset(asset: Asset & { id?: string }): object {
   return {
     ...asset,
-    fechaAlta: serializeTimestamp(asset.fechaAlta),
-  }
-}
-
-function deserializeAsset(raw: Record<string, unknown>): Omit<Asset, 'id'> {
-  return {
-    ...(raw as Omit<Asset, 'id' | 'fechaAlta'>),
-    fechaAlta: deserializeTimestamp(raw.fechaAlta as string),
+    fechaAlta: asset.fechaAlta.toDate().toISOString(),
   }
 }
 
 export async function exportBackup(userId: string): Promise<BackupData> {
-  const [txSnap, assetSnap, budgetSnap, settingsSnap] = await Promise.all([
-    getDocs(collection(db, 'transactions')),
-    getDocs(collection(db, 'assets')),
-    getDocs(collection(db, 'budgets')),
-    getDocs(collection(db, 'settings')),
-  ])
+  const { data: txData } = await supabase
+    .from('movimientos')
+    .select('*')
+    .is('deleted_at', null)
 
-  const transactions = txSnap.docs
-    .filter((d) => (d.data() as Transaction).userId === userId)
-    .map((d) => serializeTx({ id: d.id, ...(d.data() as Transaction) }))
+  const { data: assetData } = await supabase
+    .from('cuentas')
+    .select('*')
 
-  const assets = assetSnap.docs
-    .filter((d) => (d.data() as Asset).userId === userId)
-    .map((d) => serializeAsset({ id: d.id, ...(d.data() as Asset) }))
+  const { data: configData } = await supabase
+    .from('configuracion')
+    .select('*')
+    .maybeSingle()
 
-  const budgets = budgetSnap.docs
-    .filter((d) => (d.data() as Budget).userId === userId)
-    .map((d) => ({ id: d.id, ...d.data() }))
+  const appSettings = configData?.app_settings ?? {}
+  const budgets: Budget[] = appSettings.budgets ?? []
 
-  const settingsDoc = settingsSnap.docs.find((d) => d.id === userId)
-  const settings = settingsDoc ? settingsDoc.data() : {}
+  const transactions = (txData ?? []).map((row) => {
+    const dateStr = row.date as string
+    const extra = row.children ?? {}
+    const tx: Transaction = {
+      id: row.id,
+      userId: 'shared',
+      tipo: row.type,
+      monto: row.amount,
+      moneda: row.currency,
+      categoria: row.category ?? '',
+      descripcion: row.description ?? '',
+      nota: extra.nota ?? '',
+      tags: extra.tags ?? [],
+      fecha: { toDate: () => new Date(dateStr + 'T12:00:00') },
+      ejecutado: row.executed ?? false,
+      asignadoA: extra.asignadoA ?? null,
+      creadoPor: extra.creadoPor ?? 'shared',
+      recurrente: extra.recurrente ?? false,
+    }
+    return serializeTx(tx)
+  })
+
+  const assets = (assetData ?? []).map((row) => {
+    const asset: Asset = {
+      id: row.id,
+      userId: 'shared',
+      nombre: row.name,
+      tipo: row.kind,
+      clase: row.type,
+      moneda: row.currency,
+      saldo: row.init_bal ?? 0,
+      fechaAlta: { toDate: () => new Date((row.date_created ?? '2024-01-01') + 'T12:00:00') },
+      metaObjetivo: row.meta_objetivo ?? null,
+      metaMoneda: row.meta_moneda ?? null,
+    }
+    return serializeAsset(asset)
+  })
+
+  const settings = {
+    tipoCambio: configData?.app_settings?.tipoCambio,
+    historialTipoCambio: configData?.monthly_rates,
+    categoriasGasto: configData?.transaction_cats,
+    categoriasIngreso: configData?.categories,
+    account_cats: configData?.account_cats,
+    mesesCerrados: configData?.closed_months,
+  }
 
   return {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     userId,
     transactions,
@@ -100,47 +113,59 @@ export function downloadBackup(data: BackupData) {
 }
 
 export async function importBackup(
-  userId: string,
-  data: BackupData,
-  options: { transactions?: boolean; assets?: boolean; settings?: boolean } = {
-    transactions: true,
-    assets: true,
-    settings: true,
-  }
+  _userId: string,
+  data: BackupData
 ): Promise<{ transactions: number; assets: number }> {
-  const batch = writeBatch(db)
   let txCount = 0
   let assetCount = 0
 
-  if (options.transactions) {
-    for (const raw of data.transactions) {
-      const tx = deserializeTx(raw as Record<string, unknown>)
-      const newDoc = doc(collection(db, 'transactions'))
-      batch.set(newDoc, { ...tx, userId })
-      txCount++
-    }
+  if (Array.isArray(data.transactions) && data.transactions.length > 0) {
+    const rows = data.transactions.map((raw) => {
+      const r = raw as Record<string, unknown>
+      const isoDate = r.fecha as string
+      const date = isoDate ? isoDate.slice(0, 10) : new Date().toISOString().slice(0, 10)
+      return {
+        user_id: '00000000-0000-0000-0000-000000000000',
+        type: r.tipo as string,
+        amount: r.monto as number,
+        currency: r.moneda as string,
+        category: r.categoria as string,
+        description: r.descripcion as string,
+        executed: r.ejecutado as boolean,
+        date,
+        children: {
+          nota: r.nota,
+          tags: r.tags,
+          asignadoA: r.asignadoA,
+          creadoPor: r.creadoPor,
+          recurrente: r.recurrente,
+        },
+      }
+    })
+    const { error } = await supabase.from('movimientos').insert(rows)
+    if (error) throw error
+    txCount = rows.length
   }
 
-  if (options.assets) {
-    for (const raw of data.assets) {
-      const asset = deserializeAsset(raw as Record<string, unknown>)
-      const newDoc = doc(collection(db, 'assets'))
-      batch.set(newDoc, { ...asset, userId })
-      assetCount++
-    }
-  }
-
-  await batch.commit()
-
-  if (options.settings && data.settings && Object.keys(data.settings).length > 0) {
-    const settingsRef = doc(db, 'settings', userId)
-    const settingsSnap = await getDocs(collection(db, 'settings'))
-    const exists = settingsSnap.docs.some((d) => d.id === userId)
-    if (!exists) {
-      const b2 = writeBatch(db)
-      b2.set(settingsRef, data.settings)
-      await b2.commit()
-    }
+  if (Array.isArray(data.assets) && data.assets.length > 0) {
+    const rows = data.assets.map((raw) => {
+      const r = raw as Record<string, unknown>
+      const isoDate = r.fechaAlta as string
+      return {
+        user_id: '00000000-0000-0000-0000-000000000000',
+        name: r.nombre as string,
+        kind: r.tipo as string,
+        type: r.clase as string,
+        currency: r.moneda as string,
+        init_bal: r.saldo as number,
+        date_created: isoDate ? isoDate.slice(0, 10) : new Date().toISOString().slice(0, 10),
+        meta_objetivo: r.metaObjetivo ?? null,
+        meta_moneda: r.metaMoneda ?? null,
+      }
+    })
+    const { error } = await supabase.from('cuentas').insert(rows)
+    if (error) throw error
+    assetCount = rows.length
   }
 
   return { transactions: txCount, assets: assetCount }
@@ -152,7 +177,7 @@ export function parseBackupFile(file: File): Promise<BackupData> {
     reader.onload = (e) => {
       try {
         const data = JSON.parse(e.target?.result as string)
-        if (!data.version || !data.userId || !Array.isArray(data.transactions)) {
+        if (!data.version || !Array.isArray(data.transactions)) {
           reject(new Error('Archivo de backup inválido'))
           return
         }

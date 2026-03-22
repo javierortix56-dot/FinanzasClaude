@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { Timestamp } from 'firebase/firestore'
 import { X, Trash2 } from 'lucide-react'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { addAsset, updateAsset, deleteAsset } from '@/lib/assets'
@@ -80,7 +79,7 @@ export default function AssetModal({ open, onClose, editing }: Props) {
         tipo,
         moneda,
         saldo: parseFloat(saldo.replace(',', '.')),
-        fechaAlta: Timestamp.fromDate(new Date(fechaAlta + 'T12:00:00')),
+        fechaAlta: { toDate: () => new Date(fechaAlta + 'T12:00:00') },
         metaObjetivo: metaObjVal ? parseFloat(metaObjVal.replace(',', '.')) : null,
         metaMoneda: metaObjVal ? metaMoneda : null,
       }

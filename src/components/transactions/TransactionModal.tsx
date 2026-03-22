@@ -2,7 +2,6 @@
 
 import { useState, useEffect, KeyboardEvent } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { Timestamp } from 'firebase/firestore'
 import { X, Trash2, Tag } from 'lucide-react'
 import { useUIStore } from '@/store/useUIStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
@@ -115,7 +114,7 @@ export default function TransactionModal() {
         descripcion: descripcion.trim(),
         nota: nota.trim(),
         tags,
-        fecha: Timestamp.fromDate(new Date(fecha + 'T12:00:00')),
+        fecha: { toDate: () => new Date(fecha + 'T12:00:00') },
         ejecutado,
         asignadoA: editingTransaction?.asignadoA ?? null,
         creadoPor: creadoPor || SHARED_USER_ID,

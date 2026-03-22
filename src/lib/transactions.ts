@@ -1,129 +1,229 @@
-import {
-  collection,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  query,
-  where,
-  orderBy,
-  onSnapshot,
-  getDocs,
-  writeBatch,
-  Timestamp,
-} from 'firebase/firestore'
-import { db } from './firebase'
+import { supabase, SHARED_UUID } from './supabase'
 import { Transaction } from '@/types'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToTx(row: Record<string, any>): Transaction {
+  const dateStr = row.date as string
+  const extra = row.children ?? {}
+  return {
+    id: row.id as string,
+    userId: 'shared',
+    tipo: row.type as 'ingreso' | 'egreso',
+    monto: row.amount as number,
+    moneda: row.currency as 'ARS' | 'COP' | 'USD',
+    categoria: row.category as string ?? '',
+    descripcion: row.description as string ?? '',
+    nota: extra.nota ?? '',
+    tags: extra.tags ?? [],
+    fecha: { toDate: () => new Date(dateStr + 'T12:00:00') },
+    ejecutado: row.executed as boolean ?? false,
+    asignadoA: extra.asignadoA ?? null,
+    creadoPor: extra.creadoPor ?? 'shared',
+    recurrente: extra.recurrente ?? false,
+  }
+}
+
+function txToRow(tx: Omit<Transaction, 'id'>) {
+  return {
+    user_id: SHARED_UUID,
+    type: tx.tipo,
+    amount: tx.monto,
+    currency: tx.moneda,
+    category: tx.categoria,
+    description: tx.descripcion,
+    executed: tx.ejecutado,
+    date: tx.fecha.toDate().toISOString().slice(0, 10),
+    children: {
+      nota: tx.nota,
+      tags: tx.tags,
+      asignadoA: tx.asignadoA,
+      creadoPor: tx.creadoPor,
+      recurrente: tx.recurrente ?? false,
+    },
+  }
+}
 
 export function subscribeToTransactions(
   month: string,
   callback: (txs: Transaction[]) => void
-) {
+): () => void {
   const [year, mon] = month.split('-').map(Number)
-  const start = new Date(year, mon - 1, 1, 0, 0, 0, 0)
-  const end = new Date(year, mon, 0, 23, 59, 59, 999)
+  const start = `${year}-${String(mon).padStart(2, '0')}-01`
+  const lastDay = new Date(year, mon, 0).getDate()
+  const end = `${year}-${String(mon).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
 
-  const q = query(
-    collection(db, 'transactions'),
-    where('fecha', '>=', Timestamp.fromDate(start)),
-    where('fecha', '<=', Timestamp.fromDate(end)),
-    orderBy('fecha', 'desc')
-  )
+  async function fetchAndNotify() {
+    const { data, error } = await supabase
+      .from('movimientos')
+      .select('*')
+      .is('deleted_at', null)
+      .gte('date', start)
+      .lte('date', end)
+      .order('date', { ascending: false })
 
-  return onSnapshot(q, (snap) => {
-    const txs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Transaction))
-    callback(txs)
-  })
+    if (error) {
+      console.error('[transactions] fetch error:', error)
+      callback([])
+      return
+    }
+    callback((data ?? []).map(rowToTx))
+  }
+
+  fetchAndNotify()
+
+  const channel = supabase
+    .channel(`movimientos-${month}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'movimientos' }, fetchAndNotify)
+    .subscribe()
+
+  return () => { supabase.removeChannel(channel) }
 }
 
 export async function addTransaction(data: Omit<Transaction, 'id'>): Promise<string> {
-  const ref = await addDoc(collection(db, 'transactions'), data)
-  return ref.id
+  const { data: row, error } = await supabase
+    .from('movimientos')
+    .insert(txToRow(data))
+    .select('id')
+    .single()
+
+  if (error) throw error
+  return row.id as string
 }
 
 export async function updateTransaction(id: string, data: Partial<Omit<Transaction, 'id'>>) {
-  await updateDoc(doc(db, 'transactions', id), data)
+  const partial: Record<string, unknown> = {}
+  if (data.tipo !== undefined) partial.type = data.tipo
+  if (data.monto !== undefined) partial.amount = data.monto
+  if (data.moneda !== undefined) partial.currency = data.moneda
+  if (data.categoria !== undefined) partial.category = data.categoria
+  if (data.descripcion !== undefined) partial.description = data.descripcion
+  if (data.ejecutado !== undefined) partial.executed = data.ejecutado
+  if (data.fecha !== undefined) partial.date = data.fecha.toDate().toISOString().slice(0, 10)
+
+  // merge children fields
+  const childrenFields: Record<string, unknown> = {}
+  if (data.nota !== undefined) childrenFields.nota = data.nota
+  if (data.tags !== undefined) childrenFields.tags = data.tags
+  if (data.asignadoA !== undefined) childrenFields.asignadoA = data.asignadoA
+  if (data.creadoPor !== undefined) childrenFields.creadoPor = data.creadoPor
+  if (data.recurrente !== undefined) childrenFields.recurrente = data.recurrente
+
+  if (Object.keys(childrenFields).length > 0) {
+    // fetch current children then merge
+    const { data: current } = await supabase
+      .from('movimientos').select('children').eq('id', id).single()
+    partial.children = { ...(current?.children ?? {}), ...childrenFields }
+  }
+
+  const { error } = await supabase.from('movimientos').update(partial).eq('id', id)
+  if (error) throw error
 }
 
 export async function deleteTransaction(id: string) {
-  await deleteDoc(doc(db, 'transactions', id))
+  const { error } = await supabase
+    .from('movimientos')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) throw error
 }
 
 export async function markEjecutado(id: string, ejecutado: boolean) {
-  await updateDoc(doc(db, 'transactions', id), { ejecutado })
+  const { error } = await supabase
+    .from('movimientos')
+    .update({ executed: ejecutado })
+    .eq('id', id)
+  if (error) throw error
 }
 
 export async function deleteMonthTransactions(month: string): Promise<number> {
   const [year, mon] = month.split('-').map(Number)
-  const start = new Date(year, mon - 1, 1, 0, 0, 0, 0)
-  const end = new Date(year, mon, 0, 23, 59, 59, 999)
-  const q = query(
-    collection(db, 'transactions'),
-    where('fecha', '>=', Timestamp.fromDate(start)),
-    where('fecha', '<=', Timestamp.fromDate(end))
-  )
-  const snap = await getDocs(q)
-  const batch = writeBatch(db)
-  snap.docs.forEach((d) => batch.delete(d.ref))
-  await batch.commit()
-  return snap.size
+  const start = `${year}-${String(mon).padStart(2, '0')}-01`
+  const lastDay = new Date(year, mon, 0).getDate()
+  const end = `${year}-${String(mon).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+
+  const { data, error } = await supabase
+    .from('movimientos')
+    .select('id')
+    .is('deleted_at', null)
+    .gte('date', start)
+    .lte('date', end)
+
+  if (error) throw error
+  if (!data || data.length === 0) return 0
+
+  const ids = data.map((r) => r.id)
+  const { error: delErr } = await supabase
+    .from('movimientos')
+    .update({ deleted_at: new Date().toISOString() })
+    .in('id', ids)
+
+  if (delErr) throw delErr
+  return ids.length
 }
 
 export async function cloneMonthTransactions(fromMonth: string, toMonth: string): Promise<number> {
   const [fy, fm] = fromMonth.split('-').map(Number)
-  const start = new Date(fy, fm - 1, 1, 0, 0, 0, 0)
-  const end = new Date(fy, fm, 0, 23, 59, 59, 999)
-  const q = query(
-    collection(db, 'transactions'),
-    where('fecha', '>=', Timestamp.fromDate(start)),
-    where('fecha', '<=', Timestamp.fromDate(end))
-  )
-  const snap = await getDocs(q)
   const [ty, tm] = toMonth.split('-').map(Number)
-  let count = 0
-  for (const d of snap.docs) {
-    const tx = d.data() as Omit<Transaction, 'id'>
-    const origDate = tx.fecha.toDate()
+  const startF = `${fy}-${String(fm).padStart(2, '0')}-01`
+  const lastDayF = new Date(fy, fm, 0).getDate()
+  const endF = `${fy}-${String(fm).padStart(2, '0')}-${String(lastDayF).padStart(2, '0')}`
+
+  const { data, error } = await supabase
+    .from('movimientos')
+    .select('*')
+    .is('deleted_at', null)
+    .gte('date', startF)
+    .lte('date', endF)
+
+  if (error) throw error
+  if (!data || data.length === 0) return 0
+
+  const inserts = data.map((row) => {
+    const origDate = new Date(row.date + 'T12:00:00')
     const day = Math.min(origDate.getDate(), new Date(ty, tm, 0).getDate())
-    const newDate = new Date(ty, tm - 1, day, 12, 0, 0)
-    await addDoc(collection(db, 'transactions'), {
-      ...tx,
-      fecha: Timestamp.fromDate(newDate),
-      ejecutado: false,
-      asignadoA: null,
-    })
-    count++
-  }
-  return count
+    const newDate = `${ty}-${String(tm).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    return {
+      ...txToRow({ ...rowToTx(row), ejecutado: false, asignadoA: null }),
+      date: newDate,
+    }
+  })
+
+  const { error: insErr } = await supabase.from('movimientos').insert(inserts)
+  if (insErr) throw insErr
+  return inserts.length
 }
 
 export async function createRecurringTransactions(toMonth: string): Promise<number> {
   const [ty, tm] = toMonth.split('-').map(Number)
   const prevDate = new Date(ty, tm - 2, 1)
-  const fromMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`
-  const [fy, fm] = fromMonth.split('-').map(Number)
-  const start = new Date(fy, fm - 1, 1, 0, 0, 0, 0)
-  const end = new Date(fy, fm, 0, 23, 59, 59, 999)
-  const q = query(
-    collection(db, 'transactions'),
-    where('fecha', '>=', Timestamp.fromDate(start)),
-    where('fecha', '<=', Timestamp.fromDate(end)),
-    where('recurrente', '==', true)
-  )
-  const snap = await getDocs(q)
-  let count = 0
-  for (const d of snap.docs) {
-    const tx = d.data() as Omit<Transaction, 'id'>
-    const origDate = tx.fecha.toDate()
+  const fy = prevDate.getFullYear()
+  const fm = prevDate.getMonth() + 1
+  const startF = `${fy}-${String(fm).padStart(2, '0')}-01`
+  const lastDayF = new Date(fy, fm, 0).getDate()
+  const endF = `${fy}-${String(fm).padStart(2, '0')}-${String(lastDayF).padStart(2, '0')}`
+
+  const { data, error } = await supabase
+    .from('movimientos')
+    .select('*')
+    .is('deleted_at', null)
+    .gte('date', startF)
+    .lte('date', endF)
+
+  if (error) throw error
+  const recurring = (data ?? []).filter((r) => r.children?.recurrente === true)
+  if (recurring.length === 0) return 0
+
+  const inserts = recurring.map((row) => {
+    const origDate = new Date(row.date + 'T12:00:00')
     const day = Math.min(origDate.getDate(), new Date(ty, tm, 0).getDate())
-    const newDate = new Date(ty, tm - 1, day, 12, 0, 0)
-    await addDoc(collection(db, 'transactions'), {
-      ...tx,
-      fecha: Timestamp.fromDate(newDate),
-      ejecutado: false,
-      asignadoA: null,
-    })
-    count++
-  }
-  return count
+    const newDate = `${ty}-${String(tm).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    return {
+      ...txToRow({ ...rowToTx(row), ejecutado: false, asignadoA: null }),
+      date: newDate,
+    }
+  })
+
+  const { error: insErr } = await supabase.from('movimientos').insert(inserts)
+  if (insErr) throw insErr
+  return inserts.length
 }

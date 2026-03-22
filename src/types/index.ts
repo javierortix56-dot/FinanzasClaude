@@ -1,8 +1,11 @@
-import { Timestamp } from 'firebase/firestore'
-
 export type Currency = 'ARS' | 'COP' | 'USD'
 
 export type TransactionType = 'ingreso' | 'egreso'
+
+/** Compat shim so code calling .toDate() still works with Supabase date strings */
+export interface FechaCompat {
+  toDate: () => Date
+}
 
 export interface User {
   nombre: string
@@ -20,7 +23,7 @@ export interface Transaction {
   descripcion: string
   nota: string
   tags: string[]
-  fecha: Timestamp
+  fecha: FechaCompat
   ejecutado: boolean
   asignadoA: string | null
   creadoPor: string
@@ -35,7 +38,7 @@ export interface Asset {
   clase: 'activo' | 'pasivo'
   moneda: Currency
   saldo: number
-  fechaAlta: Timestamp
+  fechaAlta: FechaCompat
   metaObjetivo: number | null
   metaMoneda: string | null
 }
