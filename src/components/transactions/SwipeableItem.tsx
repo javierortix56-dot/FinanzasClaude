@@ -1,0 +1,180 @@
+'use client'
+
+import { useRef, useState } from 'react'
+import { CheckCheck, Edit3, Trash2, Unlink, CheckCircle2 } from 'lucide-react'
+import { Transaction } from '@/types'
+import { useUIStore } from '@/store/useUIStore'
+import { useSettingsStore } from '@/store/useSettingsStore'
+import { markEjecutado, deleteTransaction, updateTransaction } from '@/lib/transactions'
+import { getCategoryById, formatAmount } from '@/lib/constants'
+
+interface Props {
+  tx: Transaction
+  userName?: string
+}
+
+const THRESHOLD = 65
+const RIGHT_OPEN = 170
+
+export default function SwipeableItem({ tx, userName }: Props) {
+  const { openEditModal } = useUIStore()
+  const { hideAmounts } = useSettingsStore()
+  const cat = getCategoryById(tx.categoria)
+
+  const [offset, setOffset] = useState(0)
+  const [held, setHeld] = useState<'left' | 'right' | null>(null)
+  const [transitioning, setTransitioning] = useState(false)
+  const startX = useRef(0)
+  const dragging = useRef(false)
+
+  const dotColor = tx.tipo === 'ingreso' ? '#22c55e' : '#ef4444'
+  const dateStr = tx.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
+
+  function onTouchStart(e: React.TouchEvent) {
+    if (held) return
+    startX.current = e.touches[0].clientX
+    dragging.current = true
+    setTransitioning(false)
+  }
+
+  function onTouchMove(e: React.TouchEvent) {
+    if (!dragging.current) return
+    const delta = e.touches[0].clientX - startX.current
+    // left swipe: item goes left (negative), max -80
+    // right swipe: item goes right (positive), max RIGHT_OPEN
+    if (delta < 0) setOffset(Math.max(delta, -80))
+    else setOffset(Math.min(delta, RIGHT_OPEN))
+  }
+
+  async function onTouchEnd() {
+    dragging.current = false
+    setTransitioning(true)
+
+    if (offset <= -THRESHOLD) {
+      // Left swipe → toggle ejecutado
+      setOffset(0)
+      await markEjecutado(tx.id!, !tx.ejecutado)
+    } else if (offset >= THRESHOLD) {
+      // Right swipe → hold open action menu
+      setOffset(RIGHT_OPEN)
+      setHeld('right')
+    } else {
+      setOffset(0)
+    }
+  }
+
+  function closeMenu() {
+    setTransitioning(true)
+    setOffset(0)
+    setHeld(null)
+  }
+
+  async function handleDelete() {
+    closeMenu()
+    await deleteTransaction(tx.id!)
+  }
+
+  async function handleDesasignar() {
+    closeMenu()
+    await updateTransaction(tx.id!, { asignadoA: null })
+  }
+
+  return (
+    <div className="relative overflow-hidden select-none">
+      {/* ── Left strip: ejecutado (revealed by left swipe) ── */}
+      <div className="absolute inset-y-0 right-0 w-20 flex items-center justify-center bg-green-500">
+        <div className="flex flex-col items-center gap-1">
+          <CheckCheck size={20} color="white" />
+          <span className="text-white text-[10px] font-semibold">
+            {tx.ejecutado ? 'Pendiente' : 'Ejecutado'}
+          </span>
+        </div>
+      </div>
+
+      {/* ── Right strip: actions (revealed by right swipe) ── */}
+      <div className="absolute inset-y-0 left-0 flex items-stretch bg-gray-50">
+        <button
+          onTouchEnd={(e) => { e.stopPropagation(); openEditModal(tx); closeMenu() }}
+          onClick={() => { openEditModal(tx); closeMenu() }}
+          className="flex flex-col items-center justify-center gap-1 px-4 hover:bg-[#534AB7]/10 transition-colors"
+        >
+          <Edit3 size={17} className="text-[#534AB7]" />
+          <span className="text-[10px] font-medium text-[#534AB7]">Editar</span>
+        </button>
+        <button
+          onTouchEnd={(e) => { e.stopPropagation(); handleDelete() }}
+          onClick={handleDelete}
+          className="flex flex-col items-center justify-center gap-1 px-4 hover:bg-red-50 transition-colors"
+        >
+          <Trash2 size={17} className="text-red-500" />
+          <span className="text-[10px] font-medium text-red-500">Eliminar</span>
+        </button>
+        {tx.asignadoA && (
+          <button
+            onTouchEnd={(e) => { e.stopPropagation(); handleDesasignar() }}
+            onClick={handleDesasignar}
+            className="flex flex-col items-center justify-center gap-1 px-4 hover:bg-orange-50 transition-colors"
+          >
+            <Unlink size={17} className="text-orange-500" />
+            <span className="text-[10px] font-medium text-orange-500">Desasignar</span>
+          </button>
+        )}
+      </div>
+
+      {/* ── Main row ── */}
+      <div
+        className="relative bg-white flex items-center gap-3 py-3 px-4"
+        style={{
+          transform: `translateX(${offset}px)`,
+          transition: transitioning && !dragging.current ? 'transform 0.2s ease' : 'none',
+        }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onClick={() => {
+          if (held) { closeMenu(); return }
+          openEditModal(tx)
+        }}
+      >
+        <div
+          className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-0.5"
+          style={{ backgroundColor: dotColor }}
+        />
+
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-gray-900 truncate">
+            {tx.descripcion || cat?.nombre || tx.categoria}
+          </p>
+          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+            {cat && (
+              <span
+                className="text-xs px-1.5 py-0.5 rounded font-medium"
+                style={{ backgroundColor: cat.color + '20', color: cat.color }}
+              >
+                {cat.nombre}
+              </span>
+            )}
+            <span className="text-xs text-gray-400">{dateStr}</span>
+            {userName && <span className="text-xs text-gray-400">· {userName}</span>}
+          </div>
+        </div>
+
+        <div className="flex-shrink-0 text-right flex flex-col items-end gap-0.5">
+          <p
+            className={`text-sm font-semibold transition-all ${
+              tx.tipo === 'ingreso' ? 'text-green-600' : 'text-red-500'
+            } ${hideAmounts ? 'blur-sm' : ''}`}
+          >
+            {tx.tipo === 'ingreso' ? '+' : '-'}
+            {formatAmount(tx.monto, tx.moneda)}
+          </p>
+          {tx.ejecutado ? (
+            <CheckCircle2 size={13} className="text-green-400" />
+          ) : (
+            <span className="text-[10px] text-gray-400">pendiente</span>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
