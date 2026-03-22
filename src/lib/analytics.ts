@@ -41,6 +41,7 @@ export async function fetchMonthTransactions(month: string): Promise<Transaction
     console.error('[analytics] fetchMonthTransactions error:', error)
     return []
   }
+
   return (data ?? []).map(rowToTx)
 }
 

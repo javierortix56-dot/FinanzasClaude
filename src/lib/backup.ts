@@ -31,6 +31,7 @@ export async function exportBackup(userId: string): Promise<BackupData> {
     .select('*')
     .is('deleted_at', null)
 
+
   const { data: assetData } = await supabase
     .from('cuentas')
     .select('*')

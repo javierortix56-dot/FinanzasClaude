@@ -59,6 +59,7 @@ export function subscribeToTransactions(
     const { data, error } = await supabase
       .from('movimientos')
       .select('*')
+      .is('deleted_at', null)
       .filter('date', 'gte', start)
       .filter('date', 'lte', end)
       .order('date', { ascending: false })
@@ -120,7 +121,11 @@ export async function updateTransaction(id: string, data: Partial<Omit<Transacti
 }
 
 export async function deleteTransaction(id: string) {
-  const { error } = await supabase.from('movimientos').delete().eq('id', id)
+  // Soft delete to match existing data pattern
+  const { error } = await supabase
+    .from('movimientos')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id)
   if (error) throw error
 }
 
@@ -138,6 +143,7 @@ export async function deleteMonthTransactions(month: string): Promise<number> {
   const { data, error } = await supabase
     .from('movimientos')
     .select('id')
+    .is('deleted_at', null)
     .gte('date', start)
     .lte('date', end)
 
@@ -146,7 +152,7 @@ export async function deleteMonthTransactions(month: string): Promise<number> {
 
   const { error: delErr } = await supabase
     .from('movimientos')
-    .delete()
+    .update({ deleted_at: new Date().toISOString() })
     .in('id', data.map((r) => r.id))
 
   if (delErr) throw delErr
@@ -163,6 +169,7 @@ export async function cloneMonthTransactions(fromMonth: string, toMonth: string)
   const { data, error } = await supabase
     .from('movimientos')
     .select('*')
+    .is('deleted_at', null)
     .gte('date', startF)
     .lte('date', endF)
 
@@ -193,6 +200,7 @@ export async function createRecurringTransactions(toMonth: string): Promise<numb
   const { data, error } = await supabase
     .from('movimientos')
     .select('*')
+    .is('deleted_at', null)
     .gte('date', startF)
     .lte('date', endF)
 
