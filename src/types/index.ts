@@ -24,6 +24,7 @@ export interface Transaction {
   ejecutado: boolean
   asignadoA: string | null
   creadoPor: string
+  recurrente?: boolean
 }
 
 export interface Asset {
@@ -62,6 +63,7 @@ export interface Settings {
   categoriasIngreso: Category[]
   tiposActivo: string[]
   tiposPasivo: string[]
+  mesesCerrados?: string[]
 }
 
 export interface Budget {

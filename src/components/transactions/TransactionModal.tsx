@@ -1,14 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, KeyboardEvent } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { Timestamp } from 'firebase/firestore'
-import { collection, getDocs } from 'firebase/firestore'
-import { X, Trash2 } from 'lucide-react'
+import { Timestamp, collection, getDocs } from 'firebase/firestore'
+import { X, Trash2, Tag } from 'lucide-react'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useUIStore } from '@/store/useUIStore'
+import { useSettingsStore } from '@/store/useSettingsStore'
 import { addTransaction, updateTransaction, deleteTransaction } from '@/lib/transactions'
 import { DEFAULT_GASTO_CATEGORIES, DEFAULT_INGRESO_CATEGORIES } from '@/lib/constants'
+import { DEFAULT_SETTINGS } from '@/lib/settings'
 import { db } from '@/lib/firebase'
 import { Transaction, Currency, TransactionType } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -24,14 +25,21 @@ interface UserOption {
 export default function TransactionModal() {
   const { user } = useAuthStore()
   const { isTransactionModalOpen, editingTransaction, closeTransactionModal } = useUIStore()
+  const { settings } = useSettingsStore()
+  const s = settings ?? DEFAULT_SETTINGS
 
   const [tipo, setTipo] = useState<TransactionType>('egreso')
   const [monto, setMonto] = useState('')
   const [moneda, setMoneda] = useState<Currency>('ARS')
   const [categoria, setCategoria] = useState('')
   const [descripcion, setDescripcion] = useState('')
+  const [nota, setNota] = useState('')
+  const [tags, setTags] = useState<string[]>([])
+  const [tagInput, setTagInput] = useState('')
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
   const [creadoPor, setCreadoPor] = useState('')
+  const [ejecutado, setEjecutado] = useState(false)
+  const [recurrente, setRecurrente] = useState(false)
   const [users, setUsers] = useState<UserOption[]>([])
   const [saving, setSaving] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
@@ -55,21 +63,51 @@ export default function TransactionModal() {
       setMoneda(editingTransaction.moneda)
       setCategoria(editingTransaction.categoria)
       setDescripcion(editingTransaction.descripcion)
+      setNota(editingTransaction.nota ?? '')
+      setTags(editingTransaction.tags ?? [])
       const d = editingTransaction.fecha.toDate()
       setFecha(d.toISOString().split('T')[0])
       setCreadoPor(editingTransaction.creadoPor)
+      setEjecutado(editingTransaction.ejecutado)
+      setRecurrente(editingTransaction.recurrente ?? false)
     } else {
       setTipo('egreso')
       setMonto('')
       setMoneda('ARS')
       setCategoria('')
       setDescripcion('')
+      setNota('')
+      setTags([])
+      setTagInput('')
       setFecha(new Date().toISOString().split('T')[0])
       setCreadoPor(user?.uid ?? '')
+      setEjecutado(false)
+      setRecurrente(false)
     }
   }, [isTransactionModalOpen, editingTransaction, user])
 
-  const categories = tipo === 'egreso' ? DEFAULT_GASTO_CATEGORIES : DEFAULT_INGRESO_CATEGORIES
+  const gastoCategories = s.categoriasGasto.length > 0 ? s.categoriasGasto : DEFAULT_GASTO_CATEGORIES.map((c) => ({ ...c, activa: true }))
+  const ingresoCategories = s.categoriasIngreso.length > 0 ? s.categoriasIngreso : DEFAULT_INGRESO_CATEGORIES.map((c) => ({ ...c, activa: true }))
+  const categories = (tipo === 'egreso' ? gastoCategories : ingresoCategories).filter((c) => c.activa)
+
+  function addTag() {
+    const t = tagInput.trim().replace(/,/g, '')
+    if (t && !tags.includes(t)) setTags((prev) => [...prev, t])
+    setTagInput('')
+  }
+
+  function handleTagKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault()
+      addTag()
+    } else if (e.key === 'Backspace' && tagInput === '' && tags.length > 0) {
+      setTags((prev) => prev.slice(0, -1))
+    }
+  }
+
+  function removeTag(t: string) {
+    setTags((prev) => prev.filter((x) => x !== t))
+  }
 
   async function handleSave() {
     if (!monto || !categoria || !user) return
@@ -82,12 +120,13 @@ export default function TransactionModal() {
         moneda,
         categoria,
         descripcion: descripcion.trim(),
-        nota: editingTransaction?.nota ?? '',
-        tags: editingTransaction?.tags ?? [],
+        nota: nota.trim(),
+        tags,
         fecha: Timestamp.fromDate(new Date(fecha + 'T12:00:00')),
-        ejecutado: editingTransaction?.ejecutado ?? false,
+        ejecutado,
         asignadoA: editingTransaction?.asignadoA ?? null,
         creadoPor: creadoPor || user.uid,
+        recurrente,
       }
       if (editingTransaction?.id) {
         await updateTransaction(editingTransaction.id, data)
@@ -235,6 +274,53 @@ export default function TransactionModal() {
               />
             </div>
 
+            {/* Nota */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                Nota
+              </label>
+              <textarea
+                placeholder="Detalle adicional (opcional)"
+                value={nota}
+                onChange={(e) => setNota(e.target.value)}
+                rows={2}
+                className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#534AB7]"
+              />
+            </div>
+
+            {/* Tags */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide flex items-center gap-1">
+                <Tag size={11} /> Etiquetas
+              </label>
+              <div className="flex flex-wrap gap-1.5 min-h-[36px] border border-gray-200 rounded-md px-2 py-1.5 focus-within:ring-2 focus-within:ring-[#534AB7]">
+                {tags.map((t) => (
+                  <span
+                    key={t}
+                    className="flex items-center gap-1 bg-[#534AB7]/10 text-[#534AB7] text-xs font-medium px-2 py-0.5 rounded-full"
+                  >
+                    {t}
+                    <button
+                      type="button"
+                      onClick={() => removeTag(t)}
+                      className="hover:text-red-500 transition-colors"
+                    >
+                      <X size={10} />
+                    </button>
+                  </span>
+                ))}
+                <input
+                  type="text"
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyDown={handleTagKeyDown}
+                  onBlur={addTag}
+                  placeholder={tags.length === 0 ? 'Escribí y presioná Enter...' : ''}
+                  className="flex-1 min-w-[100px] text-xs outline-none bg-transparent"
+                />
+              </div>
+            </div>
+
             {/* Fecha + Persona */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -263,6 +349,37 @@ export default function TransactionModal() {
                   ))}
                 </select>
               </div>
+            </div>
+
+            {/* Ejecutado + Recurrente toggles */}
+            <div className="flex gap-3">
+              {/* Ejecutado */}
+              <button
+                type="button"
+                onClick={() => setEjecutado((v) => !v)}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${
+                  ejecutado
+                    ? 'bg-green-50 border-green-500 text-green-600'
+                    : 'border-gray-200 text-gray-400'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${ejecutado ? 'bg-green-500' : 'bg-gray-300'}`} />
+                {ejecutado ? 'Ejecutado' : 'Pendiente'}
+              </button>
+
+              {/* Recurrente */}
+              <button
+                type="button"
+                onClick={() => setRecurrente((v) => !v)}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${
+                  recurrente
+                    ? 'bg-[#534AB7]/10 border-[#534AB7] text-[#534AB7]'
+                    : 'border-gray-200 text-gray-400'
+                }`}
+              >
+                <span className="text-base leading-none">↺</span>
+                Recurrente
+              </button>
             </div>
 
             {/* Actions */}
