@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { signInAnonymously } from 'firebase/auth'
+import { auth } from '@/lib/firebase'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { getOrInitSettings, subscribeToSettings } from '@/lib/settings'
@@ -13,9 +15,12 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const settingsUnsubRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
+    // Sign in anonymously so Firestore security rules are satisfied
+    signInAnonymously(auth).catch(() => {})
+
     async function init() {
       const settings = await getOrInitSettings(SHARED_USER_ID)
-      setMonedaBase((settings as any).monedaBase ?? 'ARS' as Currency)
+      setMonedaBase(((settings as any).monedaBase ?? 'ARS') as Currency)
       settingsUnsubRef.current = subscribeToSettings(SHARED_USER_ID, setSettings)
     }
     init()

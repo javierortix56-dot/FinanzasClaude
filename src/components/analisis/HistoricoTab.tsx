@@ -8,7 +8,7 @@ import { useBudgetStore } from '@/store/useBudgetStore'
 import { subscribeToBudgets } from '@/lib/budgets'
 import { fetchMonthTransactions, fetchLastNMonths } from '@/lib/analytics'
 import { DEFAULT_SETTINGS } from '@/lib/settings'
-import { shiftMonth, monthLabel, SHARED_USER_ID } from '@/lib/constants'
+import { shiftMonth, monthLabel } from '@/lib/constants'
 import { toBase } from '@/lib/currency'
 import { Transaction, Currency } from '@/types'
 import SummaryComparison from './SummaryComparison'
@@ -46,7 +46,7 @@ export default function HistoricoTab() {
 
   // Subscribe to budgets for current month
   useEffect(() => {
-    const unsub = subscribeToBudgets(SHARED_USER_ID, currentMonth, setBudgets)
+    const unsub = subscribeToBudgets(currentMonth, setBudgets)
     return () => unsub()
   }, [currentMonth, setBudgets])
 

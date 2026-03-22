@@ -5,7 +5,7 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { X, Trash2 } from 'lucide-react'
 import { useBudgetStore } from '@/store/useBudgetStore'
 import { upsertBudget, deleteBudget } from '@/lib/budgets'
-import { getCategoryById, SHARED_USER_ID } from '@/lib/constants'
+import { getCategoryById } from '@/lib/constants'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -42,7 +42,7 @@ export default function BudgetModal({ open, onClose, categoria, mes }: Props) {
     if (!limite) return
     setSaving(true)
     try {
-      await upsertBudget(SHARED_USER_ID, mes, categoria, parseFloat(limite), moneda, existing?.id)
+      await upsertBudget(mes, categoria, parseFloat(limite), moneda, existing?.id)
       onClose()
     } finally { setSaving(false) }
   }
