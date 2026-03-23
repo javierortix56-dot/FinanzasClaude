@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
-import { Zap, X } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { Zap, X, Unlink2 } from 'lucide-react'
 import { useTransactionStore } from '@/store/useTransactionStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAuthStore } from '@/store/useAuthStore'
@@ -20,10 +20,12 @@ export default function AssignmentTab() {
   const s = settings ?? DEFAULT_SETTINGS
   const base = monedaBase as Currency
 
-  const [selectedIds, setSelectedIds]     = useState<Set<string>>(new Set())
+  const [selectedIds, setSelectedIds]       = useState<Set<string>>(new Set())
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['unassigned']))
-  const [reassignOpen, setReassignOpen]   = useState(false)
-  const [autoLoading, setAutoLoading]     = useState(false)
+  const [reassignOpen, setReassignOpen]     = useState(false)
+  const [autoLoading, setAutoLoading]       = useState(false)
+  const [unassignLoading, setUnassignLoading] = useState(false)
+  const [unassignConfirm, setUnassignConfirm] = useState(false)
   const userNames = Object.fromEntries(SHARED_USERS.map((u) => [u.id, u.nombre]))
 
   const ingresos = useMemo(
@@ -37,40 +39,29 @@ export default function AssignmentTab() {
     [transactions]
   )
 
-  // Progress
   const assignedCount   = egresos.filter((e) => e.asignadoA !== null).length
   const totalEgresos    = egresos.length
   const progressPercent = totalEgresos > 0 ? (assignedCount / totalEgresos) * 100 : 0
+  const allAssigned     = assignedCount === totalEgresos && totalEgresos > 0
 
-  // Build groups: incomeId → expenses[]  +  'unassigned' → []
   const groups = useMemo(() => {
     const map = new Map<string, { income: Transaction | null; expenses: Transaction[] }>()
-
-    // One entry per ingreso
     ingresos.forEach((inc) => map.set(inc.id!, { income: inc, expenses: [] }))
-    // Unassigned group
     map.set('unassigned', { income: null, expenses: [] })
-
     egresos.forEach((exp) => {
       const key = exp.asignadoA ?? 'unassigned'
-      if (!map.has(key)) {
-        // Orphaned reference (ingreso deleted) — treat as unassigned
-        map.get('unassigned')!.expenses.push(exp)
-      } else {
-        map.get(key)!.expenses.push(exp)
-      }
+      if (!map.has(key)) map.get('unassigned')!.expenses.push(exp)
+      else map.get(key)!.expenses.push(exp)
     })
-
     return map
   }, [ingresos, egresos])
 
-  // Auto-asignar: asigna al ingreso más cercano que tenga capacidad disponible
+  // Auto-asignar respetando capacidad
   async function autoAssign() {
     const unassigned = egresos.filter((e) => e.asignadoA === null)
     if (ingresos.length === 0 || unassigned.length === 0) return
     setAutoLoading(true)
 
-    // Calcular capacidad restante por ingreso (en moneda base)
     const capacity = new Map<string, number>()
     ingresos.forEach((inc) => {
       const incBase = toBase(inc.monto, inc.moneda, base, s)
@@ -81,21 +72,15 @@ export default function AssignmentTab() {
     })
 
     try {
-      // Procesar secuencialmente para que la capacidad se actualice correctamente
       for (const exp of unassigned) {
         const expBase = toBase(exp.monto, exp.moneda, base, s)
         const expTime = exp.fecha.toDate().getTime()
-
-        // Solo considerar ingresos con capacidad suficiente
         const elegibles = ingresos.filter((inc) => (capacity.get(inc.id!) ?? 0) >= expBase)
-        if (elegibles.length === 0) continue // no cabe en ningún ingreso → queda sin asignar
-
+        if (elegibles.length === 0) continue
         const closest = elegibles.reduce((prev, curr) =>
           Math.abs(curr.fecha.toDate().getTime() - expTime) <
-          Math.abs(prev.fecha.toDate().getTime() - expTime)
-            ? curr : prev
+          Math.abs(prev.fecha.toDate().getTime() - expTime) ? curr : prev
         )
-
         capacity.set(closest.id!, (capacity.get(closest.id!) ?? 0) - expBase)
         await updateTransaction(exp.id!, { asignadoA: closest.id! })
       }
@@ -104,18 +89,27 @@ export default function AssignmentTab() {
     }
   }
 
-  // Desasignar todos los egresos de un grupo
+  // Desasignar todos
+  async function desassignAll() {
+    if (!unassignConfirm) { setUnassignConfirm(true); return }
+    setUnassignLoading(true)
+    setUnassignConfirm(false)
+    try {
+      const assigned = egresos.filter((e) => e.asignadoA !== null)
+      await Promise.all(assigned.map((e) => updateTransaction(e.id!, { asignadoA: null })))
+    } finally {
+      setUnassignLoading(false)
+    }
+  }
+
   async function desassignGroup(incomeId: string) {
     const group = groups.get(incomeId)
     if (!group) return
     await Promise.all(group.expenses.map((e) => updateTransaction(e.id!, { asignadoA: null })))
   }
 
-  // Reasignar seleccionados a otro ingreso
   async function reassignSelected(newIncomeId: string) {
-    await Promise.all(
-      [...selectedIds].map((id) => updateTransaction(id, { asignadoA: newIncomeId }))
-    )
+    await Promise.all([...selectedIds].map((id) => updateTransaction(id, { asignadoA: newIncomeId })))
     setSelectedIds(new Set())
     setReassignOpen(false)
   }
@@ -137,52 +131,80 @@ export default function AssignmentTab() {
   }
 
   const unassignedExpenses = groups.get('unassigned')?.expenses ?? []
-
-  // Render order: ingresos groups first, unassigned last
   const groupEntries = [
     ...ingresos
       .map((inc) => ({ key: inc.id!, group: groups.get(inc.id!)! }))
-      .filter(({ group }) => group.expenses.length > 0 || ingresos.length <= 5), // show even empty if few ingresos
+      .filter(({ group }) => group.expenses.length > 0 || ingresos.length <= 5),
     { key: 'unassigned', group: { income: null, expenses: unassignedExpenses } },
   ]
 
+  const barColor = progressPercent >= 100 ? '#22c55e' : progressPercent >= 50 ? '#534AB7' : '#f59e0b'
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      {/* ── Progress + Auto-asignar ── */}
-      <div className="px-4 pt-4 pb-3 bg-white border-b border-gray-50">
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            <p className="text-xs font-semibold text-gray-500">
-              {assignedCount} de {totalEgresos} egresos asignados
-            </p>
+
+      {/* ── Header ── */}
+      <div className="px-4 pt-3 pb-4 bg-white border-b border-gray-100">
+        {/* Stats row */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
+              allAssigned
+                ? 'bg-green-100 text-green-700'
+                : assignedCount === 0
+                  ? 'bg-gray-100 text-gray-500'
+                  : 'bg-[#534AB7]/10 text-[#534AB7]'
+            }`}>
+              {assignedCount}/{totalEgresos} asignados
+            </span>
           </div>
-          <button
-            onClick={autoAssign}
-            disabled={autoLoading || unassignedExpenses.length === 0 || ingresos.length === 0}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#534AB7] text-white text-xs font-semibold disabled:opacity-40 active:scale-95 transition-transform"
-          >
-            <Zap size={13} />
-            {autoLoading ? 'Asignando...' : 'Auto-asignar'}
-          </button>
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-2">
+            {assignedCount > 0 && (
+              <button
+                onClick={desassignAll}
+                disabled={unassignLoading}
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95 ${
+                  unassignConfirm
+                    ? 'bg-red-500 border-red-500 text-white'
+                    : 'border-gray-200 text-gray-500 hover:border-red-300 hover:text-red-500'
+                }`}
+              >
+                <Unlink2 size={12} />
+                {unassignConfirm ? '¿Confirmar?' : 'Desasignar todo'}
+              </button>
+            )}
+            <button
+              onClick={autoAssign}
+              disabled={autoLoading || unassignedExpenses.length === 0 || ingresos.length === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#534AB7] text-white text-xs font-semibold disabled:opacity-40 active:scale-95 transition-all shadow-sm"
+            >
+              <Zap size={12} />
+              {autoLoading ? 'Asignando…' : 'Auto-asignar'}
+            </button>
+          </div>
         </div>
 
         {/* Progress bar */}
-        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
           <div
-            className="h-full bg-[#534AB7] rounded-full transition-all duration-500"
-            style={{ width: `${progressPercent}%` }}
+            className="h-full rounded-full transition-all duration-700"
+            style={{ width: `${progressPercent}%`, backgroundColor: barColor }}
           />
         </div>
         <div className="flex justify-between mt-1">
-          <span className="text-[10px] text-gray-400">asignado</span>
-          <span className="text-[10px] text-[#534AB7] font-semibold">
-            {Math.round(progressPercent)}%
-          </span>
+          <span className="text-[10px] text-gray-400">{Math.round(progressPercent)}% asignado</span>
+          {unassignedExpenses.length > 0 && (
+            <span className="text-[10px] text-amber-500 font-semibold">
+              {unassignedExpenses.length} sin asignar
+            </span>
+          )}
         </div>
       </div>
 
       {/* ── Groups ── */}
-      <div className="flex-1 overflow-y-auto pt-3 pb-24">
+      <div className="flex-1 overflow-y-auto pt-3 pb-24 bg-gray-50/60">
         {egresos.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center px-6">
             <p className="text-gray-400 text-sm">No hay egresos este mes</p>
@@ -213,10 +235,7 @@ export default function AssignmentTab() {
       {/* ── Multi-select action bar ── */}
       {selectedIds.size > 0 && (
         <div className="fixed bottom-[72px] left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-white border-t border-gray-100 shadow-lg z-30 px-4 py-3 flex items-center gap-3">
-          <button
-            onClick={() => setSelectedIds(new Set())}
-            className="p-2 rounded-full hover:bg-gray-100 transition-colors"
-          >
+          <button onClick={() => setSelectedIds(new Set())} className="p-2 rounded-full hover:bg-gray-100">
             <X size={18} className="text-gray-500" />
           </button>
           <span className="flex-1 text-sm font-semibold text-gray-700">
@@ -231,7 +250,6 @@ export default function AssignmentTab() {
         </div>
       )}
 
-      {/* ── Reassign modal ── */}
       <ReassignModal
         open={reassignOpen}
         onClose={() => setReassignOpen(false)}
