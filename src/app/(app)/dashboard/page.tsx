@@ -151,39 +151,39 @@ export default function DashboardPage() {
         {mainTab === 'movimientos' ? (
           <>
             {/* Search */}
-            <div className="px-4 py-3 border-b border-gray-50">
+            <div className="px-4 py-2 border-b border-gray-50">
               {searching ? (
-                <div className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2">
-                  <Search size={14} className="text-gray-400 flex-shrink-0" />
+                <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-1.5">
+                  <Search size={13} className="text-gray-400 flex-shrink-0" />
                   <input
                     autoFocus
                     placeholder="Buscar movimiento..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="flex-1 bg-transparent text-sm outline-none text-gray-900 placeholder:text-gray-400"
+                    className="flex-1 bg-transparent text-xs outline-none text-gray-900 placeholder:text-gray-400"
                   />
                   <button onClick={() => { setSearch(''); setSearching(false) }}>
-                    <X size={14} className="text-gray-400" />
+                    <X size={13} className="text-gray-400" />
                   </button>
                 </div>
               ) : (
                 <button
                   onClick={() => setSearching(true)}
-                  className="flex items-center gap-2 w-full bg-gray-50 rounded-xl px-3 py-2"
+                  className="flex items-center gap-2 w-full bg-gray-50 rounded-lg px-3 py-1.5"
                 >
-                  <Search size={14} className="text-gray-400" />
-                  <span className="text-sm text-gray-400">Buscar movimientos...</span>
+                  <Search size={13} className="text-gray-400" />
+                  <span className="text-xs text-gray-400">Buscar movimientos...</span>
                 </button>
               )}
             </div>
 
             {/* Sub-tabs */}
-            <div className="flex gap-1 px-4 pt-2 border-b border-gray-50">
+            <div className="flex gap-1 px-4 pt-1.5 border-b border-gray-50">
               {(['ingreso', 'egreso'] as SubTab[]).map((t) => (
                 <button
                   key={t}
                   onClick={() => setSubTab(t)}
-                  className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-colors ${
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-t-lg transition-colors ${
                     subTab === t
                       ? t === 'egreso'
                         ? 'text-red-500 border-b-2 border-red-400'
