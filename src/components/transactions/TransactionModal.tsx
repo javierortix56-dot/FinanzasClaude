@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect, KeyboardEvent } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { X, Trash2, Tag } from 'lucide-react'
+import { X, Trash2 } from 'lucide-react'
 import { useUIStore } from '@/store/useUIStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
+import { useTransactionStore } from '@/store/useTransactionStore'
 import { addTransaction, updateTransaction, deleteTransaction } from '@/lib/transactions'
-import { DEFAULT_GASTO_CATEGORIES, DEFAULT_INGRESO_CATEGORIES, SHARED_USER_ID, SHARED_USERS } from '@/lib/constants'
+import { DEFAULT_GASTO_CATEGORIES, DEFAULT_INGRESO_CATEGORIES, SHARED_USER_ID, SHARED_USERS, formatAmount } from '@/lib/constants'
 import { DEFAULT_SETTINGS } from '@/lib/settings'
 import { Transaction, Currency, TransactionType } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -14,14 +15,10 @@ import { Input } from '@/components/ui/input'
 
 const CURRENCIES: Currency[] = ['ARS', 'COP', 'USD']
 
-interface UserOption {
-  id: string
-  nombre: string
-}
-
 export default function TransactionModal() {
   const { isTransactionModalOpen, editingTransaction, closeTransactionModal } = useUIStore()
-  const { settings } = useSettingsStore()
+  const { settings, hideAmounts } = useSettingsStore()
+  const { transactions } = useTransactionStore()
   const s = settings ?? DEFAULT_SETTINGS
 
   const [tipo, setTipo] = useState<TransactionType>('egreso')
@@ -29,19 +26,12 @@ export default function TransactionModal() {
   const [moneda, setMoneda] = useState<Currency>('ARS')
   const [categoria, setCategoria] = useState('')
   const [descripcion, setDescripcion] = useState('')
-  const [nota, setNota] = useState('')
-  const [tags, setTags] = useState<string[]>([])
-  const [tagInput, setTagInput] = useState('')
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
-  const [creadoPor, setCreadoPor] = useState('')
+  const [creadoPor, setCreadoPor] = useState(SHARED_USERS[0].id)
   const [ejecutado, setEjecutado] = useState(false)
-  const [recurrente, setRecurrente] = useState(false)
-  const [users, setUsers] = useState<UserOption[]>([])
+  const [asignadoA, setAsignadoA] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
-
-  // Hardcoded users
-  useEffect(() => { setUsers(SHARED_USERS) }, [])
 
   // Populate form on open
   useEffect(() => {
@@ -55,51 +45,50 @@ export default function TransactionModal() {
       setMoneda(editingTransaction.moneda)
       setCategoria(editingTransaction.categoria)
       setDescripcion(editingTransaction.descripcion)
-      setNota(editingTransaction.nota ?? '')
-      setTags(editingTransaction.tags ?? [])
       const d = editingTransaction.fecha.toDate()
       setFecha(d.toISOString().split('T')[0])
-      setCreadoPor(editingTransaction.creadoPor)
+      setCreadoPor(editingTransaction.creadoPor || SHARED_USERS[0].id)
       setEjecutado(editingTransaction.ejecutado)
-      setRecurrente(editingTransaction.recurrente ?? false)
+      setAsignadoA(editingTransaction.asignadoA ?? null)
     } else {
       setTipo('egreso')
       setMonto('')
       setMoneda('ARS')
       setCategoria('')
       setDescripcion('')
-      setNota('')
-      setTags([])
-      setTagInput('')
       setFecha(new Date().toISOString().split('T')[0])
-      setCreadoPor('')
+      setCreadoPor(SHARED_USERS[0].id)
       setEjecutado(false)
-      setRecurrente(false)
+      setAsignadoA(null)
     }
   }, [isTransactionModalOpen, editingTransaction])
 
-  const gastoCategories = s.categoriasGasto.length > 0 ? s.categoriasGasto : DEFAULT_GASTO_CATEGORIES.map((c) => ({ ...c, activa: true }))
-  const ingresoCategories = s.categoriasIngreso.length > 0 ? s.categoriasIngreso : DEFAULT_INGRESO_CATEGORIES.map((c) => ({ ...c, activa: true }))
+  const gastoCategories = s.categoriasGasto.length > 0
+    ? s.categoriasGasto
+    : DEFAULT_GASTO_CATEGORIES.map((c) => ({ ...c, activa: true }))
+  const ingresoCategories = s.categoriasIngreso.length > 0
+    ? s.categoriasIngreso
+    : DEFAULT_INGRESO_CATEGORIES.map((c) => ({ ...c, activa: true }))
   const categories = (tipo === 'egreso' ? gastoCategories : ingresoCategories).filter((c) => c.activa)
 
-  function addTag() {
-    const t = tagInput.trim().replace(/,/g, '')
-    if (t && !tags.includes(t)) setTags((prev) => [...prev, t])
-    setTagInput('')
-  }
+  // Sugerencias: últimas descripciones únicas de la misma categoría
+  const sugerencias = useMemo(() => {
+    if (!categoria) return []
+    return [
+      ...new Set(
+        transactions
+          .filter((t) => t.categoria === categoria && t.descripcion && t.descripcion !== descripcion)
+          .sort((a, b) => b.fecha.toDate().getTime() - a.fecha.toDate().getTime())
+          .map((t) => t.descripcion)
+      ),
+    ].slice(0, 5)
+  }, [transactions, categoria, descripcion])
 
-  function handleTagKeyDown(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault()
-      addTag()
-    } else if (e.key === 'Backspace' && tagInput === '' && tags.length > 0) {
-      setTags((prev) => prev.slice(0, -1))
-    }
-  }
-
-  function removeTag(t: string) {
-    setTags((prev) => prev.filter((x) => x !== t))
-  }
+  // Ingresos disponibles para asignar (todos los meses)
+  const ingresos = useMemo(
+    () => transactions.filter((t) => t.tipo === 'ingreso'),
+    [transactions]
+  )
 
   async function handleSave() {
     if (!monto || !categoria) return
@@ -112,13 +101,13 @@ export default function TransactionModal() {
         moneda,
         categoria,
         descripcion: descripcion.trim(),
-        nota: nota.trim(),
-        tags,
+        nota: editingTransaction?.nota ?? '',
+        tags: editingTransaction?.tags ?? [],
         fecha: { toDate: () => new Date(fecha + 'T12:00:00') },
         ejecutado,
-        asignadoA: editingTransaction?.asignadoA ?? null,
+        asignadoA: tipo === 'egreso' ? (asignadoA || null) : null,
         creadoPor: creadoPor || SHARED_USER_ID,
-        recurrente,
+        recurrente: editingTransaction?.recurrente ?? false,
       }
       if (editingTransaction?.id) {
         await updateTransaction(editingTransaction.id, data)
@@ -144,6 +133,8 @@ export default function TransactionModal() {
   }
 
   const canSave = !!monto && parseFloat(monto) > 0 && !!categoria
+
+  const selectedCat = categories.find((c) => c.id === categoria)
 
   return (
     <Dialog.Root
@@ -175,32 +166,35 @@ export default function TransactionModal() {
           </div>
 
           {/* Scrollable body */}
-          <div className="px-5 pt-4 pb-8 space-y-5 overflow-y-auto max-h-[78vh]">
-            {/* Tipo toggle */}
-            <div className="flex rounded-xl bg-gray-100 p-1 gap-1">
-              {(['egreso', 'ingreso'] as TransactionType[]).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => { setTipo(t); setCategoria('') }}
-                  className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                    tipo === t
-                      ? t === 'egreso'
-                        ? 'bg-red-500 text-white shadow-sm'
-                        : 'bg-green-500 text-white shadow-sm'
-                      : 'text-gray-500'
-                  }`}
-                >
-                  {t === 'egreso' ? 'Egreso' : 'Ingreso'}
-                </button>
-              ))}
-            </div>
+          <div className="px-5 pt-4 pb-8 space-y-4 overflow-y-auto max-h-[78vh]">
+
+            {/* Tipo toggle (solo al crear) */}
+            {!editingTransaction && (
+              <div className="flex rounded-xl bg-gray-100 p-1 gap-1">
+                {(['egreso', 'ingreso'] as TransactionType[]).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => { setTipo(t); setCategoria(''); setAsignadoA(null) }}
+                    className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
+                      tipo === t
+                        ? t === 'egreso'
+                          ? 'bg-red-500 text-white shadow-sm'
+                          : 'bg-green-500 text-white shadow-sm'
+                        : 'text-gray-500'
+                    }`}
+                  >
+                    {t === 'egreso' ? 'Egreso' : 'Ingreso'}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Monto */}
-            <div className="space-y-2">
+            <div>
               <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
                 Monto
               </label>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 mt-1.5">
                 <input
                   type="number"
                   inputMode="decimal"
@@ -227,151 +221,132 @@ export default function TransactionModal() {
               </div>
             </div>
 
-            {/* Categoría */}
-            <div className="space-y-2">
+            {/* Concepto / Descripción */}
+            <div>
               <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                Categoría
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {categories.map((cat) => (
-                  <button
-                    key={cat.id}
-                    onClick={() => setCategoria(cat.id)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
-                      categoria === cat.id
-                        ? 'text-white border-transparent shadow-sm'
-                        : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
-                    }`}
-                    style={
-                      categoria === cat.id
-                        ? { backgroundColor: cat.color, borderColor: cat.color }
-                        : {}
-                    }
-                  >
-                    {cat.nombre}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Descripción */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                Descripción
+                Concepto / Descripción
               </label>
               <Input
+                className="mt-1.5"
                 placeholder="¿En qué fue?"
                 value={descripcion}
                 onChange={(e) => setDescripcion(e.target.value)}
               />
             </div>
 
-            {/* Nota */}
-            <div className="space-y-1.5">
+            {/* Categoría dropdown */}
+            <div>
               <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                Nota
+                Categoría
               </label>
-              <textarea
-                placeholder="Detalle adicional (opcional)"
-                value={nota}
-                onChange={(e) => setNota(e.target.value)}
-                rows={2}
-                className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#534AB7]"
-              />
-            </div>
-
-            {/* Tags */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide flex items-center gap-1">
-                <Tag size={11} /> Etiquetas
-              </label>
-              <div className="flex flex-wrap gap-1.5 min-h-[36px] border border-gray-200 rounded-md px-2 py-1.5 focus-within:ring-2 focus-within:ring-[#534AB7]">
-                {tags.map((t) => (
-                  <span
-                    key={t}
-                    className="flex items-center gap-1 bg-[#534AB7]/10 text-[#534AB7] text-xs font-medium px-2 py-0.5 rounded-full"
-                  >
-                    {t}
-                    <button
-                      type="button"
-                      onClick={() => removeTag(t)}
-                      className="hover:text-red-500 transition-colors"
-                    >
-                      <X size={10} />
-                    </button>
-                  </span>
+              <select
+                value={categoria}
+                onChange={(e) => setCategoria(e.target.value)}
+                className="mt-1.5 w-full h-10 rounded-md border border-gray-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#534AB7]"
+                style={selectedCat ? { color: selectedCat.color, borderColor: selectedCat.color + '80' } : {}}
+              >
+                <option value="">Seleccionar categoría…</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.nombre}
+                  </option>
                 ))}
-                <input
-                  type="text"
-                  value={tagInput}
-                  onChange={(e) => setTagInput(e.target.value)}
-                  onKeyDown={handleTagKeyDown}
-                  onBlur={addTag}
-                  placeholder={tags.length === 0 ? 'Escribí y presioná Enter...' : ''}
-                  className="flex-1 min-w-[100px] text-xs outline-none bg-transparent"
-                />
-              </div>
+              </select>
             </div>
 
-            {/* Fecha + Persona */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
+            {/* Sugerencias */}
+            {sugerencias.length > 0 && (
+              <div>
+                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                  Sugerencias
+                </label>
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {sugerencias.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setDescripcion(s)}
+                      className="px-2.5 py-1 bg-gray-100 rounded-full text-xs text-gray-600 hover:bg-[#534AB7]/10 hover:text-[#534AB7] transition-colors"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Asignar a Ingreso (solo egresos) */}
+            {tipo === 'egreso' && (
+              <div>
+                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                  Asignar a Ingreso (Opcional)
+                </label>
+                <select
+                  value={asignadoA ?? ''}
+                  onChange={(e) => setAsignadoA(e.target.value || null)}
+                  className="mt-1.5 w-full h-10 rounded-md border border-gray-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#534AB7]"
+                >
+                  <option value="">Sin asignar</option>
+                  {ingresos.map((ing) => {
+                    const user = SHARED_USERS.find((u) => u.id === ing.creadoPor)
+                    const label = `${user?.nombre ?? ing.creadoPor} — ${
+                      hideAmounts ? '$ ****' : formatAmount(ing.monto, ing.moneda)
+                    } (${ing.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })})`
+                    return (
+                      <option key={ing.id} value={ing.id}>
+                        {label}
+                      </option>
+                    )
+                  })}
+                </select>
+              </div>
+            )}
+
+            {/* Fecha + Ejecutado */}
+            <div className="flex items-end gap-3">
+              <div className="flex-1">
                 <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
                   Fecha
                 </label>
                 <Input
+                  className="mt-1.5"
                   type="date"
                   value={fecha}
                   onChange={(e) => setFecha(e.target.value)}
                 />
               </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                  Persona
-                </label>
-                <select
-                  value={creadoPor}
-                  onChange={(e) => setCreadoPor(e.target.value)}
-                  className="flex h-10 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#534AB7]"
+              <div className="flex-shrink-0 pb-1">
+                <button
+                  type="button"
+                  onClick={() => setEjecutado((v) => !v)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-xs font-semibold transition-all ${
+                    ejecutado
+                      ? 'bg-green-50 border-green-500 text-green-600'
+                      : 'border-gray-200 text-gray-400'
+                  }`}
                 >
-                  {users.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.nombre}
-                    </option>
-                  ))}
-                </select>
+                  <span className={`w-2 h-2 rounded-full ${ejecutado ? 'bg-green-500' : 'bg-gray-300'}`} />
+                  {ejecutado ? 'Ejecutado' : 'Pendiente'}
+                </button>
               </div>
             </div>
 
-            {/* Ejecutado + Recurrente toggles */}
-            <div className="flex gap-3">
-              {/* Ejecutado */}
-              <button
-                type="button"
-                onClick={() => setEjecutado((v) => !v)}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${
-                  ejecutado
-                    ? 'bg-green-50 border-green-500 text-green-600'
-                    : 'border-gray-200 text-gray-400'
-                }`}
+            {/* Persona */}
+            <div>
+              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                Persona
+              </label>
+              <select
+                value={creadoPor}
+                onChange={(e) => setCreadoPor(e.target.value)}
+                className="mt-1.5 w-full h-10 rounded-md border border-gray-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#534AB7]"
               >
-                <span className={`w-2 h-2 rounded-full ${ejecutado ? 'bg-green-500' : 'bg-gray-300'}`} />
-                {ejecutado ? 'Ejecutado' : 'Pendiente'}
-              </button>
-
-              {/* Recurrente */}
-              <button
-                type="button"
-                onClick={() => setRecurrente((v) => !v)}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all ${
-                  recurrente
-                    ? 'bg-[#534AB7]/10 border-[#534AB7] text-[#534AB7]'
-                    : 'border-gray-200 text-gray-400'
-                }`}
-              >
-                <span className="text-base leading-none">↺</span>
-                Recurrente
-              </button>
+                {SHARED_USERS.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.nombre}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Actions */}
@@ -390,12 +365,19 @@ export default function TransactionModal() {
                   <Trash2 size={17} />
                 </button>
               )}
+              <button
+                onClick={closeTransactionModal}
+                disabled={saving}
+                className="h-11 px-4 rounded-xl border border-gray-200 text-sm font-semibold text-gray-500 hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
               <Button
                 onClick={handleSave}
                 disabled={saving || !canSave}
                 className="flex-1 h-11 text-base font-semibold"
               >
-                {saving ? 'Guardando...' : editingTransaction ? 'Guardar cambios' : 'Agregar'}
+                {saving ? 'Guardando...' : editingTransaction ? 'Guardar' : 'Agregar'}
               </Button>
             </div>
 

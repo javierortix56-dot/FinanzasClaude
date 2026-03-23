@@ -1,10 +1,11 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { CheckCheck, Edit3, Trash2, Unlink, CheckCircle2 } from 'lucide-react'
+import { CheckCheck, Edit3, Trash2, Unlink, CheckCircle2, Link2 } from 'lucide-react'
 import { Transaction } from '@/types'
 import { useUIStore } from '@/store/useUIStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
+import { useTransactionStore } from '@/store/useTransactionStore'
 import { markEjecutado, deleteTransaction, updateTransaction } from '@/lib/transactions'
 import { getCategoryById, formatAmount } from '@/lib/constants'
 
@@ -19,7 +20,13 @@ const RIGHT_OPEN = 170
 export default function SwipeableItem({ tx, userName }: Props) {
   const { openEditModal } = useUIStore()
   const { hideAmounts } = useSettingsStore()
+  const { transactions } = useTransactionStore()
   const cat = getCategoryById(tx.categoria)
+
+  // Para egresos: buscar el ingreso vinculado
+  const linkedIngreso = tx.tipo === 'egreso' && tx.asignadoA
+    ? transactions.find((t) => t.id === tx.asignadoA)
+    : null
 
   const [offset, setOffset] = useState(0)
   const [held, setHeld] = useState<'left' | 'right' | null>(null)
@@ -149,6 +156,12 @@ export default function SwipeableItem({ tx, userName }: Props) {
           </p>
           <p className="text-[10px] text-gray-400 leading-tight truncate mt-px">
             {dateStr}{userName ? ` · ${userName}` : ''}
+            {linkedIngreso && (
+              <span className="inline-flex items-center gap-0.5 ml-1 text-[#534AB7]">
+                <Link2 size={8} />
+                {linkedIngreso.descripcion || linkedIngreso.categoria}
+              </span>
+            )}
           </p>
         </div>
 
