@@ -1,8 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
 import { useTransactionStore } from '@/store/useTransactionStore'
-import { subscribeToTransactions } from '@/lib/transactions'
 import SwipeableItem from './SwipeableItem'
 import { Transaction } from '@/types'
 import { getCategoryById, SHARED_USERS } from '@/lib/constants'
@@ -17,13 +15,7 @@ const USER_NAMES: Record<string, string> = Object.fromEntries(
 )
 
 export default function TransactionList({ filter = 'all', search = '' }: Props) {
-  const { transactions, currentMonth, setTransactions, isLoading } = useTransactionStore()
-
-  // Subscribe to Firestore on month change
-  useEffect(() => {
-    const unsub = subscribeToTransactions(currentMonth, setTransactions)
-    return () => unsub()
-  }, [currentMonth, setTransactions])
+  const { transactions, isLoading } = useTransactionStore()
 
   const filtered: Transaction[] = transactions
     .filter((t) => filter === 'all' || t.tipo === filter)
