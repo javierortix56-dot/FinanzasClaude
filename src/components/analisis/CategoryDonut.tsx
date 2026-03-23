@@ -9,6 +9,18 @@ import { useBudgetStore } from '@/store/useBudgetStore'
 import DonutChart, { DonutSlice } from './DonutChart'
 import BudgetModal from './BudgetModal'
 
+// Vibrant palette for categories that lack a color or have the default gray
+const PALETTE = [
+  '#8B5CF6', '#10B981', '#3B82F6', '#F59E0B', '#EC4899',
+  '#EF4444', '#14B8A6', '#6366F1', '#F97316', '#06B6D4',
+]
+const DEFAULT_GRAY = '#6B7280'
+
+function resolveColor(color: string | undefined, index: number): string {
+  if (!color || color === DEFAULT_GRAY) return PALETTE[index % PALETTE.length]
+  return color
+}
+
 interface Props {
   transactions: Transaction[]
   settings: Settings
@@ -37,15 +49,15 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
   const total = [...catMap.values()].reduce((a, b) => a + b, 0)
 
   // Build slices sorted by amount desc
-  const allSettingsCats = [...settings.categoriasGasto, ...settings.categoriasIngreso]
+  const allSettingsCats = [...(settings.categoriasGasto ?? []), ...(settings.categoriasIngreso ?? [])]
   const slices: (DonutSlice & { nombre: string; amount: number; percent: number })[] = [...catMap.entries()]
     .sort((a, b) => b[1] - a[1])
-    .map(([id, amount]) => {
+    .map(([id, amount], index) => {
       const cat = allSettingsCats.find((c) => c.id === id) ?? getCategoryById(id) ?? defaultCats.find((c) => c.id === id)
       return {
         id,
         nombre: cat?.nombre ?? id,
-        color:  cat?.color  ?? '#6B7280',
+        color:  resolveColor(cat?.color, index),
         amount,
         percent: total > 0 ? (amount / total) * 100 : 0,
         dimmed: selected !== null && selected !== id,
@@ -165,8 +177,9 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
 
                 return (
                   <div key={slice.id}>
+                    {/* Main row */}
                     <button
-                      className="w-full flex items-center gap-2 hover:bg-gray-50 rounded-lg px-1 py-1 transition-colors"
+                      className="w-full flex items-center gap-2 hover:bg-gray-50 rounded-lg px-1 py-1.5 transition-colors"
                       onClick={() => setSelected(slice.id)}
                     >
                       <div
@@ -176,15 +189,26 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
                       <span className="flex-1 text-xs font-medium text-gray-700 text-left truncate">
                         {slice.nombre}
                       </span>
-                      <span className="text-[10px] text-gray-400 tabular-nums">{slice.percent.toFixed(0)}%</span>
-                      <span className="text-xs font-semibold text-gray-800 ml-1 tabular-nums">
+                      <span className="text-[10px] text-gray-400 tabular-nums w-7 text-right">
+                        {slice.percent.toFixed(0)}%
+                      </span>
+                      <span className="text-xs font-semibold text-gray-800 tabular-nums w-12 text-right">
                         {fmtShort(slice.amount)}
                       </span>
+                      {tipoTab === 'egreso' && !budget && (
+                        <button
+                          className="text-gray-300 hover:text-[#534AB7] transition-colors ml-0.5"
+                          onClick={(e) => { e.stopPropagation(); setBudgetCat(slice.id) }}
+                          title="Agregar presupuesto"
+                        >
+                          <SlidersHorizontal size={11} />
+                        </button>
+                      )}
                     </button>
 
-                    {/* Budget bar */}
-                    {budget ? (
-                      <div className="ml-4 mt-0.5 mb-1">
+                    {/* Budget bar (only when budget exists) */}
+                    {budget && (
+                      <div className="ml-4 mb-0.5">
                         <div className="flex justify-between text-[9px] text-gray-400 mb-0.5">
                           <span>{budget.moneda} {fmtShort(spentInBudgetMoneda)} / {fmtShort(budget.limite)}</span>
                           <span className={`font-semibold ${
@@ -200,15 +224,7 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
                           />
                         </div>
                       </div>
-                    ) : tipoTab === 'egreso' ? (
-                      <button
-                        className="ml-4 text-[9px] text-[#534AB7]/50 hover:text-[#534AB7] flex items-center gap-0.5"
-                        onClick={(e) => { e.stopPropagation(); setBudgetCat(slice.id) }}
-                      >
-                        <SlidersHorizontal size={9} />
-                        Agregar presupuesto
-                      </button>
-                    ) : null}
+                    )}
                   </div>
                 )
               })
