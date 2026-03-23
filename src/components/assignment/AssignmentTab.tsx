@@ -91,12 +91,16 @@ export default function AssignmentTab() {
 
   // Desasignar todos
   async function desassignAll() {
-    if (!unassignConfirm) { setUnassignConfirm(true); return }
+    if (!unassignConfirm) {
+      setUnassignConfirm(true)
+      setTimeout(() => setUnassignConfirm(false), 4000)
+      return
+    }
     setUnassignLoading(true)
     setUnassignConfirm(false)
     try {
       const assigned = egresos.filter((e) => e.asignadoA !== null)
-      await Promise.all(assigned.map((e) => updateTransaction(e.id!, { asignadoA: null })))
+      await Promise.allSettled(assigned.map((e) => updateTransaction(e.id!, { asignadoA: null })))
     } finally {
       setUnassignLoading(false)
     }
@@ -105,11 +109,11 @@ export default function AssignmentTab() {
   async function desassignGroup(incomeId: string) {
     const group = groups.get(incomeId)
     if (!group) return
-    await Promise.all(group.expenses.map((e) => updateTransaction(e.id!, { asignadoA: null })))
+    await Promise.allSettled(group.expenses.map((e) => updateTransaction(e.id!, { asignadoA: null })))
   }
 
   async function reassignSelected(newIncomeId: string) {
-    await Promise.all([...selectedIds].map((id) => updateTransaction(id, { asignadoA: newIncomeId })))
+    await Promise.allSettled([...selectedIds].map((id) => updateTransaction(id, { asignadoA: newIncomeId })))
     setSelectedIds(new Set())
     setReassignOpen(false)
   }
@@ -132,9 +136,7 @@ export default function AssignmentTab() {
 
   const unassignedExpenses = groups.get('unassigned')?.expenses ?? []
   const groupEntries = [
-    ...ingresos
-      .map((inc) => ({ key: inc.id!, group: groups.get(inc.id!)! }))
-      .filter(({ group }) => group.expenses.length > 0 || ingresos.length <= 5),
+    ...ingresos.map((inc) => ({ key: inc.id!, group: groups.get(inc.id!)! })),
     { key: 'unassigned', group: { income: null, expenses: unassignedExpenses } },
   ]
 
@@ -212,7 +214,6 @@ export default function AssignmentTab() {
           </div>
         ) : (
           groupEntries.map(({ key, group }) => {
-            if (key !== 'unassigned' && group.expenses.length === 0) return null
             return (
               <AssignmentGroup
                 key={key}
