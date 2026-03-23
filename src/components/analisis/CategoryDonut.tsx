@@ -76,12 +76,12 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
   return (
     <div>
       {/* Inner tabs */}
-      <div className="flex gap-1 px-4 pt-3 border-b border-gray-50">
+      <div className="flex gap-1 px-4 pt-2.5 border-b border-gray-50">
         {(['egreso', 'ingreso'] as TipoTab[]).map((t) => (
           <button
             key={t}
             onClick={() => { setTipoTab(t); setSelected(null) }}
-            className={`px-4 py-2 text-xs font-semibold rounded-t-lg transition-colors ${
+            className={`px-3 py-1.5 text-xs font-semibold rounded-t-lg transition-colors ${
               tipoTab === t
                 ? t === 'egreso'
                   ? 'text-red-500 border-b-2 border-red-400'
@@ -95,18 +95,18 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
       </div>
 
       {/* Donut */}
-      <div className="flex justify-center py-4">
+      <div className="flex justify-center py-3">
         <DonutChart
           slices={slices}
           total={total}
           centerLabel={centerLabel}
           centerSub={centerSub}
-          size={160}
+          size={140}
         />
       </div>
 
       {/* Legend / Detail */}
-      <div className="px-4 pb-4">
+      <div className="px-4 pb-3">
         {selected ? (
           /* ── Detail view ── */
           <>
@@ -146,9 +146,9 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
           </>
         ) : (
           /* ── Category legend ── */
-          <div className="space-y-3">
+          <div className="space-y-1">
             {slices.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-4">
+              <p className="text-xs text-gray-400 text-center py-3">
                 No hay movimientos en este período
               </p>
             ) : (
@@ -170,34 +170,28 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
                       onClick={() => setSelected(slice.id)}
                     >
                       <div
-                        className="w-3 h-3 rounded-full flex-shrink-0"
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                         style={{ backgroundColor: slice.color }}
                       />
-                      <span className="flex-1 text-sm font-medium text-gray-800 text-left truncate">
+                      <span className="flex-1 text-xs font-medium text-gray-700 text-left truncate">
                         {slice.nombre}
                       </span>
-                      <span className="text-xs text-gray-400">{slice.percent.toFixed(0)}%</span>
-                      <span className="text-sm font-semibold text-gray-900 ml-1">
+                      <span className="text-[10px] text-gray-400 tabular-nums">{slice.percent.toFixed(0)}%</span>
+                      <span className="text-xs font-semibold text-gray-800 ml-1 tabular-nums">
                         {fmtShort(slice.amount)}
                       </span>
                     </button>
 
                     {/* Budget bar */}
                     {budget ? (
-                      <div className="ml-5 mt-1">
-                        <div className="flex justify-between text-[10px] text-gray-400 mb-0.5">
-                          <span>
-                            {budget.moneda} {fmtShort(spentInBudgetMoneda)} de {fmtShort(budget.limite)}
-                          </span>
-                          <span
-                            className={`font-semibold ${
-                              budgetPct >= 100 ? 'text-red-500' : budgetPct >= 80 ? 'text-orange-500' : 'text-green-600'
-                            }`}
-                          >
-                            {Math.round(budgetPct)}%
-                          </span>
+                      <div className="ml-4 mt-0.5 mb-1">
+                        <div className="flex justify-between text-[9px] text-gray-400 mb-0.5">
+                          <span>{budget.moneda} {fmtShort(spentInBudgetMoneda)} / {fmtShort(budget.limite)}</span>
+                          <span className={`font-semibold ${
+                            budgetPct >= 100 ? 'text-red-500' : budgetPct >= 80 ? 'text-orange-500' : 'text-green-600'
+                          }`}>{Math.round(budgetPct)}%</span>
                         </div>
-                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
                           <div
                             className={`h-full rounded-full transition-all ${
                               budgetPct >= 100 ? 'bg-red-500' : budgetPct >= 80 ? 'bg-orange-400' : 'bg-green-500'
@@ -208,10 +202,10 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
                       </div>
                     ) : tipoTab === 'egreso' ? (
                       <button
-                        className="ml-5 mt-0.5 text-[10px] text-[#534AB7]/60 hover:text-[#534AB7] flex items-center gap-1"
+                        className="ml-4 text-[9px] text-[#534AB7]/50 hover:text-[#534AB7] flex items-center gap-0.5"
                         onClick={(e) => { e.stopPropagation(); setBudgetCat(slice.id) }}
                       >
-                        <SlidersHorizontal size={10} />
+                        <SlidersHorizontal size={9} />
                         Agregar presupuesto
                       </button>
                     ) : null}

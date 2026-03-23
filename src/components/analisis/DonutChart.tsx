@@ -1,10 +1,10 @@
 'use client'
 
-const R  = 45
-const CX = 60
-const CY = 60
-const CIRC = 2 * Math.PI * R   // ≈ 282.74
-const GAP  = 2                 // gap between slices
+const R    = 42
+const CX   = 60
+const CY   = 60
+const CIRC = 2 * Math.PI * R
+const GAP  = 1.5
 
 export interface DonutSlice {
   id: string
@@ -21,13 +21,16 @@ interface Props {
   size?: number
 }
 
-export default function DonutChart({ slices, total, centerLabel, centerSub, size = 160 }: Props) {
+export default function DonutChart({ slices, total, centerLabel, centerSub, size = 150 }: Props) {
   if (total === 0) {
     return (
       <div style={{ width: size, height: size }} className="flex items-center justify-center">
         <div
-          className="rounded-full border-[18px] border-gray-100 flex items-center justify-center"
-          style={{ width: size, height: size }}
+          className="rounded-full flex items-center justify-center"
+          style={{
+            width: size, height: size,
+            border: '13px solid #f3f4f6',
+          }}
         />
       </div>
     )
@@ -42,10 +45,10 @@ export default function DonutChart({ slices, total, centerLabel, centerSub, size
         cx={CX} cy={CY} r={R}
         fill="none"
         stroke={slice.color}
-        strokeWidth={18}
+        strokeWidth={13}
         strokeDasharray={`${portion} ${CIRC - portion}`}
         strokeDashoffset={-accumulated}
-        opacity={slice.dimmed ? 0.2 : 1}
+        opacity={slice.dimmed ? 0.15 : 1}
         style={{ transition: 'opacity 0.2s' }}
       />
     )
@@ -60,27 +63,29 @@ export default function DonutChart({ slices, total, centerLabel, centerSub, size
       height={size}
       style={{ overflow: 'visible' }}
     >
-      {/* Background ring */}
-      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#f3f4f6" strokeWidth={18} />
+      {/* Shadow ring */}
+      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#f1f5f9" strokeWidth={13} />
 
-      {/* Slices — rotated so first slice starts at 12 o'clock */}
+      {/* Slices */}
       <g transform={`rotate(-90 ${CX} ${CY})`}>{circles}</g>
 
-      {/* Center text */}
+      {/* Center: sub label */}
       <text
-        x={CX} y={CY - 7}
+        x={CX} y={CY - 6}
         textAnchor="middle"
-        fontSize="8"
-        fill="#6b7280"
+        fontSize="7"
+        fill="#9ca3af"
         fontFamily="system-ui"
+        letterSpacing="0.3"
       >
         {centerSub}
       </text>
+      {/* Center: main amount */}
       <text
         x={CX} y={CY + 8}
         textAnchor="middle"
-        fontSize="10"
-        fontWeight="700"
+        fontSize="11"
+        fontWeight="800"
         fill="#111827"
         fontFamily="system-ui"
       >

@@ -74,16 +74,16 @@ export default function HistoricoTab() {
   }
 
   const lineSeries: LineSeries[] = [
-    { label: 'Ingresos', color: '#22c55e', values: ingresosVals },
-    { label: 'Egresos',  color: '#ef4444', values: egresosVals  },
-    { label: 'Balance',  color: '#534AB7', values: balanceVals, dashed: true },
+    { label: 'Ingresos', color: '#10b981', values: ingresosVals },
+    { label: 'Egresos',  color: '#f43f5e', values: egresosVals  },
+    { label: 'Balance',  color: '#a78bfa', values: balanceVals, dashed: true },
   ]
 
   return (
     <div className="overflow-y-auto pb-8">
       {/* Section 1: Comparison */}
       <div className="border-b border-gray-50">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-4 pt-4 pb-1">
+        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-4 pt-3 pb-0.5">
           Resumen — vs {monthLabel(prevMonth)}
         </p>
         <SummaryComparison
@@ -96,7 +96,7 @@ export default function HistoricoTab() {
 
       {/* Section 2: Donut by category */}
       <div className="border-b border-gray-50">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-4 pt-4 pb-0">
+        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-4 pt-3 pb-0">
           Por categoría
         </p>
         <CategoryDonut
@@ -108,12 +108,12 @@ export default function HistoricoTab() {
       </div>
 
       {/* Section 3: Line chart */}
-      <div>
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-4 pt-4 pb-2">
+      <div className="pb-2">
+        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-4 pt-3 pb-1">
           Evolución 6 meses
         </p>
         {loadingChart ? (
-          <div className="flex justify-center py-8">
+          <div className="flex justify-center py-6">
             <div className="w-5 h-5 border-2 border-[#534AB7] border-t-transparent rounded-full animate-spin" />
           </div>
         ) : (

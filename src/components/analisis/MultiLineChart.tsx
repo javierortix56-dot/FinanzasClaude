@@ -1,10 +1,12 @@
 'use client'
 
-const W = 320
-const H = 100
-const PAD_L = 38
-const PAD_B = 20
-const PAD_T = 10
+const W     = 320
+const H     = 120
+const PAD_L = 34
+const PAD_B = 22
+const PAD_T = 8
+const PLOT_W = W - PAD_L
+const PLOT_H = H - PAD_B - PAD_T
 
 export interface LineSeries {
   label: string
@@ -19,14 +21,14 @@ interface Props {
   currency?: string
 }
 
-function scaleX(i: number, n: number) {
-  if (n <= 1) return PAD_L + (W - PAD_L) / 2
-  return PAD_L + (i / (n - 1)) * (W - PAD_L)
+function px(i: number, n: number) {
+  if (n <= 1) return PAD_L + PLOT_W / 2
+  return PAD_L + (i / (n - 1)) * PLOT_W
 }
 
-function scaleY(val: number, min: number, max: number) {
-  if (max === min) return PAD_T + (H - PAD_B - PAD_T) / 2
-  return PAD_T + ((max - val) / (max - min)) * (H - PAD_B - PAD_T)
+function py(val: number, min: number, max: number) {
+  if (max === min) return PAD_T + PLOT_H / 2
+  return PAD_T + ((max - val) / (max - min)) * PLOT_H
 }
 
 function fmt(n: number) {
@@ -35,6 +37,25 @@ function fmt(n: number) {
   return n.toFixed(0)
 }
 
+/** Smooth cubic-bezier path through points */
+function smoothLine(pts: [number, number][]): string {
+  if (pts.length < 2) return ''
+  let d = `M ${pts[0][0]},${pts[0][1]}`
+  for (let i = 1; i < pts.length; i++) {
+    const cpx = (pts[i - 1][0] + pts[i][0]) / 2
+    d += ` C ${cpx},${pts[i - 1][1]} ${cpx},${pts[i][1]} ${pts[i][0]},${pts[i][1]}`
+  }
+  return d
+}
+
+/** Area fill: close at bottom */
+function areaFill(pts: [number, number][], bottom: number): string {
+  if (pts.length < 2) return ''
+  return `${smoothLine(pts)} L ${pts[pts.length - 1][0]},${bottom} L ${pts[0][0]},${bottom} Z`
+}
+
+const GRID_ROWS = 3
+
 export default function MultiLineChart({ months, series, currency = '' }: Props) {
   if (!months.length || !series.length) return null
 
@@ -42,79 +63,100 @@ export default function MultiLineChart({ months, series, currency = '' }: Props)
   const minVal  = Math.min(...allVals, 0)
   const maxVal  = Math.max(...allVals, 1)
   const n       = months.length
+  const bottom  = PAD_T + PLOT_H
+  const zeroY   = py(0, minVal, maxVal)
 
   return (
-    <div className="px-4 pb-4">
+    <div className="px-3 pb-3">
       {/* Legend */}
-      <div className="flex flex-wrap gap-3 mb-2">
+      <div className="flex gap-3 mb-2 px-1">
         {series.map((s) => (
-          <div key={s.label} className="flex items-center gap-1.5">
-            <svg width="20" height="8">
-              <line
-                x1="0" y1="4" x2="20" y2="4"
-                stroke={s.color}
-                strokeWidth="2"
-                strokeDasharray={s.dashed ? '4 2' : undefined}
-              />
-            </svg>
-            <span className="text-[10px] text-gray-500">{s.label}</span>
+          <div key={s.label} className="flex items-center gap-1">
+            <span
+              className="inline-block w-2 h-2 rounded-full"
+              style={{ backgroundColor: s.color, opacity: s.dashed ? 0.7 : 1 }}
+            />
+            <span className="text-[9px] font-medium text-gray-400">{s.label}</span>
           </div>
         ))}
       </div>
 
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ overflow: 'visible' }}>
-        {/* Zero line */}
+        <defs>
+          {series.map((s) => (
+            <linearGradient key={s.label} id={`grad-${s.label}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"   stopColor={s.color} stopOpacity={s.dashed ? 0.06 : 0.12} />
+              <stop offset="100%" stopColor={s.color} stopOpacity="0" />
+            </linearGradient>
+          ))}
+        </defs>
+
+        {/* Horizontal grid lines */}
+        {Array.from({ length: GRID_ROWS }, (_, i) => {
+          const v = minVal + (i / (GRID_ROWS - 1)) * (maxVal - minVal)
+          const y = py(v, minVal, maxVal)
+          return (
+            <g key={i}>
+              <line
+                x1={PAD_L} y1={y} x2={W} y2={y}
+                stroke="#f3f4f6" strokeWidth="1"
+              />
+              <text
+                x={PAD_L - 3} y={y + 3}
+                textAnchor="end" fontSize="6.5" fill="#d1d5db"
+                fontFamily="system-ui"
+              >
+                {fmt(v)}
+              </text>
+            </g>
+          )
+        })}
+
+        {/* Zero line (only when there are negatives) */}
         {minVal < 0 && (
           <line
-            x1={PAD_L} y1={scaleY(0, minVal, maxVal)}
-            x2={W}     y2={scaleY(0, minVal, maxVal)}
+            x1={PAD_L} y1={zeroY} x2={W} y2={zeroY}
             stroke="#e5e7eb" strokeWidth="1" strokeDasharray="3 2"
           />
         )}
 
-        {/* Y-axis labels */}
-        {[minVal, (minVal + maxVal) / 2, maxVal].map((v, i) => (
-          <text
-            key={i}
-            x={PAD_L - 4}
-            y={scaleY(v, minVal, maxVal) + 3}
-            textAnchor="end"
-            fontSize="7"
-            fill="#9ca3af"
-            fontFamily="system-ui"
-          >
-            {fmt(v)}
-          </text>
-        ))}
+        {/* Area fills */}
+        {series.map((s) => {
+          const pts: [number, number][] = s.values.map((v, i) => [px(i, n), py(v, minVal, maxVal)])
+          return (
+            <path
+              key={s.label}
+              d={areaFill(pts, bottom)}
+              fill={`url(#grad-${s.label})`}
+            />
+          )
+        })}
 
         {/* Lines */}
         {series.map((s) => {
-          const pts = s.values
-            .map((v, i) => `${scaleX(i, n)},${scaleY(v, minVal, maxVal)}`)
-            .join(' ')
+          const pts: [number, number][] = s.values.map((v, i) => [px(i, n), py(v, minVal, maxVal)])
           return (
             <g key={s.label}>
-              <polyline
-                points={pts}
+              <path
+                d={smoothLine(pts)}
                 fill="none"
                 stroke={s.color}
-                strokeWidth="2"
+                strokeWidth={s.dashed ? 1.5 : 2}
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeDasharray={s.dashed ? '5 3' : undefined}
+                opacity={s.dashed ? 0.75 : 1}
               />
-              {/* Dots */}
-              {s.values.map((v, i) => (
-                <circle
-                  key={i}
-                  cx={scaleX(i, n)}
-                  cy={scaleY(v, minVal, maxVal)}
-                  r="3"
-                  fill="white"
-                  stroke={s.color}
-                  strokeWidth="1.5"
-                />
-              ))}
+              {/* End-point dot only */}
+              {(() => {
+                const last = pts[pts.length - 1]
+                return (
+                  <circle
+                    cx={last[0]} cy={last[1]} r="3"
+                    fill="white" stroke={s.color} strokeWidth="1.5"
+                  />
+                )
+              })()}
             </g>
           )
         })}
@@ -123,11 +165,11 @@ export default function MultiLineChart({ months, series, currency = '' }: Props)
         {months.map((m, i) => (
           <text
             key={m}
-            x={scaleX(i, n)}
-            y={H - 4}
+            x={px(i, n)}
+            y={H - 5}
             textAnchor="middle"
             fontSize="7"
-            fill={i === n - 1 ? '#534AB7' : '#9ca3af'}
+            fill={i === n - 1 ? '#534AB7' : '#c4c4c4'}
             fontWeight={i === n - 1 ? '700' : '400'}
             fontFamily="system-ui"
           >

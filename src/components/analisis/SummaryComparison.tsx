@@ -32,24 +32,25 @@ function Metric({ label, value, prev, curr, currency = '', higherIsBetter = true
   const diff = prev === 0 ? 0 : ((curr - prev) / prev) * 100
   const improved = higherIsBetter ? curr >= prev : curr <= prev
   const arrow = diff === 0 ? null : improved
-    ? <ArrowUp  size={12} className="text-green-500" />
-    : <ArrowDown size={12} className="text-red-500"  />
+    ? <ArrowUp  size={10} className="text-green-500" />
+    : <ArrowDown size={10} className="text-red-500"  />
 
   return (
-    <div className="bg-gray-50 rounded-xl p-3">
-      <p className="text-[10px] text-gray-400 font-medium mb-1">{label}</p>
-      <p className="text-sm font-bold text-gray-900 leading-tight">
+    <div className="bg-gray-50 rounded-xl px-3 py-2.5">
+      <p className="text-[9px] text-gray-400 font-medium uppercase tracking-wide mb-1">{label}</p>
+      <p className="text-sm font-bold text-gray-900 leading-tight tabular-nums">
         {typeof value === 'string' ? value : formatAmount(value, currency)}
       </p>
-      {diff !== 0 && (
-        <div className="flex items-center gap-0.5 mt-1">
-          {arrow}
-          <span className={`text-[10px] font-semibold ${improved ? 'text-green-500' : 'text-red-500'}`}>
-            {Math.abs(diff).toFixed(0)}%
-          </span>
-          <span className="text-[10px] text-gray-400 ml-0.5">vs anterior</span>
-        </div>
-      )}
+      <div className="flex items-center gap-0.5 mt-0.5 h-3">
+        {diff !== 0 && (
+          <>
+            {arrow}
+            <span className={`text-[9px] font-semibold ${improved ? 'text-green-500' : 'text-red-500'}`}>
+              {Math.abs(diff).toFixed(0)}%
+            </span>
+          </>
+        )}
+      </div>
     </div>
   )
 }
@@ -63,7 +64,7 @@ export default function SummaryComparison({ current, previous, settings, monedaB
   const pBalance  = pIngresos - pEgresos
 
   return (
-    <div className="grid grid-cols-2 gap-2 px-4 py-3">
+    <div className="grid grid-cols-2 gap-2 px-4 py-2.5">
       <Metric label="Balance"      value={cBalance}   prev={pBalance}   curr={cBalance}   currency={monedaBase} higherIsBetter />
       <Metric label="Ingresos"     value={cIngresos}  prev={pIngresos}  curr={cIngresos}  currency={monedaBase} higherIsBetter />
       <Metric label="Egresos"      value={cEgresos}   prev={pEgresos}   curr={cEgresos}   currency={monedaBase} higherIsBetter={false} />
