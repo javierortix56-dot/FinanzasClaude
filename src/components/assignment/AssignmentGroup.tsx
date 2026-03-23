@@ -6,9 +6,10 @@ import { getCategoryById, formatAmount } from '@/lib/constants'
 import { toBase } from '@/lib/currency'
 import { Settings } from '@/types'
 import { Currency } from '@/types'
+import { useSettingsStore } from '@/store/useSettingsStore'
 
 interface Props {
-  income: Transaction | null         // null = "Sin asignar"
+  income: Transaction | null
   expenses: Transaction[]
   selectedIds: Set<string>
   onToggleSelect: (id: string) => void
@@ -32,13 +33,26 @@ export default function AssignmentGroup({
   settings,
   monedaBase,
 }: Props) {
+  const { hideAmounts } = useSettingsStore()
   const isUnassigned = income === null
 
   // Total egresos en moneda base
-  const total = expenses.reduce(
+  const totalGastado = expenses.reduce(
     (sum, e) => sum + toBase(e.monto, e.moneda, monedaBase, settings),
     0
   )
+
+  // Ingreso convertido a moneda base (para calcular % disponible)
+  const incomeBase = income
+    ? toBase(income.monto, income.moneda, monedaBase, settings)
+    : 0
+  const disponible = incomeBase - totalGastado
+  const usedPercent = incomeBase > 0 ? Math.min((totalGastado / incomeBase) * 100, 100) : 0
+
+  const barColor =
+    usedPercent >= 100 ? '#ef4444' :
+    usedPercent >= 85  ? '#f59e0b' :
+    '#22c55e'
 
   const incomeDate = income?.fecha.toDate().toLocaleDateString('es-AR', {
     day: 'numeric',
@@ -90,10 +104,12 @@ export default function AssignmentGroup({
           )}
         </div>
 
-        {/* Total + count */}
+        {/* Total gastado + count */}
         <div className="text-right flex-shrink-0">
-          <p className={`text-xs font-semibold ${isUnassigned ? 'text-orange-600' : 'text-gray-600'}`}>
-            {formatAmount(total, monedaBase)}
+          <p className={`text-xs font-semibold ${isUnassigned ? 'text-orange-600' : 'text-red-500'}`}>
+            <span className={hideAmounts ? 'blur-sm' : ''}>
+              -{formatAmount(totalGastado, monedaBase)}
+            </span>
           </p>
           <p className="text-[10px] text-gray-400">{expenses.length} egreso{expenses.length !== 1 ? 's' : ''}</p>
         </div>
@@ -109,6 +125,39 @@ export default function AssignmentGroup({
           </button>
         )}
       </div>
+
+      {/* ── Barra de progreso por ingreso ── */}
+      {!isUnassigned && incomeBase > 0 && (
+        <div className="px-4 pb-3 pt-1 bg-gray-50/50 border-b border-gray-100">
+          <div className="flex justify-between items-baseline mb-1">
+            <span className="text-[10px] text-gray-400">
+              Ingreso: <span className={`font-semibold text-green-600 ${hideAmounts ? 'blur-sm' : ''}`}>
+                +{formatAmount(incomeBase, monedaBase)}
+              </span>
+            </span>
+            <span className={`text-[10px] font-semibold ${disponible >= 0 ? 'text-gray-600' : 'text-red-500'}`}>
+              <span className={hideAmounts ? 'blur-sm' : ''}>
+                {disponible >= 0 ? 'Disponible' : 'Excedido'}: {formatAmount(Math.abs(disponible), monedaBase)}
+              </span>
+            </span>
+          </div>
+          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{ width: `${usedPercent}%`, backgroundColor: barColor }}
+            />
+          </div>
+          <div className="flex justify-between mt-0.5">
+            <span className="text-[9px] text-gray-400">0%</span>
+            <span
+              className="text-[9px] font-semibold"
+              style={{ color: barColor }}
+            >
+              {Math.round(usedPercent)}% usado
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* ── Expense list ── */}
       {isExpanded && (
@@ -130,20 +179,20 @@ export default function AssignmentGroup({
                 <button
                   key={exp.id}
                   onClick={() => onToggleSelect(exp.id!)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
                     isSelected ? 'bg-[#534AB7]/8' : 'hover:bg-gray-50'
                   }`}
                 >
                   {/* Checkbox */}
                   <div
-                    className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
+                    className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
                       isSelected
                         ? 'bg-[#534AB7] border-[#534AB7]'
                         : 'border-gray-300'
                     }`}
                   >
                     {isSelected && (
-                      <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                      <svg width="8" height="6" viewBox="0 0 10 8" fill="none">
                         <path d="M1 4l2.5 2.5L9 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     )}
@@ -151,30 +200,22 @@ export default function AssignmentGroup({
 
                   {/* Content */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
+                    <p className="text-xs font-medium text-gray-900 truncate">
                       {exp.descripcion || cat?.nombre || exp.categoria}
                     </p>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      {cat && (
-                        <span
-                          className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                          style={{ backgroundColor: cat.color + '20', color: cat.color }}
-                        >
-                          {cat.nombre}
-                        </span>
-                      )}
-                      <span className="text-[10px] text-gray-400">{dateStr}</span>
-                    </div>
+                    <p className="text-[10px] text-gray-400 mt-px">
+                      {dateStr}{cat ? ` · ${cat.nombre}` : ''}
+                    </p>
                   </div>
 
                   {/* Amount + status */}
-                  <div className="flex-shrink-0 text-right">
-                    <p className="text-sm font-semibold text-red-500">
+                  <div className="flex-shrink-0 flex items-center gap-1.5">
+                    <p className={`text-xs font-semibold text-red-500 ${hideAmounts ? 'blur-sm' : ''}`}>
                       -{formatAmount(exp.monto, exp.moneda)}
                     </p>
                     {exp.ejecutado
-                      ? <CheckCircle2 size={12} className="text-green-400 ml-auto" />
-                      : <span className="text-[10px] text-gray-400">pendiente</span>
+                      ? <CheckCircle2 size={11} className="text-green-400 flex-shrink-0" />
+                      : <div className="w-[11px] h-[11px] rounded-full border border-gray-200 flex-shrink-0" />
                     }
                   </div>
                 </button>
