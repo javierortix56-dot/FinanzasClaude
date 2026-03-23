@@ -6,9 +6,11 @@ import { X, Trash2 } from 'lucide-react'
 import { useUIStore } from '@/store/useUIStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useTransactionStore } from '@/store/useTransactionStore'
+import { useAuthStore } from '@/store/useAuthStore'
 import { addTransaction, updateTransaction, deleteTransaction } from '@/lib/transactions'
 import { DEFAULT_GASTO_CATEGORIES, DEFAULT_INGRESO_CATEGORIES, SHARED_USER_ID, SHARED_USERS, formatAmount } from '@/lib/constants'
 import { DEFAULT_SETTINGS } from '@/lib/settings'
+import { toBase } from '@/lib/currency'
 import { Transaction, Currency, TransactionType } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,7 +21,9 @@ export default function TransactionModal() {
   const { isTransactionModalOpen, editingTransaction, closeTransactionModal } = useUIStore()
   const { settings, hideAmounts } = useSettingsStore()
   const { transactions } = useTransactionStore()
+  const { monedaBase } = useAuthStore()
   const s = settings ?? DEFAULT_SETTINGS
+  const base = monedaBase as Currency
 
   const [tipo, setTipo] = useState<TransactionType>('egreso')
   const [monto, setMonto] = useState('')
@@ -84,11 +88,29 @@ export default function TransactionModal() {
     ].slice(0, 5)
   }, [transactions, categoria, descripcion])
 
-  // Ingresos disponibles para asignar (todos los meses)
-  const ingresos = useMemo(
-    () => transactions.filter((t) => t.tipo === 'ingreso'),
-    [transactions]
-  )
+  // Ingresos con capacidad restante calculada
+  const ingresoOptions = useMemo(() => {
+    const montoExp = parseFloat(monto.replace(',', '.')) || 0
+    const expBase = toBase(montoExp, moneda, base, s)
+
+    return transactions
+      .filter((t) => t.tipo === 'ingreso')
+      .sort((a, b) => b.fecha.toDate().getTime() - a.fecha.toDate().getTime())
+      .map((ing) => {
+        const incBase = toBase(ing.monto, ing.moneda, base, s)
+        const usedBase = transactions
+          .filter(
+            (t) =>
+              t.tipo === 'egreso' &&
+              t.asignadoA === ing.id &&
+              t.id !== editingTransaction?.id // excluir el tx actual al editar
+          )
+          .reduce((sum, t) => sum + toBase(t.monto, t.moneda, base, s), 0)
+        const remaining = incBase - usedBase
+        const wouldExceed = expBase > 0 && expBase > remaining
+        return { ing, remaining, wouldExceed }
+      })
+  }, [transactions, monto, moneda, base, s, editingTransaction])
 
   async function handleSave() {
     if (!monto || !categoria) return
@@ -287,18 +309,25 @@ export default function TransactionModal() {
                   className="mt-1.5 w-full h-10 rounded-md border border-gray-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#534AB7]"
                 >
                   <option value="">Sin asignar</option>
-                  {ingresos.map((ing) => {
+                  {ingresoOptions.map(({ ing, remaining, wouldExceed }) => {
                     const user = SHARED_USERS.find((u) => u.id === ing.creadoPor)
-                    const label = `${user?.nombre ?? ing.creadoPor} — ${
-                      hideAmounts ? '$ ****' : formatAmount(ing.monto, ing.moneda)
-                    } (${ing.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })})`
+                    const dateStr = ing.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
+                    const remainStr = hideAmounts ? '$ ****' : formatAmount(remaining, base)
+                    const label = wouldExceed
+                      ? `🚫 ${user?.nombre ?? ing.creadoPor} — disp: ${remainStr} (${dateStr})`
+                      : `${user?.nombre ?? ing.creadoPor} — disp: ${remainStr} (${dateStr})`
                     return (
-                      <option key={ing.id} value={ing.id}>
+                      <option key={ing.id} value={ing.id} disabled={wouldExceed}>
                         {label}
                       </option>
                     )
                   })}
                 </select>
+                {asignadoA && ingresoOptions.find((o) => o.ing.id === asignadoA)?.wouldExceed && (
+                  <p className="text-[10px] text-red-500 mt-1">
+                    Este egreso excede la capacidad del ingreso seleccionado
+                  </p>
+                )}
               </div>
             )}
 

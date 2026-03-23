@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/useAuthStore'
 import { updateTransaction } from '@/lib/transactions'
 import { DEFAULT_SETTINGS } from '@/lib/settings'
 import { SHARED_USERS } from '@/lib/constants'
+import { toBase } from '@/lib/currency'
 import { Transaction, Currency } from '@/types'
 import AssignmentGroup from './AssignmentGroup'
 import ReassignModal from './ReassignModal'
@@ -63,24 +64,41 @@ export default function AssignmentTab() {
     return map
   }, [ingresos, egresos])
 
-  // Auto-asignar: for each unassigned egreso, find closest ingreso by date
+  // Auto-asignar: asigna al ingreso más cercano que tenga capacidad disponible
   async function autoAssign() {
     const unassigned = egresos.filter((e) => e.asignadoA === null)
     if (ingresos.length === 0 || unassigned.length === 0) return
     setAutoLoading(true)
+
+    // Calcular capacidad restante por ingreso (en moneda base)
+    const capacity = new Map<string, number>()
+    ingresos.forEach((inc) => {
+      const incBase = toBase(inc.monto, inc.moneda, base, s)
+      const yaAsignado = egresos
+        .filter((e) => e.asignadoA === inc.id)
+        .reduce((sum, e) => sum + toBase(e.monto, e.moneda, base, s), 0)
+      capacity.set(inc.id!, incBase - yaAsignado)
+    })
+
     try {
-      await Promise.all(
-        unassigned.map((exp) => {
-          const expTime = exp.fecha.toDate().getTime()
-          const closest = ingresos.reduce((prev, curr) =>
-            Math.abs(curr.fecha.toDate().getTime() - expTime) <
-            Math.abs(prev.fecha.toDate().getTime() - expTime)
-              ? curr
-              : prev
-          )
-          return updateTransaction(exp.id!, { asignadoA: closest.id! })
-        })
-      )
+      // Procesar secuencialmente para que la capacidad se actualice correctamente
+      for (const exp of unassigned) {
+        const expBase = toBase(exp.monto, exp.moneda, base, s)
+        const expTime = exp.fecha.toDate().getTime()
+
+        // Solo considerar ingresos con capacidad suficiente
+        const elegibles = ingresos.filter((inc) => (capacity.get(inc.id!) ?? 0) >= expBase)
+        if (elegibles.length === 0) continue // no cabe en ningún ingreso → queda sin asignar
+
+        const closest = elegibles.reduce((prev, curr) =>
+          Math.abs(curr.fecha.toDate().getTime() - expTime) <
+          Math.abs(prev.fecha.toDate().getTime() - expTime)
+            ? curr : prev
+        )
+
+        capacity.set(closest.id!, (capacity.get(closest.id!) ?? 0) - expBase)
+        await updateTransaction(exp.id!, { asignadoA: closest.id! })
+      }
     } finally {
       setAutoLoading(false)
     }
