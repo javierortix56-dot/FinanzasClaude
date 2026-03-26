@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { ChevronLeft, SlidersHorizontal } from 'lucide-react'
 import { Transaction, Settings, Currency } from '@/types'
-import { getCategoryById, DEFAULT_GASTO_CATEGORIES, DEFAULT_INGRESO_CATEGORIES, formatAmount } from '@/lib/constants'
+import { getCatFromSettings, formatAmount } from '@/lib/constants'
 import { toBase, toUSD } from '@/lib/currency'
 import { useBudgetStore } from '@/store/useBudgetStore'
 import DonutChart, { DonutSlice } from './DonutChart'
@@ -45,15 +45,13 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
     catMap.set(t.categoria, (catMap.get(t.categoria) ?? 0) + val)
   })
 
-  const defaultCats = tipoTab === 'egreso' ? DEFAULT_GASTO_CATEGORIES : DEFAULT_INGRESO_CATEGORIES
   const total = [...catMap.values()].reduce((a, b) => a + b, 0)
 
   // Build slices sorted by amount desc
-  const allSettingsCats = [...(settings.categoriasGasto ?? []), ...(settings.categoriasIngreso ?? [])]
   const slices: (DonutSlice & { nombre: string; amount: number; percent: number })[] = [...catMap.entries()]
     .sort((a, b) => b[1] - a[1])
     .map(([id, amount], index) => {
-      const cat = allSettingsCats.find((c) => c.id === id) ?? getCategoryById(id) ?? defaultCats.find((c) => c.id === id)
+      const cat = getCatFromSettings(id, settings)
       return {
         id,
         nombre: cat?.nombre ?? id,
@@ -136,12 +134,12 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
                 detailTxs.map((tx) => {
                   const amt = toBase(tx.monto, tx.moneda, monedaBase, settings)
                   const pct = detailTotal > 0 ? (amt / detailTotal) * 100 : 0
-                  const cat = getCategoryById(tx.categoria)
+                  const cat = getCatFromSettings(tx.categoria, settings)
                   return (
                     <div key={tx.id} className="flex items-center gap-2">
                       <div
                         className="w-2 h-2 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: (allSettingsCats.find((c) => c.id === tx.categoria) ?? getCategoryById(tx.categoria))?.color ?? '#6B7280' }}
+                        style={{ backgroundColor: cat?.color ?? '#6B7280' }}
                       />
                       <span className="flex-1 text-sm text-gray-700 truncate">
                         {tx.descripcion || cat?.nombre || tx.categoria}

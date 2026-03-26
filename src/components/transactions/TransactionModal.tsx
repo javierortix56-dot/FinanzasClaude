@@ -8,10 +8,10 @@ import { useSettingsStore } from '@/store/useSettingsStore'
 import { useTransactionStore } from '@/store/useTransactionStore'
 import { useAuthStore } from '@/store/useAuthStore'
 import { addTransaction, updateTransaction, deleteTransaction } from '@/lib/transactions'
-import { DEFAULT_GASTO_CATEGORIES, DEFAULT_INGRESO_CATEGORIES, SHARED_USER_ID, SHARED_USERS, formatAmount } from '@/lib/constants'
+import { SHARED_USER_ID, SHARED_USERS, formatAmount, getParentGroup, DEFAULT_GASTO_CATEGORY_GROUPS, DEFAULT_INGRESO_CATEGORY_GROUPS } from '@/lib/constants'
 import { DEFAULT_SETTINGS } from '@/lib/settings'
 import { toBase } from '@/lib/currency'
-import { Transaction, Currency, TransactionType } from '@/types'
+import { Transaction, Currency, TransactionType, CategoryGroup } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -28,7 +28,8 @@ export default function TransactionModal() {
   const [tipo, setTipo] = useState<TransactionType>('egreso')
   const [monto, setMonto] = useState('')
   const [moneda, setMoneda] = useState<Currency>('ARS')
-  const [categoria, setCategoria] = useState('')
+  const [selectedGroup, setSelectedGroup] = useState('')
+  const [selectedSub, setSelectedSub]     = useState('')
   const [descripcion, setDescripcion] = useState('')
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
   const [creadoPor, setCreadoPor] = useState(SHARED_USERS[0].id)
@@ -47,46 +48,62 @@ export default function TransactionModal() {
       setTipo(editingTransaction.tipo)
       setMonto(String(editingTransaction.monto))
       setMoneda(editingTransaction.moneda)
-      setCategoria(editingTransaction.categoria)
       setDescripcion(editingTransaction.descripcion)
       const d = editingTransaction.fecha.toDate()
       setFecha(d.toISOString().split('T')[0])
       setCreadoPor(editingTransaction.creadoPor || SHARED_USERS[0].id)
       setEjecutado(editingTransaction.ejecutado)
       setAsignadoA(editingTransaction.asignadoA ?? null)
+      // Resolver grupo + subcategoría del tx editado
+      const catId = editingTransaction.categoria
+      const allGroups = editingTransaction.tipo === 'egreso'
+        ? (settings?.categoriasGasto ?? DEFAULT_GASTO_CATEGORY_GROUPS)
+        : (settings?.categoriasIngreso ?? DEFAULT_INGRESO_CATEGORY_GROUPS)
+      const parentGrp = getParentGroup(catId, allGroups)
+      if (parentGrp) {
+        setSelectedGroup(parentGrp.id)
+        setSelectedSub(catId)
+      } else {
+        // catId es un grupo directamente
+        setSelectedGroup(catId)
+        setSelectedSub('')
+      }
     } else {
       setTipo('egreso')
       setMonto('')
       setMoneda('ARS')
-      setCategoria('')
+      setSelectedGroup('')
+      setSelectedSub('')
       setDescripcion('')
       setFecha(new Date().toISOString().split('T')[0])
       setCreadoPor(SHARED_USERS[0].id)
       setEjecutado(false)
       setAsignadoA(null)
     }
-  }, [isTransactionModalOpen, editingTransaction])
+  }, [isTransactionModalOpen, editingTransaction, settings])
 
-  const gastoCategories = s.categoriasGasto.length > 0
-    ? s.categoriasGasto
-    : DEFAULT_GASTO_CATEGORIES.map((c) => ({ ...c, activa: true }))
-  const ingresoCategories = s.categoriasIngreso.length > 0
-    ? s.categoriasIngreso
-    : DEFAULT_INGRESO_CATEGORIES.map((c) => ({ ...c, activa: true }))
-  const categories = (tipo === 'egreso' ? gastoCategories : ingresoCategories).filter((c) => c.activa)
+  const categoryGroups: CategoryGroup[] = tipo === 'egreso'
+    ? (s.categoriasGasto.length > 0 ? s.categoriasGasto : DEFAULT_GASTO_CATEGORY_GROUPS)
+    : (s.categoriasIngreso.length > 0 ? s.categoriasIngreso : DEFAULT_INGRESO_CATEGORY_GROUPS)
 
-  // Sugerencias: últimas descripciones únicas de la misma categoría
+  const activeGroups   = categoryGroups.filter((g) => g.activa)
+  const currentGroup   = activeGroups.find((g) => g.id === selectedGroup)
+  const activeSubs     = currentGroup?.subcategorias.filter((c) => c.activa) ?? []
+  const categoria      = selectedSub || selectedGroup
+
+  // Sugerencias: últimas descripciones únicas de la misma categoría o subcategoría
   const sugerencias = useMemo(() => {
-    if (!categoria) return []
+    const catId = selectedSub || selectedGroup
+    if (!catId) return []
     return [
       ...new Set(
         transactions
-          .filter((t) => t.categoria === categoria && t.descripcion && t.descripcion !== descripcion)
+          .filter((t) => t.categoria === catId && t.descripcion && t.descripcion !== descripcion)
           .sort((a, b) => b.fecha.toDate().getTime() - a.fecha.toDate().getTime())
           .map((t) => t.descripcion)
       ),
     ].slice(0, 5)
-  }, [transactions, categoria, descripcion])
+  }, [transactions, selectedSub, selectedGroup, descripcion])
 
   // Ingresos con capacidad restante calculada
   const ingresoOptions = useMemo(() => {
@@ -156,8 +173,6 @@ export default function TransactionModal() {
 
   const canSave = !!monto && parseFloat(monto) > 0 && !!categoria
 
-  const selectedCat = categories.find((c) => c.id === categoria)
-
   return (
     <Dialog.Root
       open={isTransactionModalOpen}
@@ -196,7 +211,7 @@ export default function TransactionModal() {
                 {(['egreso', 'ingreso'] as TransactionType[]).map((t) => (
                   <button
                     key={t}
-                    onClick={() => { setTipo(t); setCategoria(''); setAsignadoA(null) }}
+                    onClick={() => { setTipo(t); setSelectedGroup(''); setSelectedSub(''); setAsignadoA(null) }}
                     className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
                       tipo === t
                         ? t === 'egreso'
@@ -256,24 +271,58 @@ export default function TransactionModal() {
               />
             </div>
 
-            {/* Categoría dropdown */}
+            {/* Categoría — chips de dos niveles */}
             <div>
               <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
                 Categoría
               </label>
-              <select
-                value={categoria}
-                onChange={(e) => setCategoria(e.target.value)}
-                className="mt-1.5 w-full h-10 rounded-md border border-gray-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#534AB7]"
-                style={selectedCat ? { color: selectedCat.color, borderColor: selectedCat.color + '80' } : {}}
-              >
-                <option value="">Seleccionar categoría…</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.nombre}
-                  </option>
-                ))}
-              </select>
+
+              {/* Nivel 1: grupos */}
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {activeGroups.map((g) => {
+                  const isSelected = selectedGroup === g.id
+                  return (
+                    <button
+                      key={g.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedGroup(g.id)
+                        setSelectedSub('')
+                      }}
+                      className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all active:scale-95"
+                      style={isSelected
+                        ? { backgroundColor: g.color, color: '#fff' }
+                        : { backgroundColor: g.color + '18', color: g.color }
+                      }
+                    >
+                      {g.nombre}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* Nivel 2: subcategorías del grupo seleccionado */}
+              {selectedGroup && activeSubs.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2 pl-2 border-l-2 border-gray-100">
+                  {activeSubs.map((sub) => {
+                    const isSelected = selectedSub === sub.id
+                    return (
+                      <button
+                        key={sub.id}
+                        type="button"
+                        onClick={() => setSelectedSub(isSelected ? '' : sub.id)}
+                        className="px-2.5 py-1 rounded-full text-xs font-medium transition-all active:scale-95"
+                        style={isSelected
+                          ? { backgroundColor: sub.color, color: '#fff' }
+                          : { backgroundColor: sub.color + '18', color: sub.color }
+                        }
+                      >
+                        {sub.nombre}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Sugerencias */}

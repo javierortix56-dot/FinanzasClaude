@@ -19,9 +19,10 @@ interface Props {
   onClose: () => void
   onSave: (cat: Category) => void
   onDelete?: (id: string) => void
+  title?: string
 }
 
-export default function CategoryModal({ open, category, onClose, onSave, onDelete }: Props) {
+export default function CategoryModal({ open, category, onClose, onSave, onDelete, title }: Props) {
   const [nombre, setNombre] = useState('')
   const [color, setColor] = useState(PRESET_COLORS[0])
   const [activa, setActiva] = useState(true)
@@ -63,7 +64,7 @@ export default function CategoryModal({ open, category, onClose, onSave, onDelet
           </div>
           <div className="flex items-center justify-between px-5 py-3 border-b border-gray-50">
             <Dialog.Title className="text-base font-semibold text-gray-900">
-              {category ? 'Editar categoría' : 'Nueva categoría'}
+              {title ?? (category ? 'Editar categoría' : 'Nueva categoría')}
             </Dialog.Title>
             <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100">
               <X size={16} className="text-gray-500" />

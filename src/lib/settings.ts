@@ -1,6 +1,6 @@
 import { supabase, SHARED_UUID } from './supabase'
-import { Settings } from '@/types'
-import { DEFAULT_GASTO_CATEGORIES, DEFAULT_INGRESO_CATEGORIES } from './constants'
+import { Settings, CategoryGroup, Category } from '@/types'
+import { DEFAULT_GASTO_CATEGORY_GROUPS, DEFAULT_INGRESO_CATEGORY_GROUPS } from './constants'
 
 export const DEFAULT_SETTINGS: Settings = {
   tipoCambio: {
@@ -8,45 +8,63 @@ export const DEFAULT_SETTINGS: Settings = {
     COP_USD: 4100,
   },
   historialTipoCambio: [],
-  categoriasGasto: DEFAULT_GASTO_CATEGORIES.map((c) => ({ ...c, activa: true })),
-  categoriasIngreso: DEFAULT_INGRESO_CATEGORIES.map((c) => ({ ...c, activa: true })),
-  tiposActivo: ['Banco', 'Efectivo', 'Cripto', 'Inversiones', 'Ahorro'],
-  tiposPasivo: ['Tarjeta de crédito', 'Préstamo', 'Deuda'],
+  categoriasGasto:   DEFAULT_GASTO_CATEGORY_GROUPS,
+  categoriasIngreso: DEFAULT_INGRESO_CATEGORY_GROUPS,
+  tiposActivo:  ['Banco', 'Efectivo', 'Cripto', 'Inversiones', 'Ahorro'],
+  tiposPasivo:  ['Tarjeta de crédito', 'Préstamo', 'Deuda'],
   mesesCerrados: [],
+}
+
+// ── Migración de formato viejo (Category[]) → nuevo (CategoryGroup[]) ────────
+function isGroup(item: unknown): item is CategoryGroup {
+  return typeof item === 'object' && item !== null && 'subcategorias' in item
+}
+
+function migrateToGroups(items: unknown[], defaults: CategoryGroup[]): CategoryGroup[] {
+  if (!Array.isArray(items) || items.length === 0) return defaults
+  if (isGroup(items[0])) return items as CategoryGroup[]
+  // Formato viejo: Category[] → cada categoría se convierte en grupo sin subcategorías
+  return (items as Category[]).map((c) => ({
+    id:            c.id,
+    nombre:        c.nombre,
+    color:         c.color,
+    activa:        c.activa ?? true,
+    subcategorias: [],
+  }))
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function rowToSettings(row: Record<string, any>): Settings {
-  const appSettings = row.app_settings ?? {}
-  const accountCats = row.account_cats ?? {}
+  const appSettings  = row.app_settings  ?? {}
+  const accountCats  = row.account_cats  ?? {}
   const monthlyRates = row.monthly_rates ?? []
-  // tipoCambio may be in app_settings, or we fall back to the latest monthly_rates entry
-  const latestRate = monthlyRates.length > 0 ? monthlyRates[monthlyRates.length - 1] : null
-  const tipoCambio = (appSettings.tipoCambio && typeof appSettings.tipoCambio.ARS_USD === 'number')
+  const latestRate   = monthlyRates.length > 0 ? monthlyRates[monthlyRates.length - 1] : null
+  const tipoCambio   = (appSettings.tipoCambio && typeof appSettings.tipoCambio.ARS_USD === 'number')
     ? appSettings.tipoCambio
     : latestRate
       ? { ARS_USD: latestRate.ARS_USD, COP_USD: latestRate.COP_USD }
       : DEFAULT_SETTINGS.tipoCambio
+
   return {
     tipoCambio,
-    historialTipoCambio: Array.isArray(row.monthly_rates) ? row.monthly_rates : DEFAULT_SETTINGS.historialTipoCambio,
-    categoriasGasto: Array.isArray(row.transaction_cats) ? row.transaction_cats : DEFAULT_SETTINGS.categoriasGasto,
-    categoriasIngreso: Array.isArray(row.categories) ? row.categories : DEFAULT_SETTINGS.categoriasIngreso,
-    tiposActivo: Array.isArray(accountCats.tiposActivo) ? accountCats.tiposActivo : DEFAULT_SETTINGS.tiposActivo,
-    tiposPasivo: Array.isArray(accountCats.tiposPasivo) ? accountCats.tiposPasivo : DEFAULT_SETTINGS.tiposPasivo,
+    historialTipoCambio: Array.isArray(row.monthly_rates)  ? row.monthly_rates : [],
+    categoriasGasto:     migrateToGroups(row.transaction_cats, DEFAULT_GASTO_CATEGORY_GROUPS),
+    categoriasIngreso:   migrateToGroups(row.categories,       DEFAULT_INGRESO_CATEGORY_GROUPS),
+    tiposActivo:  Array.isArray(accountCats.tiposActivo) ? accountCats.tiposActivo : DEFAULT_SETTINGS.tiposActivo,
+    tiposPasivo:  Array.isArray(accountCats.tiposPasivo) ? accountCats.tiposPasivo : DEFAULT_SETTINGS.tiposPasivo,
     mesesCerrados: Array.isArray(row.closed_months) ? row.closed_months : [],
   }
 }
 
 function settingsToRow(settings: Settings) {
   return {
-    user_id: SHARED_UUID,
-    app_settings: { tipoCambio: settings.tipoCambio },
-    monthly_rates: settings.historialTipoCambio,
+    user_id:         SHARED_UUID,
+    app_settings:    { tipoCambio: settings.tipoCambio },
+    monthly_rates:   settings.historialTipoCambio,
     transaction_cats: settings.categoriasGasto,
-    categories: settings.categoriasIngreso,
-    account_cats: { tiposActivo: settings.tiposActivo, tiposPasivo: settings.tiposPasivo },
-    closed_months: settings.mesesCerrados ?? [],
+    categories:      settings.categoriasIngreso,
+    account_cats:    { tiposActivo: settings.tiposActivo, tiposPasivo: settings.tiposPasivo },
+    closed_months:   settings.mesesCerrados ?? [],
   }
 }
 
@@ -98,13 +116,10 @@ export function subscribeToSettings(
 }
 
 export async function updateSettings(_userId: string, partial: Partial<Settings>) {
-  // fetch current then merge
   const current = await getOrInitSettings(_userId)
-  const merged = { ...current, ...partial }
-
+  const merged  = { ...current, ...partial }
   const { error } = await supabase
     .from('configuracion')
     .upsert(settingsToRow(merged), { onConflict: 'user_id' })
-
   if (error) throw error
 }

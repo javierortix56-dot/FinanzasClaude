@@ -7,7 +7,7 @@ import { useUIStore } from '@/store/useUIStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useTransactionStore } from '@/store/useTransactionStore'
 import { markEjecutado, deleteTransaction, updateTransaction } from '@/lib/transactions'
-import { getCategoryById, formatAmount } from '@/lib/constants'
+import { getCatFromSettings, formatAmount } from '@/lib/constants'
 
 interface Props {
   tx: Transaction
@@ -19,9 +19,9 @@ const RIGHT_OPEN = 170
 
 export default function SwipeableItem({ tx, userName }: Props) {
   const { openEditModal } = useUIStore()
-  const { hideAmounts } = useSettingsStore()
+  const { hideAmounts, settings } = useSettingsStore()
   const { transactions } = useTransactionStore()
-  const cat = getCategoryById(tx.categoria)
+  const cat = getCatFromSettings(tx.categoria, settings ?? null)
 
   // Para egresos: buscar el ingreso vinculado
   const linkedIngreso = tx.tipo === 'egreso' && tx.asignadoA

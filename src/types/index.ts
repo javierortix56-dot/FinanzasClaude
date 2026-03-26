@@ -56,14 +56,22 @@ export interface Category {
   activa: boolean
 }
 
+export interface CategoryGroup {
+  id: string
+  nombre: string
+  color: string
+  activa: boolean
+  subcategorias: Category[]
+}
+
 export interface Settings {
   tipoCambio: {
     ARS_USD: number
     COP_USD: number
   }
   historialTipoCambio: ExchangeRateRecord[]
-  categoriasGasto: Category[]
-  categoriasIngreso: Category[]
+  categoriasGasto: CategoryGroup[]
+  categoriasIngreso: CategoryGroup[]
   tiposActivo: string[]
   tiposPasivo: string[]
   mesesCerrados?: string[]
