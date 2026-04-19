@@ -129,14 +129,17 @@ export default function TransactionModal() {
       })
   }, [transactions, monto, moneda, base, s, editingTransaction])
 
+  const parsedMonto = parseFloat(monto.replace(',', '.'))
+  const montoValido = Number.isFinite(parsedMonto) && parsedMonto > 0
+
   async function handleSave() {
-    if (!monto || !categoria) return
+    if (!montoValido || !categoria) return
     setSaving(true)
     try {
       const data: Omit<Transaction, 'id'> = {
         userId: SHARED_USER_ID,
         tipo,
-        monto: parseFloat(monto.replace(',', '.')),
+        monto: parsedMonto,
         moneda,
         categoria,
         descripcion: descripcion.trim(),
@@ -171,7 +174,8 @@ export default function TransactionModal() {
     }
   }
 
-  const canSave = !!monto && parseFloat(monto) > 0 && !!categoria
+  const canSave = montoValido && !!categoria
+  const montoInvalid = !!monto.trim() && !montoValido
 
   return (
     <Dialog.Root
@@ -235,10 +239,14 @@ export default function TransactionModal() {
                 <input
                   type="number"
                   inputMode="decimal"
+                  min="0"
+                  step="any"
                   placeholder="0"
                   value={monto}
                   onChange={(e) => setMonto(e.target.value)}
-                  className="flex-1 text-3xl font-bold text-gray-900 bg-gray-50 rounded-xl px-4 py-3 border-0 outline-none focus:ring-2 focus:ring-[#534AB7] focus:bg-white transition-colors"
+                  className={`flex-1 text-3xl font-bold text-gray-900 bg-gray-50 rounded-xl px-4 py-3 border-0 outline-none focus:ring-2 focus:bg-white transition-colors ${
+                    montoInvalid ? 'ring-2 ring-red-300 focus:ring-red-400' : 'focus:ring-[#534AB7]'
+                  }`}
                 />
                 <div className="flex flex-col gap-1">
                   {CURRENCIES.map((c) => (
@@ -256,6 +264,11 @@ export default function TransactionModal() {
                   ))}
                 </div>
               </div>
+              {montoInvalid && (
+                <p className="text-[10px] text-red-500 mt-1.5">
+                  Ingresá un monto mayor a 0
+                </p>
+              )}
             </div>
 
             {/* Concepto / Descripción */}

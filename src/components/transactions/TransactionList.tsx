@@ -1,9 +1,10 @@
 'use client'
 
 import { useTransactionStore } from '@/store/useTransactionStore'
+import { useSettingsStore } from '@/store/useSettingsStore'
 import SwipeableItem from './SwipeableItem'
 import { Transaction } from '@/types'
-import { getCategoryById, SHARED_USERS } from '@/lib/constants'
+import { getCatFromSettings, SHARED_USERS } from '@/lib/constants'
 
 interface Props {
   filter?: 'all' | 'ingreso' | 'egreso'
@@ -16,13 +17,14 @@ const USER_NAMES: Record<string, string> = Object.fromEntries(
 
 export default function TransactionList({ filter = 'all', search = '' }: Props) {
   const { transactions, isLoading } = useTransactionStore()
+  const { settings } = useSettingsStore()
 
   const filtered: Transaction[] = transactions
     .filter((t) => filter === 'all' || t.tipo === filter)
     .filter((t) => {
       if (!search.trim()) return true
       const q = search.toLowerCase()
-      const cat = getCategoryById(t.categoria)
+      const cat = getCatFromSettings(t.categoria, settings)
       return (
         t.descripcion.toLowerCase().includes(q) ||
         cat?.nombre.toLowerCase().includes(q) ||

@@ -165,6 +165,27 @@ export async function deleteMonthTransactions(month: string): Promise<number> {
   return data.length
 }
 
+/**
+ * Devuelve cuántos movimientos activos tiene ya un mes determinado.
+ * Útil para advertir al usuario antes de clonar o crear recurrentes y evitar duplicados.
+ */
+export async function countMonthTransactions(month: string): Promise<number> {
+  const [year, mon] = month.split('-').map(Number)
+  const start = `${year}-${String(mon).padStart(2, '0')}-01`
+  const lastDay = new Date(year, mon, 0).getDate()
+  const end = `${year}-${String(mon).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+
+  const { count, error } = await supabase
+    .from('movimientos')
+    .select('id', { count: 'exact', head: true })
+    .is('deleted_at', null)
+    .gte('date', start)
+    .lte('date', end)
+
+  if (error) throw error
+  return count ?? 0
+}
+
 export async function cloneMonthTransactions(fromMonth: string, toMonth: string): Promise<number> {
   const [fy, fm] = fromMonth.split('-').map(Number)
   const [ty, tm] = toMonth.split('-').map(Number)

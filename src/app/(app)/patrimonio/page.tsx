@@ -9,7 +9,8 @@ import { subscribeToAssets } from '@/lib/assets'
 import { DEFAULT_SETTINGS } from '@/lib/settings'
 import { toUSD } from '@/lib/currency'
 import { formatAmount, getCurrentMonth, shiftMonth } from '@/lib/constants'
-import { Asset } from '@/types'
+import { fetchLastNMonths } from '@/lib/analytics'
+import { Asset, Transaction } from '@/types'
 import AssetCard from '@/components/patrimonio/AssetCard'
 import AssetModal from '@/components/patrimonio/AssetModal'
 import PatrimonioChart from '@/components/patrimonio/PatrimonioChart'
@@ -31,6 +32,29 @@ export default function PatrimonioPage() {
     return () => unsub()
   }, [setAssets])
 
+  // Flujos de caja por mes (últimos 6 meses, incluye mes actual)
+  const [monthlyFlows, setMonthlyFlows] = useState<Record<string, number>>({})
+  useEffect(() => {
+    let cancelled = false
+    const s = settings ?? DEFAULT_SETTINGS
+    fetchLastNMonths(6, getCurrentMonth())
+      .then((grouped) => {
+        if (cancelled) return
+        const flows: Record<string, number> = {}
+        for (const [month, txs] of Object.entries(grouped)) {
+          flows[month] = (txs as Transaction[])
+            .filter((t) => t.ejecutado)
+            .reduce((acc, t) => {
+              const usd = toUSD(t.monto, t.moneda, s)
+              return acc + (t.tipo === 'ingreso' ? usd : -usd)
+            }, 0)
+        }
+        setMonthlyFlows(flows)
+      })
+      .catch((err) => console.error('[patrimonio] fetchLastNMonths error:', err))
+    return () => { cancelled = true }
+  }, [settings])
+
   const activos = assets.filter((a) => a.clase === 'activo')
   const pasivos = assets.filter((a) => a.clase === 'pasivo')
 
@@ -38,23 +62,33 @@ export default function PatrimonioPage() {
   const totalPasivosUSD  = pasivos.reduce((s, a) => s + toUSD(a.saldo, a.moneda, settings ?? DEFAULT_SETTINGS), 0)
   const netoUSD          = totalActivosUSD - totalPasivosUSD
 
-  // Chart data — last 6 months placeholder using current values
+  // Chart data — evolución estimada del neto a partir de los flujos ejecutados.
+  // El mes actual tiene el valor real; los meses previos se calculan hacia atrás
+  // restando el flujo neto de cada mes posterior.
   const chartData = useMemo(() => {
-    const months: { label: string; activos: number; pasivos: number }[] = []
-    for (let i = 5; i >= 0; i--) {
-      const m = shiftMonth(getCurrentMonth(), -i)
+    const monthNames = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+    const current = getCurrentMonth()
+    const points: { label: string; neto: number; estimated?: boolean; current?: boolean }[] = []
+    // Calculamos hacia atrás: neto[-i] = neto[-i+1] - flow[-i+1]
+    // El flow del mes actual ya está incluido en totalActivos/Pasivos, no se resta.
+    let running = netoUSD
+    for (let i = 0; i <= 5; i++) {
+      const m = shiftMonth(current, -i)
+      if (i > 0) {
+        // Restamos el flujo del mes siguiente para retroceder
+        const nextMonth = shiftMonth(current, -i + 1)
+        running -= monthlyFlows[nextMonth] ?? 0
+      }
       const [, mon] = m.split('-')
-      const monthNames = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
-      months.push({
+      points.unshift({
         label: monthNames[parseInt(mon) - 1],
-        // For historical months use 0 (we don't have snapshots yet)
-        // For current month use real values
-        activos: i === 0 ? totalActivosUSD : 0,
-        pasivos: i === 0 ? totalPasivosUSD : 0,
+        neto: running,
+        estimated: i > 0,
+        current: i === 0,
       })
     }
-    return months
-  }, [totalActivosUSD, totalPasivosUSD])
+    return points
+  }, [netoUSD, monthlyFlows])
 
   function openAdd() { setEditing(null); setModalOpen(true) }
   function openEdit(a: Asset) { setEditing(a); setModalOpen(true) }

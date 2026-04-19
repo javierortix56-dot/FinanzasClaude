@@ -12,6 +12,7 @@ import {
   deleteMonthTransactions,
   cloneMonthTransactions,
   createRecurringTransactions,
+  countMonthTransactions,
 } from '@/lib/transactions'
 import { exportBackup, downloadBackup, importBackup, parseBackupFile } from '@/lib/backup'
 import { monthLabel, SHARED_USER_ID } from '@/lib/constants'
@@ -45,6 +46,7 @@ export default function AjustesPage() {
   const [copRate, setCopRate] = useState(String(settings?.tipoCambio.COP_USD ?? 4100))
   const [savingRate, setSavingRate] = useState(false)
   const [rateSaved, setRateSaved] = useState(false)
+  const [rateError, setRateError] = useState<string | null>(null)
 
   // Category tree: expanded groups
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
@@ -70,7 +72,11 @@ export default function AjustesPage() {
   // Mes actions
   const [mesAction, setMesAction] = useState<string | null>(null)
   const [mesResult, setMesResult] = useState<string | null>(null)
+  const [mesError, setMesError] = useState<string | null>(null)
   const [deleteMonthConfirm, setDeleteMonthConfirm] = useState(false)
+  // Confirmaciones cuando el mes destino ya tiene movimientos
+  const [clonarConfirm, setClonarConfirm] = useState<{ existing: number; next: string } | null>(null)
+  const [recurrentesConfirm, setRecurrentesConfirm] = useState<{ existing: number; next: string } | null>(null)
 
   // Import/Export
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -107,16 +113,22 @@ export default function AjustesPage() {
 
   // ── Tipos de cambio ──────────────────────────────────────────────────────────
   async function saveRates() {
+    setRateError(null)
+    const ARS_USD = parseFloat(arsRate.replace(',', '.'))
+    const COP_USD = parseFloat(copRate.replace(',', '.'))
+    if (!Number.isFinite(ARS_USD) || !Number.isFinite(COP_USD) || ARS_USD <= 0 || COP_USD <= 0) {
+      setRateError('Los tipos de cambio deben ser números mayores a 0')
+      return
+    }
     setSavingRate(true)
     try {
-      const ARS_USD = parseFloat(arsRate)
-      const COP_USD = parseFloat(copRate)
-      if (isNaN(ARS_USD) || isNaN(COP_USD)) return
       const updated = { ...s, tipoCambio: { ARS_USD, COP_USD } }
       await updateSettings(SHARED_USER_ID, { tipoCambio: { ARS_USD, COP_USD } })
       setSettings(updated)
       setRateSaved(true)
       setTimeout(() => setRateSaved(false), 2000)
+    } catch (err) {
+      setRateError('Error al guardar: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
       setSavingRate(false)
     }
@@ -192,7 +204,13 @@ export default function AjustesPage() {
   }
 
   // ── Acciones de mes ──────────────────────────────────────────────────────────
+  function resetMesFeedback() {
+    setMesResult(null)
+    setMesError(null)
+  }
+
   async function handleCerrarMes() {
+    resetMesFeedback()
     setMesAction('cerrando')
     try {
       const { ARS_USD, COP_USD } = s.tipoCambio
@@ -201,36 +219,76 @@ export default function AjustesPage() {
       await updateSettings(SHARED_USER_ID, { historialTipoCambio: hist, mesesCerrados: cerrados })
       setSettings({ ...s, historialTipoCambio: hist, mesesCerrados: cerrados })
       setMesResult(`Mes ${monthLabel(currentMonth)} cerrado. Tipo de cambio guardado.`)
+    } catch (err) {
+      setMesError('Error al cerrar mes: ' + (err instanceof Error ? err.message : String(err)))
     } finally { setMesAction(null) }
   }
 
   async function handleClonarMes() {
+    resetMesFeedback()
+    const { shiftMonth } = await import('@/lib/constants')
+    const nextMonth = shiftMonth(currentMonth, 1)
+    // Si aún no confirmó y el mes destino ya tiene movimientos, pedimos confirmación primero
+    if (!clonarConfirm) {
+      setMesAction('clonando')
+      try {
+        const existing = await countMonthTransactions(nextMonth)
+        if (existing > 0) {
+          setClonarConfirm({ existing, next: nextMonth })
+          return
+        }
+      } catch (err) {
+        setMesError('Error verificando mes destino: ' + (err instanceof Error ? err.message : String(err)))
+        return
+      } finally { setMesAction(null) }
+    }
     setMesAction('clonando')
     try {
-      const { shiftMonth } = await import('@/lib/constants')
-      const nextMonth = shiftMonth(currentMonth, 1)
       const count = await cloneMonthTransactions(currentMonth, nextMonth)
       setMesResult(`${count} movimiento(s) clonados a ${monthLabel(nextMonth)}.`)
+      setClonarConfirm(null)
+    } catch (err) {
+      setMesError('Error al clonar mes: ' + (err instanceof Error ? err.message : String(err)))
     } finally { setMesAction(null) }
   }
 
   async function handleCrearRecurrentes() {
+    resetMesFeedback()
+    const { shiftMonth } = await import('@/lib/constants')
+    const nextMonth = shiftMonth(currentMonth, 1)
+    if (!recurrentesConfirm) {
+      setMesAction('creando')
+      try {
+        const existing = await countMonthTransactions(nextMonth)
+        if (existing > 0) {
+          setRecurrentesConfirm({ existing, next: nextMonth })
+          return
+        }
+      } catch (err) {
+        setMesError('Error verificando mes destino: ' + (err instanceof Error ? err.message : String(err)))
+        return
+      } finally { setMesAction(null) }
+    }
     setMesAction('creando')
     try {
-      const { shiftMonth } = await import('@/lib/constants')
-      const nextMonth = shiftMonth(currentMonth, 1)
       const count = await createRecurringTransactions(nextMonth)
       setMesResult(`${count} movimiento(s) recurrente(s) creados en ${monthLabel(nextMonth)}.`)
+      setRecurrentesConfirm(null)
+    } catch (err) {
+      setMesError('Error al crear recurrentes: ' + (err instanceof Error ? err.message : String(err)))
     } finally { setMesAction(null) }
   }
 
   async function handleBorrarMes() {
     if (!deleteMonthConfirm) { setDeleteMonthConfirm(true); return }
+    resetMesFeedback()
     setMesAction('borrando')
     try {
       const count = await deleteMonthTransactions(currentMonth)
       setMesResult(`${count} movimiento(s) eliminados de ${monthLabel(currentMonth)}.`)
       setDeleteMonthConfirm(false)
+    } catch (err) {
+      setMesError('Error al borrar mes: ' + (err instanceof Error ? err.message : String(err)))
     } finally { setMesAction(null) }
   }
 
@@ -388,6 +446,11 @@ export default function AjustesPage() {
               >
                 {rateSaved ? <><Check size={14} /> Guardado</> : savingRate ? 'Guardando...' : 'Actualizar tipo de cambio'}
               </button>
+              {rateError && (
+                <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-xs text-red-600 font-medium">
+                  {rateError}
+                </div>
+              )}
               {(s?.historialTipoCambio ?? []).length > 0 && (
                 <div className="space-y-1">
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Historial</p>
@@ -496,7 +559,13 @@ export default function AjustesPage() {
           <Section
             label={`Acciones — ${monthLabel(currentMonth)}`}
             open={openSection === 'mes'}
-            onToggle={() => { toggle('mes'); setMesResult(null); setDeleteMonthConfirm(false) }}
+            onToggle={() => {
+              toggle('mes')
+              resetMesFeedback()
+              setDeleteMonthConfirm(false)
+              setClonarConfirm(null)
+              setRecurrentesConfirm(null)
+            }}
           >
             <div className="space-y-2 pt-2">
               {isClosed && (
@@ -506,12 +575,35 @@ export default function AjustesPage() {
                 </div>
               )}
               <ActionButton icon={<Lock size={14} />} label="Cerrar mes" sublabel="Guarda el tipo de cambio actual en el historial" onClick={handleCerrarMes} loading={mesAction === 'cerrando'} color="purple" />
-              <ActionButton icon={<Copy size={14} />} label="Clonar mes al siguiente" sublabel="Copia todos los movimientos al mes siguiente" onClick={handleClonarMes} loading={mesAction === 'clonando'} color="blue" />
-              <ActionButton icon={<RotateCcw size={14} />} label="Crear recurrentes" sublabel="Crea movimientos recurrentes en el mes siguiente" onClick={handleCrearRecurrentes} loading={mesAction === 'creando'} color="green" />
+              <ActionButton
+                icon={<Copy size={14} />}
+                label={clonarConfirm ? '¿Clonar igual? (duplicados)' : 'Clonar mes al siguiente'}
+                sublabel={clonarConfirm
+                  ? `${monthLabel(clonarConfirm.next)} ya tiene ${clonarConfirm.existing} movimiento(s). Tocá de nuevo para confirmar.`
+                  : 'Copia todos los movimientos al mes siguiente'}
+                onClick={handleClonarMes}
+                loading={mesAction === 'clonando'}
+                color={clonarConfirm ? 'red' : 'blue'}
+              />
+              <ActionButton
+                icon={<RotateCcw size={14} />}
+                label={recurrentesConfirm ? '¿Crear igual? (duplicados)' : 'Crear recurrentes'}
+                sublabel={recurrentesConfirm
+                  ? `${monthLabel(recurrentesConfirm.next)} ya tiene ${recurrentesConfirm.existing} movimiento(s). Tocá de nuevo para confirmar.`
+                  : 'Crea movimientos recurrentes en el mes siguiente'}
+                onClick={handleCrearRecurrentes}
+                loading={mesAction === 'creando'}
+                color={recurrentesConfirm ? 'red' : 'green'}
+              />
               <ActionButton icon={<Trash2 size={14} />} label={deleteMonthConfirm ? '¿Confirmar borrado?' : 'Borrar mes'} sublabel="Elimina todos los movimientos del mes actual" onClick={handleBorrarMes} loading={mesAction === 'borrando'} color="red" danger />
               {mesResult && (
                 <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2.5 text-xs text-green-700 font-medium">
                   ✓ {mesResult}
+                </div>
+              )}
+              {mesError && (
+                <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-xs text-red-600 font-medium">
+                  ✗ {mesError}
                 </div>
               )}
             </div>
