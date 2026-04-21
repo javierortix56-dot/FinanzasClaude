@@ -161,8 +161,19 @@ export default function TransactionModal() {
       }
       closeTransactionModal()
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      console.error('[handleSave] error:', msg, err)
+      console.error('[handleSave] error:', err)
+      let msg = 'Error desconocido'
+      if (err instanceof Error) {
+        msg = err.message
+      } else if (err && typeof err === 'object') {
+        const e = err as Record<string, unknown>
+        const parts: string[] = []
+        if (e.message) parts.push(String(e.message))
+        if (e.details) parts.push(String(e.details))
+        if (e.hint) parts.push(`Hint: ${e.hint}`)
+        if (e.code) parts.push(`Code: ${e.code}`)
+        msg = parts.length > 0 ? parts.join(' — ') : JSON.stringify(err)
+      }
       setSaveError(msg)
     } finally {
       setSaving(false)
