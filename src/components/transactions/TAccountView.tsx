@@ -27,19 +27,19 @@ function TxRow({ tx, hideAmounts, settings, onEdit }: TxRowProps) {
   return (
     <button
       onClick={() => onEdit(tx)}
-      className="w-full text-left px-2.5 py-2 border-b border-gray-50 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+      className="w-full min-w-0 text-left px-2.5 py-2 border-b border-gray-50 hover:bg-gray-50 active:bg-gray-100 transition-colors overflow-hidden"
     >
       <p className="text-[11px] font-medium text-gray-900 truncate leading-tight">
         {tx.descripcion || cat?.nombre || '-'}
       </p>
-      <div className="flex items-center justify-between mt-0.5 gap-1">
-        <div className="flex items-center gap-1 min-w-0">
+      <div className="flex items-center justify-between mt-0.5 gap-1 min-w-0">
+        <div className="flex items-center gap-1 min-w-0 shrink">
           <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: dotColor }} />
           <span className="text-[10px] text-gray-400 truncate">{dateStr}</span>
         </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div className="flex items-center gap-1 shrink-0 max-w-[55%]">
           <span
-            className={`text-[11px] font-semibold tabular-nums ${
+            className={`text-[11px] font-semibold tabular-nums truncate ${
               isIngreso ? 'text-green-600' : 'text-red-500'
             } ${hideAmounts ? 'blur-sm' : ''}`}
           >

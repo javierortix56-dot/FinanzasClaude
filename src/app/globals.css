@@ -28,6 +28,11 @@ body {
   font-family: Arial, Helvetica, sans-serif;
   max-width: 390px;
   margin: 0 auto;
+  overflow-x: hidden;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 .blur-amount {
