@@ -21,7 +21,7 @@ import { Category, CategoryGroup } from '@/types'
 
 const CategoryModal = dynamic(() => import('@/components/ajustes/CategoryModal'), { ssr: false })
 
-type Section = 'cambio' | 'categorias' | 'tipos' | 'mes' | 'datos' | null
+type Section = 'cambio' | 'categorias' | 'categorias_ing' | 'tipos' | 'mes' | 'datos' | null
 
 // ── Modal state types ─────────────────────────────────────────────────────────
 type GroupModalState = {
@@ -147,7 +147,7 @@ export default function AjustesPage() {
     const partial = { [key]: list }
     await updateSettings(SHARED_USER_ID, partial)
     setSettings({ ...s, ...partial })
-    setGroupModal({ open: false, tipo: 'gasto', group: null })
+    setGroupModal((prev) => ({ ...prev, open: false, group: null }))
   }
 
   async function handleDeleteGroup(id: string, tipo: 'gasto' | 'ingreso') {
@@ -156,7 +156,7 @@ export default function AjustesPage() {
     const partial = { [key]: list }
     await updateSettings(SHARED_USER_ID, partial)
     setSettings({ ...s, ...partial })
-    setGroupModal({ open: false, tipo: 'gasto', group: null })
+    setGroupModal((prev) => ({ ...prev, open: false, group: null }))
   }
 
   // ── CRUD Subcategorías ───────────────────────────────────────────────────────
@@ -173,7 +173,7 @@ export default function AjustesPage() {
     const partial = { [key]: list }
     await updateSettings(SHARED_USER_ID, partial)
     setSettings({ ...s, ...partial })
-    setSubModal({ open: false, tipo: 'gasto', groupId: '', category: null })
+    setSubModal((prev) => ({ ...prev, open: false, category: null }))
   }
 
   async function handleDeleteSubcat(id: string, tipo: 'gasto' | 'ingreso', groupId: string) {
@@ -185,7 +185,7 @@ export default function AjustesPage() {
     const partial = { [key]: list }
     await updateSettings(SHARED_USER_ID, partial)
     setSettings({ ...s, ...partial })
-    setSubModal({ open: false, tipo: 'gasto', groupId: '', category: null })
+    setSubModal((prev) => ({ ...prev, open: false, category: null }))
   }
 
   // ── Tipos activo/pasivo ──────────────────────────────────────────────────────
@@ -477,8 +477,8 @@ export default function AjustesPage() {
           {/* ── Categorías de Ingreso ── */}
           <Section
             label="Categorías de Ingreso"
-            open={openSection === ('categorias_ing' as Section)}
-            onToggle={() => toggle('categorias_ing' as Section)}
+            open={openSection === 'categorias_ing'}
+            onToggle={() => toggle('categorias_ing')}
           >
             <CategoryTree tipo="ingreso" />
           </Section>

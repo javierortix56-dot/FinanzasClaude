@@ -133,7 +133,7 @@ export default function TransactionModal() {
   const montoValido = Number.isFinite(parsedMonto) && parsedMonto > 0
 
   async function handleSave() {
-    if (!montoValido || !categoria) return
+    if (!montoValido) return
     setSaving(true)
     try {
       const data: Omit<Transaction, 'id'> = {
@@ -174,7 +174,7 @@ export default function TransactionModal() {
     }
   }
 
-  const canSave = montoValido && !!categoria
+  const canSave = montoValido
   const montoInvalid = !!monto.trim() && !montoValido
 
   return (
@@ -422,10 +422,10 @@ export default function TransactionModal() {
               </div>
             </div>
 
-            {/* Persona */}
+            {/* Registrado por */}
             <div>
               <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                Persona
+                Registrado por
               </label>
               <select
                 value={creadoPor}

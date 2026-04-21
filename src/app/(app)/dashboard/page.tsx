@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, Eye, EyeOff, Search, X } from 'lucide-react'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useTransactionStore } from '@/store/useTransactionStore'
-import TransactionList from '@/components/transactions/TransactionList'
+import TAccountView from '@/components/transactions/TAccountView'
 import AssignmentTab from '@/components/assignment/AssignmentTab'
 import { monthLabel, formatAmount } from '@/lib/constants'
 import { toBase } from '@/lib/currency'
@@ -13,7 +13,6 @@ import { DEFAULT_SETTINGS } from '@/lib/settings'
 import { Currency } from '@/types'
 
 type MainTab = 'movimientos' | 'asignacion'
-type SubTab  = 'egreso' | 'ingreso'
 
 function greet() {
   const h = new Date().getHours()
@@ -28,7 +27,6 @@ export default function DashboardPage() {
   const { transactions, currentMonth, prevMonth, nextMonth } = useTransactionStore()
 
   const [mainTab, setMainTab] = useState<MainTab>('movimientos')
-  const [subTab, setSubTab]   = useState<SubTab>('ingreso')
   const [search, setSearch]   = useState('')
   const [searching, setSearching] = useState(false)
 
@@ -177,27 +175,8 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Sub-tabs */}
-            <div className="flex gap-1 px-4 pt-1.5 border-b border-gray-50">
-              {(['ingreso', 'egreso'] as SubTab[]).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setSubTab(t)}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-t-lg transition-colors ${
-                    subTab === t
-                      ? t === 'egreso'
-                        ? 'text-red-500 border-b-2 border-red-400'
-                        : 'text-green-600 border-b-2 border-green-500'
-                      : 'text-gray-400'
-                  }`}
-                >
-                  {t === 'egreso' ? 'Egresos' : 'Ingresos'}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex-1 overflow-y-auto">
-              <TransactionList filter={subTab} search={search} />
+            <div className="flex-1 overflow-hidden flex flex-col">
+              <TAccountView search={search} />
             </div>
           </>
         ) : (
