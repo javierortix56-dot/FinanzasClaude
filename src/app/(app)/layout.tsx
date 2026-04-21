@@ -7,6 +7,7 @@ import { useUIStore } from '@/store/useUIStore'
 import { useTransactionStore } from '@/store/useTransactionStore'
 import { subscribeToTransactions } from '@/lib/transactions'
 import TransactionModal from '@/components/transactions/TransactionModal'
+import Toast from '@/components/ui/Toast'
 import { LayoutDashboard, Wallet, BarChart2, Settings, Plus } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -31,8 +32,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const rightNav = NAV_ITEMS.slice(2)
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
-      <main className="flex-1 pb-20">{children}</main>
+    <div className="flex flex-col min-h-screen bg-gray-50 overflow-x-hidden">
+      <main className="flex-1 pb-20 overflow-x-hidden">{children}</main>
 
       {/* Bottom nav */}
       <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-white border-t border-gray-100 shadow-lg z-40">
@@ -82,6 +83,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Global modal — mounted once, always available */}
       <TransactionModal />
+      <Toast />
     </div>
   )
 }

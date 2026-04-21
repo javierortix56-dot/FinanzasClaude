@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, Eye, EyeOff, Search, X } from 'lucide-react'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useTransactionStore } from '@/store/useTransactionStore'
-import TransactionList from '@/components/transactions/TransactionList'
+import TAccountView from '@/components/transactions/TAccountView'
 import AssignmentTab from '@/components/assignment/AssignmentTab'
 import { monthLabel, formatAmount } from '@/lib/constants'
 import { toBase } from '@/lib/currency'
@@ -13,7 +13,6 @@ import { DEFAULT_SETTINGS } from '@/lib/settings'
 import { Currency } from '@/types'
 
 type MainTab = 'movimientos' | 'asignacion'
-type SubTab  = 'egreso' | 'ingreso'
 
 function greet() {
   const h = new Date().getHours()
@@ -28,7 +27,6 @@ export default function DashboardPage() {
   const { transactions, currentMonth, prevMonth, nextMonth } = useTransactionStore()
 
   const [mainTab, setMainTab] = useState<MainTab>('movimientos')
-  const [subTab, setSubTab]   = useState<SubTab>('ingreso')
   const [search, setSearch]   = useState('')
   const [searching, setSearching] = useState(false)
 
@@ -95,35 +93,23 @@ export default function DashboardPage() {
         </div>
 
         {/* Balance */}
-        <div className="mb-4">
+        <div className="mb-3">
           <p className="text-gray-400 text-[10px] font-semibold uppercase tracking-widest mb-0.5">
             Balance del mes
           </p>
           <p className={`text-gray-900 text-3xl font-bold leading-tight ${blur}`}>
             {formatAmount(balance, base)}
           </p>
-          <p className={`text-gray-400 text-xs mt-0.5 ${blur}`}>
-            = {formatAmount(balanceUSD, 'USD')}
-          </p>
-        </div>
-
-        {/* Ingresos / Gastos chips */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-green-50 rounded-2xl px-4 py-3">
-            <p className="text-green-700 text-[10px] font-bold uppercase tracking-wide mb-1">
-              Ingresos
-            </p>
-            <p className={`text-green-700 font-bold text-sm ${blur}`}>
-              {formatAmount(totalIngresos, base)}
-            </p>
-          </div>
-          <div className="bg-red-50 rounded-2xl px-4 py-3">
-            <p className="text-red-600 text-[10px] font-bold uppercase tracking-wide mb-1">
-              Gastos
-            </p>
-            <p className={`text-red-600 font-bold text-sm ${blur}`}>
-              {formatAmount(totalEgresos, base)}
-            </p>
+          <div className={`flex items-center gap-3 mt-1.5 ${blur}`}>
+            <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+              <span className="text-[10px]">▲</span>{formatAmount(totalIngresos, base)}
+            </span>
+            <span className="text-gray-200">|</span>
+            <span className="flex items-center gap-1 text-xs text-red-500 font-medium">
+              <span className="text-[10px]">▼</span>{formatAmount(totalEgresos, base)}
+            </span>
+            <span className="text-gray-200">|</span>
+            <span className="text-xs text-gray-400">{formatAmount(balanceUSD, 'USD')}</span>
           </div>
         </div>
       </div>
@@ -177,27 +163,8 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Sub-tabs */}
-            <div className="flex gap-1 px-4 pt-1.5 border-b border-gray-50">
-              {(['ingreso', 'egreso'] as SubTab[]).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setSubTab(t)}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-t-lg transition-colors ${
-                    subTab === t
-                      ? t === 'egreso'
-                        ? 'text-red-500 border-b-2 border-red-400'
-                        : 'text-green-600 border-b-2 border-green-500'
-                      : 'text-gray-400'
-                  }`}
-                >
-                  {t === 'egreso' ? 'Egresos' : 'Ingresos'}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex-1 overflow-y-auto">
-              <TransactionList filter={subTab} search={search} />
+            <div className="flex-1 overflow-hidden flex flex-col">
+              <TAccountView search={search} />
             </div>
           </>
         ) : (
