@@ -7,6 +7,7 @@ import { useUIStore } from '@/store/useUIStore'
 import { useTransactionStore } from '@/store/useTransactionStore'
 import { subscribeToTransactions } from '@/lib/transactions'
 import TransactionModal from '@/components/transactions/TransactionModal'
+import Toast from '@/components/ui/Toast'
 import { LayoutDashboard, Wallet, BarChart2, Settings, Plus } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -82,6 +83,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Global modal — mounted once, always available */}
       <TransactionModal />
+      <Toast />
     </div>
   )
 }

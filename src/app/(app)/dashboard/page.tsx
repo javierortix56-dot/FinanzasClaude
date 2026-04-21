@@ -93,35 +93,23 @@ export default function DashboardPage() {
         </div>
 
         {/* Balance */}
-        <div className="mb-4">
+        <div className="mb-3">
           <p className="text-gray-400 text-[10px] font-semibold uppercase tracking-widest mb-0.5">
             Balance del mes
           </p>
           <p className={`text-gray-900 text-3xl font-bold leading-tight ${blur}`}>
             {formatAmount(balance, base)}
           </p>
-          <p className={`text-gray-400 text-xs mt-0.5 ${blur}`}>
-            = {formatAmount(balanceUSD, 'USD')}
-          </p>
-        </div>
-
-        {/* Ingresos / Gastos chips */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-green-50 rounded-2xl px-4 py-3">
-            <p className="text-green-700 text-[10px] font-bold uppercase tracking-wide mb-1">
-              Ingresos
-            </p>
-            <p className={`text-green-700 font-bold text-sm ${blur}`}>
-              {formatAmount(totalIngresos, base)}
-            </p>
-          </div>
-          <div className="bg-red-50 rounded-2xl px-4 py-3">
-            <p className="text-red-600 text-[10px] font-bold uppercase tracking-wide mb-1">
-              Gastos
-            </p>
-            <p className={`text-red-600 font-bold text-sm ${blur}`}>
-              {formatAmount(totalEgresos, base)}
-            </p>
+          <div className={`flex items-center gap-3 mt-1.5 ${blur}`}>
+            <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+              <span className="text-[10px]">▲</span>{formatAmount(totalIngresos, base)}
+            </span>
+            <span className="text-gray-200">|</span>
+            <span className="flex items-center gap-1 text-xs text-red-500 font-medium">
+              <span className="text-[10px]">▼</span>{formatAmount(totalEgresos, base)}
+            </span>
+            <span className="text-gray-200">|</span>
+            <span className="text-xs text-gray-400">{formatAmount(balanceUSD, 'USD')}</span>
           </div>
         </div>
       </div>

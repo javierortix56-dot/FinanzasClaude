@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input'
 const CURRENCIES: Currency[] = ['ARS', 'COP', 'USD']
 
 export default function TransactionModal() {
-  const { isTransactionModalOpen, editingTransaction, closeTransactionModal } = useUIStore()
+  const { isTransactionModalOpen, editingTransaction, closeTransactionModal, showToast } = useUIStore()
   const { settings, hideAmounts } = useSettingsStore()
   const { transactions } = useTransactionStore()
   const { monedaBase } = useAuthStore()
@@ -156,8 +156,10 @@ export default function TransactionModal() {
       }
       if (editingTransaction?.id) {
         await updateTransaction(editingTransaction.id, data)
+        showToast('Movimiento actualizado')
       } else {
         await addTransaction(data)
+        showToast('Movimiento guardado')
       }
       closeTransactionModal()
     } catch (err) {
@@ -293,9 +295,18 @@ export default function TransactionModal() {
             <div>
               <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
                 Concepto / Descripción
+                {montoValido && !descripcion.trim() && (
+                  <span className="ml-1.5 text-amber-400 font-normal normal-case tracking-normal">
+                    · recomendado
+                  </span>
+                )}
               </label>
               <Input
-                className="mt-1.5"
+                className={`mt-1.5 transition-colors ${
+                  montoValido && !descripcion.trim()
+                    ? 'border-amber-200 focus-visible:ring-amber-300'
+                    : ''
+                }`}
                 placeholder="¿En qué fue?"
                 value={descripcion}
                 onChange={(e) => setDescripcion(e.target.value)}
@@ -306,6 +317,11 @@ export default function TransactionModal() {
             <div>
               <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
                 Categoría
+                {montoValido && !categoria && (
+                  <span className="ml-1.5 text-amber-400 font-normal normal-case tracking-normal">
+                    · recomendado
+                  </span>
+                )}
               </label>
 
               {/* Nivel 1: grupos */}

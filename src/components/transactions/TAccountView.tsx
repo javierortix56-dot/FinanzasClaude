@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { CheckCircle2 } from 'lucide-react'
+import { CheckCircle2, TrendingUp, TrendingDown } from 'lucide-react'
 import { useTransactionStore } from '@/store/useTransactionStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useUIStore } from '@/store/useUIStore'
@@ -55,6 +55,26 @@ function TxRow({ tx, hideAmounts, settings, onEdit }: TxRowProps) {
   )
 }
 
+function EmptyState({ tipo }: { tipo: 'ingreso' | 'egreso' }) {
+  const isIngreso = tipo === 'ingreso'
+  return (
+    <div className="flex flex-col items-center justify-center py-10 px-3 text-center">
+      <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 ${
+        isIngreso ? 'bg-green-50' : 'bg-red-50'
+      }`}>
+        {isIngreso
+          ? <TrendingUp size={20} className="text-green-300" />
+          : <TrendingDown size={20} className="text-red-300" />
+        }
+      </div>
+      <p className="text-xs font-medium text-gray-400">
+        Sin {isIngreso ? 'ingresos' : 'egresos'}
+      </p>
+      <p className="text-[10px] text-gray-300 mt-0.5">Tocá + para agregar</p>
+    </div>
+  )
+}
+
 interface Props {
   search?: string
 }
@@ -81,18 +101,11 @@ export default function TAccountView({ search = '' }: Props) {
   }, [transactions, search, settings])
 
   const ingresos = useMemo(
-    () =>
-      filtered
-        .filter((t) => t.tipo === 'ingreso')
-        .sort((a, b) => b.fecha.toDate().getTime() - a.fecha.toDate().getTime()),
+    () => filtered.filter((t) => t.tipo === 'ingreso').sort((a, b) => b.fecha.toDate().getTime() - a.fecha.toDate().getTime()),
     [filtered],
   )
-
   const egresos = useMemo(
-    () =>
-      filtered
-        .filter((t) => t.tipo === 'egreso')
-        .sort((a, b) => b.fecha.toDate().getTime() - a.fecha.toDate().getTime()),
+    () => filtered.filter((t) => t.tipo === 'egreso').sort((a, b) => b.fecha.toDate().getTime() - a.fecha.toDate().getTime()),
     [filtered],
   )
 
@@ -100,11 +113,13 @@ export default function TAccountView({ search = '' }: Props) {
     () => ingresos.reduce((sum, t) => sum + toBase(t.monto, t.moneda, base, s), 0),
     [ingresos, base, s],
   )
-
   const totalEgresos = useMemo(
     () => egresos.reduce((sum, t) => sum + toBase(t.monto, t.moneda, base, s), 0),
     [egresos, base, s],
   )
+
+  const pctGastado = totalIngresos > 0 ? Math.min((totalEgresos / totalIngresos) * 100, 100) : 0
+  const pctColor = pctGastado >= 90 ? 'bg-red-500' : pctGastado >= 70 ? 'bg-amber-400' : 'bg-green-500'
 
   if (isLoading) {
     return (
@@ -117,29 +132,22 @@ export default function TAccountView({ search = '' }: Props) {
   return (
     <div className="flex flex-1 overflow-hidden">
       {/* ── Columna Ingresos ── */}
-      <div className="flex-1 flex flex-col border-r-2 border-gray-300 overflow-hidden">
+      <div className="flex-1 flex flex-col border-r-2 border-gray-200 overflow-hidden">
         <div className="px-3 py-2.5 bg-green-50 border-b border-green-100 flex-shrink-0">
           <p className="text-[10px] font-bold text-green-700 uppercase tracking-wider">
-            Ingresos
+            Ingresos <span className="font-normal opacity-60">({ingresos.length})</span>
           </p>
-          <p className={`text-sm font-bold text-green-700 tabular-nums ${hideAmounts ? 'blur-sm' : ''}`}>
+          <p className={`text-sm font-bold text-green-700 tabular-nums mt-0.5 ${hideAmounts ? 'blur-sm' : ''}`}>
             {formatAmount(totalIngresos, base)}
           </p>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {ingresos.length === 0 ? (
-            <p className="text-xs text-gray-400 text-center py-8 px-3">Sin ingresos</p>
-          ) : (
-            ingresos.map((tx) => (
-              <TxRow
-                key={tx.id}
-                tx={tx}
-                hideAmounts={hideAmounts}
-                settings={settings}
-                onEdit={openEditModal}
-              />
-            ))
-          )}
+          {ingresos.length === 0
+            ? <EmptyState tipo="ingreso" />
+            : ingresos.map((tx) => (
+                <TxRow key={tx.id} tx={tx} hideAmounts={hideAmounts} settings={settings} onEdit={openEditModal} />
+              ))
+          }
         </div>
       </div>
 
@@ -147,26 +155,33 @@ export default function TAccountView({ search = '' }: Props) {
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="px-3 py-2.5 bg-red-50 border-b border-red-100 flex-shrink-0">
           <p className="text-[10px] font-bold text-red-600 uppercase tracking-wider">
-            Egresos
+            Egresos <span className="font-normal opacity-60">({egresos.length})</span>
           </p>
-          <p className={`text-sm font-bold text-red-600 tabular-nums ${hideAmounts ? 'blur-sm' : ''}`}>
+          <p className={`text-sm font-bold text-red-600 tabular-nums mt-0.5 ${hideAmounts ? 'blur-sm' : ''}`}>
             {formatAmount(totalEgresos, base)}
           </p>
+          {/* Barra de progreso: % del ingreso gastado */}
+          {totalIngresos > 0 && (
+            <div className="mt-1.5">
+              <div className="h-1 bg-red-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${pctColor}`}
+                  style={{ width: `${pctGastado}%` }}
+                />
+              </div>
+              <p className={`text-[9px] text-red-400 mt-0.5 ${hideAmounts ? 'blur-sm' : ''}`}>
+                {Math.round(pctGastado)}% del ingreso
+              </p>
+            </div>
+          )}
         </div>
         <div className="flex-1 overflow-y-auto">
-          {egresos.length === 0 ? (
-            <p className="text-xs text-gray-400 text-center py-8 px-3">Sin egresos</p>
-          ) : (
-            egresos.map((tx) => (
-              <TxRow
-                key={tx.id}
-                tx={tx}
-                hideAmounts={hideAmounts}
-                settings={settings}
-                onEdit={openEditModal}
-              />
-            ))
-          )}
+          {egresos.length === 0
+            ? <EmptyState tipo="egreso" />
+            : egresos.map((tx) => (
+                <TxRow key={tx.id} tx={tx} hideAmounts={hideAmounts} settings={settings} onEdit={openEditModal} />
+              ))
+          }
         </div>
       </div>
     </div>
