@@ -36,12 +36,14 @@ export default function TransactionModal() {
   const [ejecutado, setEjecutado] = useState(false)
   const [asignadoA, setAsignadoA] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
 
   // Populate form on open
   useEffect(() => {
     if (!isTransactionModalOpen) {
       setDeleteConfirm(false)
+      setSaveError(null)
       return
     }
     if (editingTransaction) {
@@ -135,6 +137,7 @@ export default function TransactionModal() {
   async function handleSave() {
     if (!montoValido) return
     setSaving(true)
+    setSaveError(null)
     try {
       const data: Omit<Transaction, 'id'> = {
         userId: SHARED_USER_ID,
@@ -157,6 +160,10 @@ export default function TransactionModal() {
         await addTransaction(data)
       }
       closeTransactionModal()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('[handleSave] error:', msg, err)
+      setSaveError(msg)
     } finally {
       setSaving(false)
     }
@@ -439,6 +446,13 @@ export default function TransactionModal() {
                 ))}
               </select>
             </div>
+
+            {/* Error de guardado */}
+            {saveError && (
+              <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-xs text-red-600 font-medium break-words">
+                Error al guardar: {saveError}
+              </div>
+            )}
 
             {/* Actions */}
             <div className="flex gap-3 pt-1">
