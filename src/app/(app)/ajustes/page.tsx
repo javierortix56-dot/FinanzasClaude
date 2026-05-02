@@ -697,10 +697,9 @@ function ActionButton({ icon, label, sublabel, onClick, loading, color, danger }
     green: 'text-green-600 bg-green-50 border-green-200',
     red: 'text-red-500 bg-red-50 border-red-200',
   }
-  void danger
   return (
     <button onClick={onClick} disabled={loading}
-      className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl border transition-all text-left ${colorMap[color]} ${loading ? 'opacity-50' : ''}`}>
+      className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl border transition-all text-left ${colorMap[color]} ${loading ? 'opacity-50' : ''} ${danger ? 'ring-1 ring-red-300' : ''}`}>
       <span className="flex-shrink-0">{icon}</span>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold leading-tight">{loading ? 'Procesando...' : label}</p>
