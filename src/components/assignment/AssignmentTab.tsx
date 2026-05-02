@@ -295,9 +295,12 @@ export default function AssignmentTab() {
         open={reassignOpen}
         onClose={() => setReassignOpen(false)}
         ingresos={ingresos}
+        egresos={egresos}
         userNames={userNames}
         selectedCount={selectedIds.size}
         onReassign={reassignSelected}
+        settings={s}
+        monedaBase={base}
       />
     </div>
   )

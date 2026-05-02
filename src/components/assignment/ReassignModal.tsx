@@ -2,25 +2,32 @@
 
 import * as Dialog from '@radix-ui/react-dialog'
 import { X, CheckCircle2 } from 'lucide-react'
-import { Transaction } from '@/types'
+import { Transaction, Settings, Currency } from '@/types'
 import { getCategoryById, formatAmount } from '@/lib/constants'
+import { toBase } from '@/lib/currency'
 
 interface Props {
   open: boolean
   onClose: () => void
   ingresos: Transaction[]
+  egresos: Transaction[]
   userNames: Record<string, string>
   selectedCount: number
   onReassign: (incomeId: string) => void
+  settings: Settings
+  monedaBase: Currency
 }
 
 export default function ReassignModal({
   open,
   onClose,
   ingresos,
+  egresos,
   userNames,
   selectedCount,
   onReassign,
+  settings,
+  monedaBase,
 }: Props) {
   return (
     <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
@@ -81,9 +88,18 @@ export default function ReassignModal({
                         </p>
                       </div>
                       <div className="flex-shrink-0 text-right">
-                        <p className="text-sm font-semibold text-green-600">
-                          +{formatAmount(inc.monto, inc.moneda)}
-                        </p>
+                        {(() => {
+                          const totalAsignado = egresos
+                            .filter((e) => e.asignadoA === inc.id)
+                            .reduce((sum, e) => sum + toBase(e.monto, e.moneda, monedaBase, settings), 0)
+                          const disponible = toBase(inc.monto, inc.moneda, monedaBase, settings) - totalAsignado
+                          const isOver = disponible < 0
+                          return (
+                            <p className={`text-sm font-semibold ${isOver ? 'text-red-500' : 'text-green-600'}`}>
+                              {isOver ? 'Excedido' : 'Disponible'}: {formatAmount(Math.abs(disponible), monedaBase)}
+                            </p>
+                          )
+                        })()}
                         {inc.ejecutado && (
                           <CheckCircle2 size={12} className="text-green-400 ml-auto" />
                         )}
