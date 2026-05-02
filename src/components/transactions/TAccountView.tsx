@@ -31,9 +31,9 @@ function TxRow({ tx, hideAmounts, settings, onEdit }: TxRowProps) {
       tabIndex={0}
       onClick={() => onEdit(tx)}
       onKeyDown={(e) => { if (e.key === 'Enter') onEdit(tx) }}
-      className="w-full min-w-0 text-left px-2.5 py-2 border-b border-gray-50 hover:bg-gray-50 active:bg-gray-100 transition-colors overflow-hidden cursor-pointer"
+      className={`w-full min-w-0 text-left px-2.5 py-2 border-b border-gray-50 hover:bg-gray-50 active:bg-gray-100 transition-colors overflow-hidden cursor-pointer ${tx.ejecutado ? 'opacity-50' : ''}`}
     >
-      <p className="text-[11px] font-medium text-gray-900 truncate leading-tight">
+      <p className={`text-[11px] font-medium text-gray-900 truncate leading-tight ${tx.ejecutado ? 'line-through' : ''}`}>
         {tx.descripcion || cat?.nombre || '-'}
       </p>
       <div className="flex items-center justify-between mt-0.5 gap-1 min-w-0">
@@ -45,7 +45,7 @@ function TxRow({ tx, hideAmounts, settings, onEdit }: TxRowProps) {
           <span
             className={`text-[11px] font-semibold tabular-nums truncate ${
               isIngreso ? 'text-green-600' : 'text-red-500'
-            } ${hideAmounts ? 'blur-sm' : ''}`}
+            } ${hideAmounts ? 'blur-sm' : ''} ${tx.ejecutado ? 'line-through' : ''}`}
           >
             {formatAmount(tx.monto, tx.moneda)}
           </span>
@@ -112,11 +112,11 @@ export default function TAccountView({ search = '' }: Props) {
   }, [transactions, search, settings])
 
   const ingresos = useMemo(
-    () => filtered.filter((t) => t.tipo === 'ingreso').sort((a, b) => b.fecha.toDate().getTime() - a.fecha.toDate().getTime()),
+    () => filtered.filter((t) => t.tipo === 'ingreso').sort((a, b) => a.fecha.toDate().getTime() - b.fecha.toDate().getTime()),
     [filtered],
   )
   const egresos = useMemo(
-    () => filtered.filter((t) => t.tipo === 'egreso').sort((a, b) => b.fecha.toDate().getTime() - a.fecha.toDate().getTime()),
+    () => filtered.filter((t) => t.tipo === 'egreso').sort((a, b) => a.fecha.toDate().getTime() - b.fecha.toDate().getTime()),
     [filtered],
   )
 

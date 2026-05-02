@@ -164,7 +164,7 @@ export default function AssignmentGroup({
                   onKeyDown={(e) => { if (e.key === 'Enter') onToggleSelect(exp.id!) }}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors cursor-pointer ${
                     isSelected ? 'bg-[#534AB7]/5' : 'hover:bg-gray-50'
-                  }`}
+                  } ${exp.ejecutado ? 'opacity-50' : ''}`}
                 >
                   {/* Checkbox */}
                   <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${
@@ -179,7 +179,7 @@ export default function AssignmentGroup({
 
                   {/* Description + meta */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-gray-900 truncate">
+                    <p className={`text-xs font-medium text-gray-900 truncate ${exp.ejecutado ? 'line-through' : ''}`}>
                       {exp.descripcion || cat?.nombre || exp.categoria}
                     </p>
                     <p className="text-[10px] text-gray-400 mt-px">
@@ -189,7 +189,7 @@ export default function AssignmentGroup({
 
                   {/* Amount + status */}
                   <div className="flex-shrink-0 flex items-center gap-1.5">
-                    <p className={`text-xs font-semibold text-red-500 ${hideAmounts ? 'blur-sm' : ''}`}>
+                    <p className={`text-xs font-semibold text-red-500 ${hideAmounts ? 'blur-sm' : ''} ${exp.ejecutado ? 'line-through' : ''}`}>
                       -{formatAmount(exp.monto, exp.moneda)}
                     </p>
                     <button

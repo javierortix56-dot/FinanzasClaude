@@ -130,7 +130,7 @@ export default function SwipeableItem({ tx, userName }: Props) {
 
       {/* ── Main row ── */}
       <div
-        className="relative bg-white flex items-center gap-2.5 py-2 px-4"
+        className={`relative bg-white flex items-center gap-2.5 py-2 px-4 ${tx.ejecutado ? 'opacity-50' : ''}`}
         style={{
           transform: `translateX(${offset}px)`,
           transition: transitioning && !dragging.current ? 'transform 0.2s ease' : 'none',
@@ -151,7 +151,7 @@ export default function SwipeableItem({ tx, userName }: Props) {
 
         {/* Description + meta */}
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-medium text-gray-900 truncate leading-tight">
+          <p className={`text-xs font-medium text-gray-900 truncate leading-tight ${tx.ejecutado ? 'line-through' : ''}`}>
             {tx.descripcion || cat?.nombre || tx.categoria}
           </p>
           <p className="text-[10px] text-gray-400 leading-tight truncate mt-px">
@@ -170,7 +170,7 @@ export default function SwipeableItem({ tx, userName }: Props) {
           <p
             className={`text-xs font-semibold tabular-nums leading-tight text-right transition-all ${
               tx.tipo === 'ingreso' ? 'text-green-600' : 'text-red-500'
-            } ${hideAmounts ? 'blur-sm' : ''}`}
+            } ${hideAmounts ? 'blur-sm' : ''} ${tx.ejecutado ? 'line-through' : ''}`}
           >
             {tx.tipo === 'ingreso' ? '+' : '-'}{formatAmount(tx.monto, tx.moneda)}
           </p>

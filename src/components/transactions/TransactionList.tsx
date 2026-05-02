@@ -33,7 +33,7 @@ export default function TransactionList({ filter = 'all', search = '' }: Props) 
         t.tags?.some((tag) => tag.toLowerCase().includes(q))
       )
     })
-    .sort((a, b) => b.fecha.toDate().getTime() - a.fecha.toDate().getTime())
+    .sort((a, b) => a.fecha.toDate().getTime() - b.fecha.toDate().getTime())
 
   if (isLoading) {
     return (

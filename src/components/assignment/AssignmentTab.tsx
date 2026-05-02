@@ -30,13 +30,13 @@ export default function AssignmentTab() {
 
   const ingresos = useMemo(
     () => transactions.filter((t) => t.tipo === 'ingreso').sort(
-      (a, b) => b.fecha.toDate().getTime() - a.fecha.toDate().getTime()
+      (a, b) => a.fecha.toDate().getTime() - b.fecha.toDate().getTime()
     ),
     [transactions]
   )
   const egresos = useMemo(
     () => transactions.filter((t) => t.tipo === 'egreso').sort(
-      (a, b) => b.fecha.toDate().getTime() - a.fecha.toDate().getTime()
+      (a, b) => a.fecha.toDate().getTime() - b.fecha.toDate().getTime()
     ),
     [transactions]
   )
