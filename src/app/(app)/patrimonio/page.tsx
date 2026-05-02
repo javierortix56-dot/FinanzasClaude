@@ -87,8 +87,14 @@ export default function PatrimonioPage() {
         if (snap) {
           saldoMes  = snap.saldo
           aporteMes = snap.aporte
+        } else if (running[id] === undefined) {
+          // Sin snapshots aún (columna no migrada o activo recién creado):
+          // init_bal es el saldo actual — lo usamos como aporte inicial
+          saldoMes  = a.saldo
+          aporteMes = a.saldo
         } else {
-          saldoMes = running[id] ?? 0
+          // Mes sin snapshot: el saldo se mantiene igual al del mes anterior
+          saldoMes = running[id]
         }
         running[id] = saldoMes
 
