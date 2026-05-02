@@ -2,7 +2,7 @@
 
 import { ChevronDown, ChevronRight, Unlink, CheckCircle2 } from 'lucide-react'
 import { Transaction, Settings, Currency } from '@/types'
-import { getCategoryById, formatAmount } from '@/lib/constants'
+import { getCatFromSettings, formatAmount } from '@/lib/constants'
 import { toBase } from '@/lib/currency'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { markEjecutado } from '@/lib/transactions'
@@ -77,8 +77,8 @@ export default function AssignmentGroup({
               <p className="text-sm font-bold text-amber-600">Sin asignar</p>
             ) : (
               <>
-                <p className="text-sm font-bold text-gray-900 truncate">
-                  {income!.descripcion || getCategoryById(income!.categoria)?.nombre || income!.categoria}
+                <p className="text-xs font-medium text-gray-900 truncate leading-tight">
+                  {income!.descripcion || getCatFromSettings(income!.categoria, settings)?.nombre || income!.categoria}
                 </p>
                 <p className="text-[10px] text-gray-400 mt-0.5">
                   {incomeDate}{userNames[income!.creadoPor] ? ` · ${userNames[income!.creadoPor]}` : ''}
@@ -151,7 +151,7 @@ export default function AssignmentGroup({
             </p>
           ) : (
             expenses.map((exp) => {
-              const cat = getCategoryById(exp.categoria)
+              const cat = getCatFromSettings(exp.categoria, settings)
               const isSelected = selectedIds.has(exp.id!)
               const dateStr = exp.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
 

@@ -41,11 +41,6 @@ export default function AssignmentTab() {
     [transactions]
   )
 
-  const assignedCount   = egresos.filter((e) => e.asignadoA !== null).length
-  const totalEgresos    = egresos.length
-  const progressPercent = totalEgresos > 0 ? (assignedCount / totalEgresos) * 100 : 0
-  const allAssigned     = assignedCount === totalEgresos && totalEgresos > 0
-
   const groups = useMemo(() => {
     const map = new Map<string, { income: Transaction | null; expenses: Transaction[] }>()
     ingresos.forEach((inc) => map.set(inc.id!, { income: inc, expenses: [] }))
@@ -58,11 +53,20 @@ export default function AssignmentTab() {
     return map
   }, [ingresos, egresos])
 
+  const totalEgresos       = egresos.length
+  const realUnassigned     = groups.get('unassigned')?.expenses.length ?? 0
+  const assignedCount      = totalEgresos - realUnassigned
+  const progressPercent    = totalEgresos > 0 ? (assignedCount / totalEgresos) * 100 : 0
+  const allAssigned        = realUnassigned === 0 && totalEgresos > 0
+
   // Auto-asignar: prioriza capacidad + cercanía por fecha; si no entra en
   // ninguno, asigna al ingreso con más capacidad restante (o al más cercano
   // por fecha) para que ningún egreso quede sin asignar.
   async function autoAssign() {
-    const unassigned = egresos.filter((e) => e.asignadoA === null)
+    // Incluye los egresos sin asignar Y los huérfanos (asignadoA apunta a
+    // un ingreso que ya no existe — caen en el grupo "Sin asignar").
+    const ingresoIds = new Set(ingresos.map((i) => i.id!))
+    const unassigned = egresos.filter((e) => e.asignadoA === null || !ingresoIds.has(e.asignadoA))
     if (ingresos.length === 0 || unassigned.length === 0) return
     setAutoLoading(true)
 
