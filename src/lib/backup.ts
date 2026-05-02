@@ -78,6 +78,7 @@ export async function exportBackup(userId: string): Promise<BackupData> {
       fechaAlta: { toDate: () => new Date((row.date_created ?? '2024-01-01') + 'T12:00:00') },
       metaObjetivo: row.meta_objetivo ?? null,
       metaMoneda: row.meta_moneda ?? null,
+      snapshots: Array.isArray(row.snapshots) ? row.snapshots : [],
     }
     return serializeAsset(asset)
   })
