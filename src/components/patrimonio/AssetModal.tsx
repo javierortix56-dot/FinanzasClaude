@@ -72,16 +72,29 @@ export default function AssetModal({ open, onClose, editing }: Props) {
     if (!nombre || !saldo) return
     setSaving(true)
     try {
+      const saldoNum = parseFloat(saldo.replace(',', '.'))
+      const altaDate = new Date(fechaAlta + 'T12:00:00')
+      const altaMonth = `${altaDate.getFullYear()}-${String(altaDate.getMonth() + 1).padStart(2, '0')}`
+      // Mantener snapshots existentes; si no hay ninguno para el mes de alta,
+      // crear uno automáticamente que represente el aporte inicial.
+      const baseSnaps = editing?.snapshots ?? []
+      const hasAltaSnap = baseSnaps.some((sn) => sn.month === altaMonth)
+      const snapshots = hasAltaSnap
+        ? baseSnaps
+        : [...baseSnaps, { month: altaMonth, aporte: saldoNum, saldo: saldoNum }]
+            .sort((a, b) => a.month.localeCompare(b.month))
+
       const data: Omit<Asset, 'id'> = {
         userId: SHARED_USER_ID,
         nombre: nombre.trim(),
         clase,
         tipo,
         moneda,
-        saldo: parseFloat(saldo.replace(',', '.')),
-        fechaAlta: { toDate: () => new Date(fechaAlta + 'T12:00:00') },
+        saldo: saldoNum,
+        fechaAlta: { toDate: () => altaDate },
         metaObjetivo: metaObjVal ? parseFloat(metaObjVal.replace(',', '.')) : null,
         metaMoneda: metaObjVal ? metaMoneda : null,
+        snapshots,
       }
       if (editing?.id) await updateAsset(editing.id, data)
       else              await addAsset(data)

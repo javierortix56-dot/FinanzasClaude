@@ -30,6 +30,15 @@ export interface Transaction {
   recurrente?: boolean
 }
 
+export interface AssetSnapshot {
+  /** Mes en formato 'YYYY-MM' */
+  month: string
+  /** Aporte/retiro neto del mes en la moneda del activo (positivo = aporte, negativo = retiro) */
+  aporte: number
+  /** Saldo al cierre del mes en la moneda del activo */
+  saldo: number
+}
+
 export interface Asset {
   id?: string
   userId: string
@@ -41,6 +50,8 @@ export interface Asset {
   fechaAlta: FechaCompat
   metaObjetivo: number | null
   metaMoneda: string | null
+  /** Snapshots históricos por mes (incluye opcionalmente el mes de fechaAlta) */
+  snapshots: AssetSnapshot[]
 }
 
 export interface ExchangeRateRecord {

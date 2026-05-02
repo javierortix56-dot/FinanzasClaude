@@ -1,9 +1,20 @@
 import { supabase, SHARED_UUID } from './supabase'
-import { Asset } from '@/types'
+import { Asset, AssetSnapshot } from '@/types'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function rowToAsset(row: Record<string, any>): Asset {
   const dateStr = row.date_created as string
+  const rawSnaps = Array.isArray(row.snapshots) ? row.snapshots : []
+  const snapshots: AssetSnapshot[] = rawSnaps
+    .filter((s: unknown): s is AssetSnapshot =>
+      !!s && typeof (s as AssetSnapshot).month === 'string'
+    )
+    .map((s: AssetSnapshot) => ({
+      month: s.month,
+      aporte: Number(s.aporte) || 0,
+      saldo: Number(s.saldo) || 0,
+    }))
+    .sort((a: AssetSnapshot, b: AssetSnapshot) => a.month.localeCompare(b.month))
   return {
     id: row.id as string,
     userId: 'shared',
@@ -15,6 +26,7 @@ function rowToAsset(row: Record<string, any>): Asset {
     fechaAlta: { toDate: () => new Date(dateStr + 'T12:00:00') },
     metaObjetivo: row.meta_objetivo ?? null,
     metaMoneda: row.meta_moneda ?? null,
+    snapshots,
   }
 }
 
@@ -29,6 +41,7 @@ function assetToRow(asset: Omit<Asset, 'id'>) {
     date_created: asset.fechaAlta.toDate().toISOString().slice(0, 10),
     meta_objetivo: asset.metaObjetivo,
     meta_moneda: asset.metaMoneda,
+    snapshots: asset.snapshots ?? [],
   }
 }
 
@@ -77,6 +90,7 @@ export async function updateAsset(id: string, data: Partial<Omit<Asset, 'id'>>) 
   if (data.saldo !== undefined) partial.init_bal = data.saldo
   if (data.metaObjetivo !== undefined) partial.meta_objetivo = data.metaObjetivo
   if (data.metaMoneda !== undefined) partial.meta_moneda = data.metaMoneda
+  if (data.snapshots !== undefined) partial.snapshots = data.snapshots
 
   const { error } = await supabase.from('cuentas').update(partial).eq('id', id)
   if (error) throw error
@@ -84,5 +98,29 @@ export async function updateAsset(id: string, data: Partial<Omit<Asset, 'id'>>) 
 
 export async function deleteAsset(id: string) {
   const { error } = await supabase.from('cuentas').delete().eq('id', id)
+  if (error) throw error
+}
+
+/**
+ * Inserta o reemplaza el snapshot de un mes para el activo dado, y actualiza
+ * el saldo "actual" (init_bal) con el del snapshot más reciente.
+ */
+export async function upsertSnapshot(asset: Asset, snap: AssetSnapshot) {
+  const others = (asset.snapshots ?? []).filter((s) => s.month !== snap.month)
+  const next = [...others, snap].sort((a, b) => a.month.localeCompare(b.month))
+  const latest = next[next.length - 1]
+  const partial: Record<string, unknown> = { snapshots: next }
+  // El saldo "current" del activo refleja el snapshot más reciente
+  if (latest && latest.month >= snap.month) partial.init_bal = latest.saldo
+  const { error } = await supabase.from('cuentas').update(partial).eq('id', asset.id!)
+  if (error) throw error
+}
+
+export async function deleteSnapshot(asset: Asset, month: string) {
+  const next = (asset.snapshots ?? []).filter((s) => s.month !== month)
+  const latest = next[next.length - 1]
+  const partial: Record<string, unknown> = { snapshots: next }
+  if (latest) partial.init_bal = latest.saldo
+  const { error } = await supabase.from('cuentas').update(partial).eq('id', asset.id!)
   if (error) throw error
 }

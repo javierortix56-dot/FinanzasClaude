@@ -4,15 +4,14 @@ import { useEffect, useState, useMemo } from 'react'
 import { Plus } from 'lucide-react'
 import { useAssetStore } from '@/store/useAssetStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
-import { useAuthStore } from '@/store/useAuthStore'
 import { subscribeToAssets } from '@/lib/assets'
 import { DEFAULT_SETTINGS } from '@/lib/settings'
 import { toUSD } from '@/lib/currency'
 import { formatAmount, getCurrentMonth, shiftMonth } from '@/lib/constants'
-import { fetchLastNMonths } from '@/lib/analytics'
-import { Asset, Transaction } from '@/types'
+import { Asset } from '@/types'
 import AssetCard from '@/components/patrimonio/AssetCard'
 import AssetModal from '@/components/patrimonio/AssetModal'
+import SnapshotModal from '@/components/patrimonio/SnapshotModal'
 import PatrimonioChart from '@/components/patrimonio/PatrimonioChart'
 
 type Tab = 'activo' | 'pasivo'
@@ -20,40 +19,17 @@ type Tab = 'activo' | 'pasivo'
 export default function PatrimonioPage() {
   const { assets, setAssets, isLoading } = useAssetStore()
   const { settings } = useSettingsStore()
-  const { monedaBase } = useAuthStore()
   const s = settings ?? DEFAULT_SETTINGS
 
-  const [tab,     setTab]     = useState<Tab>('activo')
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editing,   setEditing]   = useState<Asset | null>(null)
+  const [tab,         setTab]         = useState<Tab>('activo')
+  const [modalOpen,   setModalOpen]   = useState(false)
+  const [editing,     setEditing]     = useState<Asset | null>(null)
+  const [snapAsset,   setSnapAsset]   = useState<Asset | null>(null)
 
   useEffect(() => {
     const unsub = subscribeToAssets(setAssets)
     return () => unsub()
   }, [setAssets])
-
-  // Flujos de caja por mes (últimos 6 meses, incluye mes actual)
-  const [monthlyFlows, setMonthlyFlows] = useState<Record<string, number>>({})
-  useEffect(() => {
-    let cancelled = false
-    const s = settings ?? DEFAULT_SETTINGS
-    fetchLastNMonths(6, getCurrentMonth())
-      .then((grouped) => {
-        if (cancelled) return
-        const flows: Record<string, number> = {}
-        for (const [month, txs] of Object.entries(grouped)) {
-          flows[month] = (txs as Transaction[])
-            .filter((t) => t.ejecutado)
-            .reduce((acc, t) => {
-              const usd = toUSD(t.monto, t.moneda, s)
-              return acc + (t.tipo === 'ingreso' ? usd : -usd)
-            }, 0)
-        }
-        setMonthlyFlows(flows)
-      })
-      .catch((err) => console.error('[patrimonio] fetchLastNMonths error:', err))
-    return () => { cancelled = true }
-  }, [settings])
 
   const activos = assets.filter((a) => a.clase === 'activo')
   const pasivos = assets.filter((a) => a.clase === 'pasivo')
@@ -62,43 +38,87 @@ export default function PatrimonioPage() {
   const totalPasivosUSD  = pasivos.reduce((s, a) => s + toUSD(a.saldo, a.moneda, settings ?? DEFAULT_SETTINGS), 0)
   const netoUSD          = totalActivosUSD - totalPasivosUSD
 
-  // Chart data — evolución estimada del neto a partir de los flujos ejecutados.
-  // El mes actual tiene el valor real; los meses previos se calculan hacia atrás
-  // restando el flujo neto de cada mes posterior. Para meses anteriores a la
-  // primera fechaAlta de cualquier activo, el neto es 0 (no existía nada).
+  // Chart data — barras apiladas de aportes acumulados vs revalorización
+  // acumulada por mes en USD. Para cada mes y cada activo:
+  //   - saldo del mes = snapshot del mes si existe, sino el saldo del mes anterior
+  //   - aporte del mes = snapshot.aporte si existe, sino 0
+  //   - revalorización del mes = saldo_mes - saldo_mes_anterior - aporte_mes
+  // El chart arranca en la fechaAlta más temprana de cualquier activo.
   const chartData = useMemo(() => {
+    if (assets.length === 0) return []
     const monthNames = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
     const current = getCurrentMonth()
-    const earliestAssetMonth = assets.length > 0
-      ? assets.reduce<string>((min, a) => {
-          const d = a.fechaAlta.toDate()
-          const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-          return m < min ? m : min
-        }, current)
-      : current
-    const points: { label: string; neto: number; estimated?: boolean; current?: boolean }[] = []
-    let running = netoUSD
-    for (let i = 0; i <= 5; i++) {
-      const m = shiftMonth(current, -i)
-      if (i > 0) {
-        // Restamos el flujo del mes siguiente para retroceder
-        const nextMonth = shiftMonth(current, -i + 1)
-        running -= monthlyFlows[nextMonth] ?? 0
-      }
-      const [, mon] = m.split('-')
-      const beforeAnyAsset = m < earliestAssetMonth
-      points.unshift({
-        label: monthNames[parseInt(mon) - 1],
-        neto: beforeAnyAsset ? 0 : running,
-        estimated: i > 0 && !beforeAnyAsset,
-        current: i === 0,
-      })
+    const earliest = assets.reduce<string>((min, a) => {
+      const d = a.fechaAlta.toDate()
+      const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      return m < min ? m : min
+    }, current)
+
+    const months: string[] = []
+    let m = earliest
+    while (m <= current && months.length < 60) {
+      months.push(m)
+      m = shiftMonth(m, 1)
     }
-    return points
-  }, [netoUSD, monthlyFlows, assets])
+    const shown = months.length > 6 ? months.slice(months.length - 6) : months
+
+    // Estado por activo: saldo "vigente" en su moneda
+    const running: Record<string, number> = {}
+
+    let aportesAcumUSD = 0
+    let prevAportes = 0
+    let prevReval   = 0
+
+    return shown.map((mon) => {
+      let saldoTotalUSD  = 0
+      let aporteMesUSD   = 0
+
+      for (const a of assets) {
+        const fa = a.fechaAlta.toDate()
+        const faMonth = `${fa.getFullYear()}-${String(fa.getMonth() + 1).padStart(2, '0')}`
+        if (faMonth > mon) continue
+
+        const id = a.id ?? a.nombre
+        const sign = a.clase === 'pasivo' ? -1 : 1
+        const snap = a.snapshots?.find((sn) => sn.month === mon)
+
+        let saldoMes: number
+        let aporteMes = 0
+        if (snap) {
+          saldoMes  = snap.saldo
+          aporteMes = snap.aporte
+        } else {
+          saldoMes = running[id] ?? 0
+        }
+        running[id] = saldoMes
+
+        saldoTotalUSD += sign * toUSD(saldoMes,  a.moneda, s)
+        aporteMesUSD  += sign * toUSD(aporteMes, a.moneda, s)
+      }
+
+      aportesAcumUSD += aporteMesUSD
+      const reval = saldoTotalUSD - aportesAcumUSD
+      const deltaAportes = aportesAcumUSD - prevAportes
+      const deltaReval   = reval - prevReval
+      prevAportes = aportesAcumUSD
+      prevReval   = reval
+
+      const [, monNum] = mon.split('-')
+      return {
+        label: monthNames[parseInt(monNum) - 1],
+        neto: saldoTotalUSD,
+        aportes: aportesAcumUSD,
+        reval,
+        deltaAportes,
+        deltaReval,
+        current: mon === current,
+      }
+    })
+  }, [assets, s])
 
   function openAdd() { setEditing(null); setModalOpen(true) }
   function openEdit(a: Asset) { setEditing(a); setModalOpen(true) }
+  function openSnap(a: Asset) { setSnapAsset(a) }
 
   const listed = tab === 'activo' ? activos : pasivos
 
@@ -190,6 +210,7 @@ export default function PatrimonioPage() {
                   asset={a}
                   settings={s}
                   onClick={() => openEdit(a)}
+                  onUpdateSnapshot={() => openSnap(a)}
                 />
               ))}
             </div>
@@ -197,11 +218,16 @@ export default function PatrimonioPage() {
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Modales */}
       <AssetModal
         open={modalOpen}
         onClose={() => { setModalOpen(false); setEditing(null) }}
         editing={editing}
+      />
+      <SnapshotModal
+        open={snapAsset !== null}
+        onClose={() => setSnapAsset(null)}
+        asset={snapAsset}
       />
     </div>
   )
