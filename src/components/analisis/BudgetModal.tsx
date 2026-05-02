@@ -90,6 +90,7 @@ export default function BudgetModal({ open, onClose, categoria, mes }: Props) {
                 <input
                   type="number"
                   inputMode="decimal"
+                  step="any"
                   placeholder="0"
                   value={limite}
                   onChange={(e) => setLimite(e.target.value)}

@@ -181,6 +181,7 @@ export default function AssetModal({ open, onClose, editing }: Props) {
                 <input
                   type="number"
                   inputMode="decimal"
+                  step="any"
                   placeholder="0"
                   value={saldo}
                   onChange={(e) => setSaldo(e.target.value)}
@@ -220,6 +221,7 @@ export default function AssetModal({ open, onClose, editing }: Props) {
                   <input
                     type="number"
                     inputMode="decimal"
+                    step="any"
                     placeholder="0"
                     value={metaObjVal}
                     onChange={(e) => setMetaObjVal(e.target.value)}

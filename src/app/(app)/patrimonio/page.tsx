@@ -64,13 +64,19 @@ export default function PatrimonioPage() {
 
   // Chart data — evolución estimada del neto a partir de los flujos ejecutados.
   // El mes actual tiene el valor real; los meses previos se calculan hacia atrás
-  // restando el flujo neto de cada mes posterior.
+  // restando el flujo neto de cada mes posterior. Para meses anteriores a la
+  // primera fechaAlta de cualquier activo, el neto es 0 (no existía nada).
   const chartData = useMemo(() => {
     const monthNames = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
     const current = getCurrentMonth()
+    const earliestAssetMonth = assets.length > 0
+      ? assets.reduce<string>((min, a) => {
+          const d = a.fechaAlta.toDate()
+          const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+          return m < min ? m : min
+        }, current)
+      : current
     const points: { label: string; neto: number; estimated?: boolean; current?: boolean }[] = []
-    // Calculamos hacia atrás: neto[-i] = neto[-i+1] - flow[-i+1]
-    // El flow del mes actual ya está incluido en totalActivos/Pasivos, no se resta.
     let running = netoUSD
     for (let i = 0; i <= 5; i++) {
       const m = shiftMonth(current, -i)
@@ -80,15 +86,16 @@ export default function PatrimonioPage() {
         running -= monthlyFlows[nextMonth] ?? 0
       }
       const [, mon] = m.split('-')
+      const beforeAnyAsset = m < earliestAssetMonth
       points.unshift({
         label: monthNames[parseInt(mon) - 1],
-        neto: running,
-        estimated: i > 0,
+        neto: beforeAnyAsset ? 0 : running,
+        estimated: i > 0 && !beforeAnyAsset,
         current: i === 0,
       })
     }
     return points
-  }, [netoUSD, monthlyFlows])
+  }, [netoUSD, monthlyFlows, assets])
 
   function openAdd() { setEditing(null); setModalOpen(true) }
   function openEdit(a: Asset) { setEditing(a); setModalOpen(true) }
