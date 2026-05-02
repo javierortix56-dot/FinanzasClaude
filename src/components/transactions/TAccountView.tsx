@@ -39,20 +39,20 @@ function TxRow({ tx, hideAmounts, settings, monedaBase, onEdit }: TxRowProps) {
       onKeyDown={(e) => { if (e.key === 'Enter') onEdit(tx) }}
       className={`w-full min-w-0 text-left px-2.5 py-2 border-b border-gray-50 hover:bg-gray-50 active:bg-gray-100 transition-colors overflow-hidden cursor-pointer ${tx.ejecutado ? 'opacity-50' : ''}`}
     >
-      <p className={`text-[11px] font-medium text-gray-900 truncate leading-tight ${tx.ejecutado ? 'line-through' : ''}`}>
-        {tx.descripcion || cat?.nombre || '-'}
-      </p>
+      <div className="flex items-center justify-between gap-1 min-w-0">
+        <p className={`text-[11px] font-medium text-gray-900 truncate leading-tight flex-1 min-w-0 ${tx.ejecutado ? 'line-through' : ''}`}>
+          {tx.descripcion || cat?.nombre || '-'}
+        </p>
+        {tx.tipo === 'egreso' && (
+          linkedIngreso
+            ? <span className="text-[9px] font-semibold text-[#534AB7] shrink-0 truncate max-w-[45%]">{linkedIngreso.descripcion?.trim() || getCatFromSettings(linkedIngreso.categoria, settings)?.nombre || linkedIngreso.categoria}</span>
+            : <span className="text-[9px] font-semibold text-amber-400 shrink-0">Sin asignar</span>
+        )}
+      </div>
       <div className="flex items-center justify-between mt-0.5 gap-1 min-w-0">
         <div className="flex items-center gap-1 min-w-0 shrink">
           <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: dotColor }} />
-          <span className="text-[10px] text-gray-400 truncate">
-            {dateStr}
-            {tx.tipo === 'egreso' && (
-              linkedIngreso
-                ? <span className="text-[#534AB7] font-medium"> · {linkedIngreso.descripcion?.trim() || getCatFromSettings(linkedIngreso.categoria, settings)?.nombre || linkedIngreso.categoria}</span>
-                : <span className="text-amber-400 font-medium"> · Sin asignar</span>
-            )}
-          </span>
+          <span className="text-[10px] text-gray-400 truncate">{dateStr}</span>
         </div>
         <div className="flex items-center gap-1 shrink-0 max-w-[55%]">
           <span
