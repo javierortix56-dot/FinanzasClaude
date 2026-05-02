@@ -16,14 +16,16 @@ interface TxRowProps {
   tx: Transaction
   hideAmounts: boolean
   settings: Settings | null
+  monedaBase: Currency
   onEdit: (tx: Transaction) => void
 }
 
-function TxRow({ tx, hideAmounts, settings, onEdit }: TxRowProps) {
+function TxRow({ tx, hideAmounts, settings, monedaBase, onEdit }: TxRowProps) {
   const cat = getCatFromSettings(tx.categoria, settings)
   const isIngreso = tx.tipo === 'ingreso'
   const dateStr = tx.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
   const dotColor = cat?.color ?? (isIngreso ? '#22c55e' : '#ef4444')
+  const montoBase = toBase(tx.monto, tx.moneda, monedaBase, settings)
 
   return (
     <div
@@ -47,7 +49,7 @@ function TxRow({ tx, hideAmounts, settings, onEdit }: TxRowProps) {
               isIngreso ? 'text-green-600' : 'text-red-500'
             } ${hideAmounts ? 'blur-sm' : ''} ${tx.ejecutado ? 'line-through' : ''}`}
           >
-            {formatAmount(tx.monto, tx.moneda)}
+            {formatAmount(montoBase, monedaBase)}
           </span>
           <button
             type="button"
@@ -141,9 +143,9 @@ export default function TAccountView({ search = '' }: Props) {
   }
 
   return (
-    <div className="flex flex-1 overflow-hidden">
+    <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* ── Columna Ingresos ── */}
-      <div className="flex-1 flex flex-col border-r-2 border-gray-200 overflow-hidden">
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col border-r-2 border-gray-200 overflow-hidden">
         <div className="px-3 py-2.5 bg-green-50 border-b border-green-100 flex-shrink-0">
           <p className="text-[10px] font-bold text-green-700 uppercase tracking-wider">
             Ingresos <span className="font-normal opacity-60">({ingresos.length})</span>
@@ -152,18 +154,18 @@ export default function TAccountView({ search = '' }: Props) {
             {formatAmount(totalIngresos, base)}
           </p>
         </div>
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           {ingresos.length === 0
             ? <EmptyState tipo="ingreso" />
             : ingresos.map((tx) => (
-                <TxRow key={tx.id} tx={tx} hideAmounts={hideAmounts} settings={settings} onEdit={openEditModal} />
+                <TxRow key={tx.id} tx={tx} hideAmounts={hideAmounts} settings={settings} monedaBase={base} onEdit={openEditModal} />
               ))
           }
         </div>
       </div>
 
       {/* ── Columna Egresos ── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
         <div className="px-3 py-2.5 bg-red-50 border-b border-red-100 flex-shrink-0">
           <p className="text-[10px] font-bold text-red-600 uppercase tracking-wider">
             Egresos <span className="font-normal opacity-60">({egresos.length})</span>
@@ -186,11 +188,11 @@ export default function TAccountView({ search = '' }: Props) {
             </div>
           )}
         </div>
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           {egresos.length === 0
             ? <EmptyState tipo="egreso" />
             : egresos.map((tx) => (
-                <TxRow key={tx.id} tx={tx} hideAmounts={hideAmounts} settings={settings} onEdit={openEditModal} />
+                <TxRow key={tx.id} tx={tx} hideAmounts={hideAmounts} settings={settings} monedaBase={base} onEdit={openEditModal} />
               ))
           }
         </div>

@@ -190,7 +190,7 @@ export default function AssignmentGroup({
                   {/* Amount + status */}
                   <div className="flex-shrink-0 flex items-center gap-1.5">
                     <p className={`text-xs font-semibold text-red-500 ${hideAmounts ? 'blur-sm' : ''} ${exp.ejecutado ? 'line-through' : ''}`}>
-                      -{formatAmount(exp.monto, exp.moneda)}
+                      -{formatAmount(toBase(exp.monto, exp.moneda, monedaBase, settings), monedaBase)}
                     </p>
                     <button
                       type="button"

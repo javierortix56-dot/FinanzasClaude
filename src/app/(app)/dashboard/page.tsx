@@ -46,7 +46,7 @@ export default function DashboardPage() {
   const blur       = hideAmounts ? 'blur-sm select-none' : ''
 
   return (
-    <div className="flex flex-col min-h-full bg-gray-50">
+    <div className="flex flex-col h-full bg-gray-50">
 
       {/* ── HEADER ── */}
       <div className="bg-white px-4 pt-10 pb-4 shadow-sm">
@@ -115,7 +115,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── CONTENT CARD ── */}
-      <div className="flex-1 bg-white mt-2 overflow-hidden flex flex-col">
+      <div className="flex-1 min-h-0 bg-white mt-2 overflow-hidden flex flex-col">
 
         {/* Main tabs */}
         <div className="flex border-b border-gray-100 px-4 pt-3">
@@ -163,7 +163,7 @@ export default function DashboardPage() {
               )}
             </div>
 
-            <div className="flex-1 overflow-hidden flex flex-col">
+            <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
               <TAccountView search={search} />
             </div>
           </>

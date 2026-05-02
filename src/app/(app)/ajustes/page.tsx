@@ -85,7 +85,7 @@ export default function AjustesPage() {
 
   if (!settings) {
     return (
-      <div className="flex flex-col min-h-full bg-gray-50">
+      <div className="flex flex-col h-full bg-gray-50">
         <div className="bg-white px-4 pt-10 pb-4 shadow-sm">
           <h1 className="text-gray-800 font-bold text-xl">Ajustes</h1>
           <p className="text-gray-400 text-xs mt-0.5">Javier &amp; Mary</p>
@@ -417,7 +417,7 @@ export default function AjustesPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-full bg-gray-50">
+    <div className="flex flex-col h-full bg-gray-50">
       {/* Header */}
       <div className="bg-white px-4 pt-10 pb-4 shadow-sm">
         <h1 className="text-gray-800 font-bold text-xl">Ajustes</h1>

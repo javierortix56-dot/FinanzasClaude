@@ -32,8 +32,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const rightNav = NAV_ITEMS.slice(2)
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 overflow-x-hidden">
-      <main className="flex-1 pb-20 overflow-x-hidden">{children}</main>
+    <div className="flex flex-col h-[100dvh] bg-gray-50 overflow-x-hidden">
+      <main className="flex-1 min-h-0 pb-20 overflow-x-hidden">{children}</main>
 
       {/* Bottom nav */}
       <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-white border-t border-gray-100 shadow-lg z-40">

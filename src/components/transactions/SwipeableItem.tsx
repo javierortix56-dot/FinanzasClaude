@@ -6,8 +6,12 @@ import { Transaction } from '@/types'
 import { useUIStore } from '@/store/useUIStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useTransactionStore } from '@/store/useTransactionStore'
+import { useAuthStore } from '@/store/useAuthStore'
 import { markEjecutado, deleteTransaction, updateTransaction } from '@/lib/transactions'
 import { getCatFromSettings, formatAmount } from '@/lib/constants'
+import { toBase } from '@/lib/currency'
+import { DEFAULT_SETTINGS } from '@/lib/settings'
+import { Currency } from '@/types'
 
 interface Props {
   tx: Transaction
@@ -21,7 +25,10 @@ export default function SwipeableItem({ tx, userName }: Props) {
   const { openEditModal } = useUIStore()
   const { hideAmounts, settings } = useSettingsStore()
   const { transactions } = useTransactionStore()
+  const { monedaBase } = useAuthStore()
   const cat = getCatFromSettings(tx.categoria, settings ?? null)
+  const base = monedaBase as Currency
+  const montoBase = toBase(tx.monto, tx.moneda, base, settings ?? DEFAULT_SETTINGS)
 
   // Para egresos: buscar el ingreso vinculado
   const linkedIngreso = tx.tipo === 'egreso' && tx.asignadoA
@@ -172,7 +179,7 @@ export default function SwipeableItem({ tx, userName }: Props) {
               tx.tipo === 'ingreso' ? 'text-green-600' : 'text-red-500'
             } ${hideAmounts ? 'blur-sm' : ''} ${tx.ejecutado ? 'line-through' : ''}`}
           >
-            {tx.tipo === 'ingreso' ? '+' : '-'}{formatAmount(tx.monto, tx.moneda)}
+            {tx.tipo === 'ingreso' ? '+' : '-'}{formatAmount(montoBase, base)}
           </p>
           <button
             type="button"

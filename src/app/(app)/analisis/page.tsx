@@ -14,7 +14,7 @@ export default function AnalisisPage() {
   const [tab, setTab] = useState<Tab>('historico')
 
   return (
-    <div className="flex flex-col min-h-full bg-gray-50">
+    <div className="flex flex-col h-full bg-gray-50">
 
       {/* ── Header ── */}
       <div className="bg-white px-4 pt-10 pb-3 shadow-sm">
