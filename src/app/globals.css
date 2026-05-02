@@ -35,6 +35,11 @@ body {
   box-sizing: border-box;
 }
 
+/* Prevent iOS/Android from zooming in on input focus (requires ≥16px font-size) */
+input, select, textarea {
+  font-size: max(16px, 1em);
+}
+
 .blur-amount {
   filter: blur(8px);
   user-select: none;

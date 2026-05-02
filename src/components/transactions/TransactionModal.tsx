@@ -414,28 +414,6 @@ export default function TransactionModal() {
               </div>
             </div>
 
-            <div className="h-px bg-gray-100 mx-5" />
-
-            {/* ── Registrado por — pill toggle ── */}
-            <div className="px-5 py-4">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Registrado por</label>
-              <div className="flex rounded-xl bg-gray-100 p-1 gap-1 mt-2">
-                {SHARED_USERS.map((u) => (
-                  <button
-                    key={u.id}
-                    onClick={() => setCreadoPor(u.id)}
-                    className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
-                      creadoPor === u.id
-                        ? 'bg-white text-gray-900 shadow-sm'
-                        : 'text-gray-400'
-                    }`}
-                  >
-                    {u.nombre}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {/* ── Error ── */}
             {saveError && (
               <div className="mx-5 mb-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-xs text-red-600 font-medium break-all">

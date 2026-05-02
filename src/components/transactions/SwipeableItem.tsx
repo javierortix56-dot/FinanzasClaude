@@ -15,13 +15,12 @@ import { Currency } from '@/types'
 
 interface Props {
   tx: Transaction
-  userName?: string
 }
 
 const THRESHOLD = 65
 const RIGHT_OPEN = 170
 
-export default function SwipeableItem({ tx, userName }: Props) {
+export default function SwipeableItem({ tx }: Props) {
   const { openEditModal } = useUIStore()
   const { hideAmounts, settings } = useSettingsStore()
   const { transactions } = useTransactionStore()
@@ -162,7 +161,7 @@ export default function SwipeableItem({ tx, userName }: Props) {
             {tx.descripcion || cat?.nombre || tx.categoria}
           </p>
           <p className="text-[10px] text-gray-400 leading-tight truncate mt-px">
-            {dateStr}{userName ? ` · ${userName}` : ''}
+            {dateStr}
             {linkedIngreso && (
               <span className="inline-flex items-center gap-0.5 ml-1 text-[#534AB7]">
                 <Link2 size={8} />

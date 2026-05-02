@@ -81,20 +81,21 @@ export default function AssignmentGroup({
                   {income!.descripcion || getCatFromSettings(income!.categoria, settings)?.nombre || income!.categoria}
                 </p>
                 <p className="text-[10px] text-gray-400 mt-0.5">
-                  {incomeDate}{userNames[income!.creadoPor] ? ` · ${userNames[income!.creadoPor]}` : ''}
+                  {incomeDate}
                 </p>
               </>
             )}
           </div>
 
-          {/* Right side: total gastado + count */}
+          {/* Right side: count of expenses (amount is already conveyed by the
+              progress bar + "Disponible") */}
           <div className="flex-shrink-0 text-right">
-            <p className={`text-sm font-bold ${isUnassigned ? 'text-amber-600' : 'text-red-500'}`}>
-              <span className={hideAmounts ? 'blur-sm' : ''}>
+            {isUnassigned ? (
+              <p className={`text-sm font-bold text-amber-600 ${hideAmounts ? 'blur-sm' : ''}`}>
                 -{formatAmount(totalGastado, monedaBase)}
-              </span>
-            </p>
-            <p className="text-[10px] text-gray-400 mt-0.5">
+              </p>
+            ) : null}
+            <p className="text-[10px] text-gray-400">
               {expenses.length} egreso{expenses.length !== 1 ? 's' : ''}
             </p>
           </div>

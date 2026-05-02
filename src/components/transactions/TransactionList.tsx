@@ -57,7 +57,7 @@ export default function TransactionList({ filter = 'all', search = '' }: Props) 
   return (
     <div className="divide-y divide-gray-50">
       {filtered.map((tx) => (
-        <SwipeableItem key={tx.id} tx={tx} userName={USER_NAMES[tx.creadoPor]} />
+        <SwipeableItem key={tx.id} tx={tx} />
       ))}
     </div>
   )
