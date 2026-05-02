@@ -160,15 +160,21 @@ export default function SwipeableItem({ tx }: Props) {
           <p className={`text-xs font-medium text-gray-900 truncate leading-tight ${tx.ejecutado ? 'line-through' : ''}`}>
             {tx.descripcion || cat?.nombre || tx.categoria}
           </p>
-          <p className="text-[10px] text-gray-400 leading-tight truncate mt-px">
-            {dateStr}
-            {linkedIngreso && (
-              <span className="inline-flex items-center gap-0.5 ml-1 text-[#534AB7]">
-                <Link2 size={8} />
-                {linkedIngreso.descripcion || linkedIngreso.categoria}
-              </span>
-            )}
-          </p>
+          <p className="text-[10px] text-gray-400 leading-tight truncate mt-px">{dateStr}</p>
+          {tx.tipo === 'egreso' && (
+            linkedIngreso
+              ? (
+                <span className="inline-flex items-center gap-0.5 mt-0.5 px-1.5 py-0.5 rounded-full bg-[#534AB7]/10 text-[#534AB7] text-[9px] font-semibold max-w-full truncate">
+                  <Link2 size={7} className="flex-shrink-0" />
+                  {linkedIngreso.descripcion?.trim() || getCatFromSettings(linkedIngreso.categoria, settings ?? null)?.nombre || linkedIngreso.categoria}
+                </span>
+              )
+              : (
+                <span className="inline-flex items-center mt-0.5 px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-400 text-[9px] font-semibold">
+                  Sin asignar
+                </span>
+              )
+          )}
         </div>
 
         {/* Amount + status inline */}
