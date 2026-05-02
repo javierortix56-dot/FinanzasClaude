@@ -48,68 +48,58 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-col h-full bg-gray-50">
 
-      {/* ── HEADER ── */}
-      <div className="bg-white px-4 pt-10 pb-4 shadow-sm">
+      {/* ── HEADER compacto ── */}
+      <div className="bg-white px-4 pt-10 pb-2 shadow-sm">
 
-        {/* Row 1: avatar · greeting · controls */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[#534AB7] flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-bold text-xs">J&M</span>
-            </div>
-            <div>
-              <p className="text-gray-800 font-semibold text-sm leading-tight">
-                {greet()}, Javier
-              </p>
-              <p className="text-gray-400 text-xs capitalize">{monthLabel(currentMonth)}</p>
-            </div>
+        {/* Fila única: avatar · mes · nav · ojo · rates */}
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-7 h-7 rounded-full bg-[#534AB7] flex items-center justify-center flex-shrink-0">
+            <span className="text-white font-bold text-[9px]">J&M</span>
           </div>
-
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={toggleHideAmounts}
-              className="flex items-center gap-1 border border-gray-200 rounded-full px-2.5 py-1.5 text-gray-500 text-xs font-medium"
-            >
-              {hideAmounts ? <EyeOff size={11} /> : <Eye size={11} />}
-              <span>{hideAmounts ? 'Mostrar' : 'Ocultar'}</span>
+          <div className="flex items-center gap-1 min-w-0">
+            <button onClick={prevMonth} className="p-1 rounded-full hover:bg-gray-100 transition-colors">
+              <ChevronLeft size={12} className="text-gray-400" />
             </button>
-            <button onClick={prevMonth} className="p-1.5 border border-gray-200 rounded-full">
-              <ChevronLeft size={13} className="text-gray-500" />
-            </button>
-            <button onClick={nextMonth} className="p-1.5 border border-gray-200 rounded-full">
-              <ChevronRight size={13} className="text-gray-500" />
+            <p className="text-gray-700 font-semibold text-xs capitalize leading-none whitespace-nowrap">
+              {monthLabel(currentMonth)}
+            </p>
+            <button onClick={nextMonth} className="p-1 rounded-full hover:bg-gray-100 transition-colors">
+              <ChevronRight size={12} className="text-gray-400" />
             </button>
           </div>
-        </div>
-
-        {/* Row 2: rate pills (right-aligned) */}
-        <div className="flex justify-end gap-1.5 mb-4">
-          <span className="bg-gray-100 text-gray-500 text-[10px] font-medium px-2.5 py-1 rounded-full">
+          <div className="flex-1" />
+          <span className="bg-gray-100 text-gray-400 text-[9px] font-medium px-1.5 py-0.5 rounded-full">
             ARS {s.tipoCambio.ARS_USD.toLocaleString('es-AR')}
           </span>
-          <span className="bg-gray-100 text-gray-500 text-[10px] font-medium px-2.5 py-1 rounded-full">
+          <span className="bg-gray-100 text-gray-400 text-[9px] font-medium px-1.5 py-0.5 rounded-full">
             COP {s.tipoCambio.COP_USD.toLocaleString('es-AR')}
           </span>
+          <button
+            onClick={toggleHideAmounts}
+            className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
+            title={hideAmounts ? 'Mostrar' : 'Ocultar'}
+          >
+            {hideAmounts ? <EyeOff size={14} className="text-gray-400" /> : <Eye size={14} className="text-gray-400" />}
+          </button>
         </div>
 
-        {/* Balance */}
-        <div className="mb-3">
-          <p className="text-gray-400 text-[10px] font-semibold uppercase tracking-widest mb-0.5">
-            Balance del mes
-          </p>
-          <p className={`text-gray-900 text-3xl font-bold leading-tight ${blur}`}>
-            {formatAmount(balance, base)}
-          </p>
-          <div className={`flex items-center gap-3 mt-1.5 ${blur}`}>
-            <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
-              <span className="text-[10px]">▲</span>{formatAmount(totalIngresos, base)}
-            </span>
-            <span className="text-gray-200">|</span>
-            <span className="flex items-center gap-1 text-xs text-red-500 font-medium">
-              <span className="text-[10px]">▼</span>{formatAmount(totalEgresos, base)}
-            </span>
-            <span className="text-gray-200">|</span>
-            <span className="text-xs text-gray-400">{formatAmount(balanceUSD, 'USD')}</span>
+        {/* Balance + stats inline */}
+        <div className="flex items-end justify-between gap-2">
+          <div>
+            <p className={`text-gray-900 text-2xl font-black leading-none tabular-nums ${blur}`}>
+              {formatAmount(balance, base)}
+            </p>
+            <div className={`flex items-center gap-2 mt-1 ${blur}`}>
+              <span className="flex items-center gap-0.5 text-[11px] text-green-600 font-semibold">
+                <span className="text-[9px]">▲</span>{formatAmount(totalIngresos, base)}
+              </span>
+              <span className="text-gray-200 text-xs">|</span>
+              <span className="flex items-center gap-0.5 text-[11px] text-red-500 font-semibold">
+                <span className="text-[9px]">▼</span>{formatAmount(totalEgresos, base)}
+              </span>
+              <span className="text-gray-200 text-xs">|</span>
+              <span className="text-[11px] text-gray-400">{formatAmount(balanceUSD, 'USD')}</span>
+            </div>
           </div>
         </div>
       </div>
