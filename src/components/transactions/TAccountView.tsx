@@ -10,6 +10,7 @@ import { Transaction, Currency, Settings } from '@/types'
 import { getCatFromSettings, formatAmount } from '@/lib/constants'
 import { toBase } from '@/lib/currency'
 import { DEFAULT_SETTINGS } from '@/lib/settings'
+import { markEjecutado } from '@/lib/transactions'
 
 interface TxRowProps {
   tx: Transaction
@@ -25,9 +26,12 @@ function TxRow({ tx, hideAmounts, settings, onEdit }: TxRowProps) {
   const dotColor = cat?.color ?? (isIngreso ? '#22c55e' : '#ef4444')
 
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onEdit(tx)}
-      className="w-full min-w-0 text-left px-2.5 py-2 border-b border-gray-50 hover:bg-gray-50 active:bg-gray-100 transition-colors overflow-hidden"
+      onKeyDown={(e) => { if (e.key === 'Enter') onEdit(tx) }}
+      className="w-full min-w-0 text-left px-2.5 py-2 border-b border-gray-50 hover:bg-gray-50 active:bg-gray-100 transition-colors overflow-hidden cursor-pointer"
     >
       <p className="text-[11px] font-medium text-gray-900 truncate leading-tight">
         {tx.descripcion || cat?.nombre || '-'}
@@ -45,13 +49,20 @@ function TxRow({ tx, hideAmounts, settings, onEdit }: TxRowProps) {
           >
             {formatAmount(tx.monto, tx.moneda)}
           </span>
-          {tx.ejecutado
-            ? <CheckCircle2 size={10} className="text-green-400 flex-shrink-0" />
-            : <div className="w-[10px] h-[10px] rounded-full border border-gray-200 flex-shrink-0" />
-          }
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); markEjecutado(tx.id!, !tx.ejecutado) }}
+            className="p-1 -m-1 flex-shrink-0 inline-flex"
+            title={tx.ejecutado ? 'Marcar pendiente' : 'Marcar ejecutado'}
+          >
+            {tx.ejecutado
+              ? <CheckCircle2 size={13} className="text-green-500" />
+              : <div className="w-[13px] h-[13px] rounded-full border border-gray-300" />
+            }
+          </button>
         </div>
       </div>
-    </button>
+    </div>
   )
 }
 

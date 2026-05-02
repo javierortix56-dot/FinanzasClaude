@@ -5,6 +5,7 @@ import { Transaction, Settings, Currency } from '@/types'
 import { getCategoryById, formatAmount } from '@/lib/constants'
 import { toBase } from '@/lib/currency'
 import { useSettingsStore } from '@/store/useSettingsStore'
+import { markEjecutado } from '@/lib/transactions'
 
 interface Props {
   income: Transaction | null
@@ -155,10 +156,13 @@ export default function AssignmentGroup({
               const dateStr = exp.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
 
               return (
-                <button
+                <div
                   key={exp.id}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => onToggleSelect(exp.id!)}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                  onKeyDown={(e) => { if (e.key === 'Enter') onToggleSelect(exp.id!) }}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors cursor-pointer ${
                     isSelected ? 'bg-[#534AB7]/5' : 'hover:bg-gray-50'
                   }`}
                 >
@@ -188,12 +192,19 @@ export default function AssignmentGroup({
                     <p className={`text-xs font-semibold text-red-500 ${hideAmounts ? 'blur-sm' : ''}`}>
                       -{formatAmount(exp.monto, exp.moneda)}
                     </p>
-                    {exp.ejecutado
-                      ? <CheckCircle2 size={11} className="text-green-400 flex-shrink-0" />
-                      : <div className="w-[11px] h-[11px] rounded-full border border-gray-200 flex-shrink-0" />
-                    }
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); markEjecutado(exp.id!, !exp.ejecutado) }}
+                      className="p-1 -m-1 flex-shrink-0 inline-flex"
+                      title={exp.ejecutado ? 'Marcar pendiente' : 'Marcar ejecutado'}
+                    >
+                      {exp.ejecutado
+                        ? <CheckCircle2 size={13} className="text-green-500" />
+                        : <div className="w-[13px] h-[13px] rounded-full border border-gray-300" />
+                      }
+                    </button>
                   </div>
-                </button>
+                </div>
               )
             })
           )}

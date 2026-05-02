@@ -174,10 +174,18 @@ export default function SwipeableItem({ tx, userName }: Props) {
           >
             {tx.tipo === 'ingreso' ? '+' : '-'}{formatAmount(tx.monto, tx.moneda)}
           </p>
-          {tx.ejecutado
-            ? <CheckCircle2 size={11} className="text-green-400 flex-shrink-0" />
-            : <div className="w-[11px] h-[11px] rounded-full border border-gray-200 flex-shrink-0" />
-          }
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); markEjecutado(tx.id!, !tx.ejecutado) }}
+            onTouchEnd={(e) => { e.stopPropagation() }}
+            className="p-1 -m-1 flex-shrink-0"
+            title={tx.ejecutado ? 'Marcar pendiente' : 'Marcar ejecutado'}
+          >
+            {tx.ejecutado
+              ? <CheckCircle2 size={14} className="text-green-500" />
+              : <div className="w-[14px] h-[14px] rounded-full border border-gray-300" />
+            }
+          </button>
         </div>
       </div>
     </div>
