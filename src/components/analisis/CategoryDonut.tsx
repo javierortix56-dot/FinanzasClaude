@@ -1,9 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { ChevronLeft, SlidersHorizontal } from 'lucide-react'
-import { Transaction, Settings, Currency } from '@/types'
-import { getCatFromSettings, formatAmount } from '@/lib/constants'
+import { Transaction, Settings, Currency, CategoryGroup } from '@/types'
+import {
+  getCatFromSettings, formatAmount,
+  DEFAULT_GASTO_CATEGORY_GROUPS, DEFAULT_INGRESO_CATEGORY_GROUPS,
+} from '@/lib/constants'
 import { toBase, toUSD } from '@/lib/currency'
 import { useBudgetStore } from '@/store/useBudgetStore'
 import DonutChart, { DonutSlice } from './DonutChart'
@@ -29,59 +32,126 @@ interface Props {
 }
 
 type TipoTab = 'egreso' | 'ingreso'
+type Slice = DonutSlice & { nombre: string; amount: number; percent: number }
 
 export default function CategoryDonut({ transactions, settings, monedaBase, mes }: Props) {
   const { getBudget } = useBudgetStore()
-  const [tipoTab,  setTipoTab]  = useState<TipoTab>('egreso')
-  const [selected, setSelected] = useState<string | null>(null)
-  const [budgetCat, setBudgetCat] = useState<string | null>(null)
+  const [tipoTab,        setTipoTab]        = useState<TipoTab>('egreso')
+  const [selectedGroup,  setSelectedGroup]  = useState<string | null>(null)
+  const [selectedSub,    setSelectedSub]    = useState<string | null>(null)
+  const [budgetCat,      setBudgetCat]      = useState<string | null>(null)
 
   const filtered = transactions.filter((t) => t.tipo === tipoTab)
 
-  // Aggregate by category
-  const catMap = new Map<string, number>()
-  filtered.forEach((t) => {
-    const val = toBase(t.monto, t.moneda, monedaBase, settings)
-    catMap.set(t.categoria, (catMap.get(t.categoria) ?? 0) + val)
-  })
+  // Árbol de grupos activos según el tipo seleccionado
+  const groups: CategoryGroup[] = useMemo(() => {
+    const raw = tipoTab === 'egreso'
+      ? (settings.categoriasGasto.length   > 0 ? settings.categoriasGasto   : DEFAULT_GASTO_CATEGORY_GROUPS)
+      : (settings.categoriasIngreso.length > 0 ? settings.categoriasIngreso : DEFAULT_INGRESO_CATEGORY_GROUPS)
+    return raw.filter((g) => g.activa)
+  }, [tipoTab, settings])
 
-  const total = [...catMap.values()].reduce((a, b) => a + b, 0)
-
-  // Build slices sorted by amount desc
-  const slices: (DonutSlice & { nombre: string; amount: number; percent: number })[] = [...catMap.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([id, amount], index) => {
-      const cat = getCatFromSettings(id, settings)
-      return {
-        id,
-        nombre: cat?.nombre ?? id,
-        color:  resolveColor(cat?.color, index),
-        amount,
-        percent: total > 0 ? (amount / total) * 100 : 0,
-        dimmed: selected !== null && selected !== id,
-      }
+  // Mapa: subcatId / grupoId → groupId padre
+  const idToGroup = useMemo(() => {
+    const m = new Map<string, string>()
+    groups.forEach((g) => {
+      m.set(g.id, g.id) // si la tx está categorizada al grupo directo
+      g.subcategorias.forEach((s) => m.set(s.id, g.id))
     })
+    return m
+  }, [groups])
 
-  // Detail: transactions in selected category
-  const detailTxs = selected
-    ? filtered.filter((t) => t.categoria === selected)
+  // ── Slices según el nivel actual ───────────────────────────────────────
+  const slices: Slice[] = useMemo(() => {
+    if (selectedGroup === null) {
+      // Nivel 0: agregar por grupo
+      const map = new Map<string, number>()
+      filtered.forEach((t) => {
+        const groupId = idToGroup.get(t.categoria) ?? t.categoria
+        const val = toBase(t.monto, t.moneda, monedaBase, settings)
+        map.set(groupId, (map.get(groupId) ?? 0) + val)
+      })
+      const tot = [...map.values()].reduce((a, b) => a + b, 0)
+      return [...map.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([gId, amount], idx) => {
+          const grp = groups.find((g) => g.id === gId)
+          return {
+            id: gId,
+            nombre: grp?.nombre ?? gId,
+            color: resolveColor(grp?.color, idx),
+            amount,
+            percent: tot > 0 ? (amount / tot) * 100 : 0,
+            dimmed: false,
+          }
+        })
+    }
+    // Nivel 1: subcategorías del grupo seleccionado
+    const map = new Map<string, number>()
+    filtered.forEach((t) => {
+      const gId = idToGroup.get(t.categoria) ?? t.categoria
+      if (gId !== selectedGroup) return
+      const val = toBase(t.monto, t.moneda, monedaBase, settings)
+      map.set(t.categoria, (map.get(t.categoria) ?? 0) + val)
+    })
+    const tot = [...map.values()].reduce((a, b) => a + b, 0)
+    return [...map.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([id, amount], idx) => {
+        const cat = getCatFromSettings(id, settings)
+        const grp = groups.find((g) => g.id === selectedGroup)
+        const fallbackName = id === selectedGroup ? `${grp?.nombre ?? ''} (sin subcategoría)` : id
+        return {
+          id,
+          nombre: cat?.nombre && id !== selectedGroup ? cat.nombre : fallbackName,
+          color: resolveColor(cat?.color, idx),
+          amount,
+          percent: tot > 0 ? (amount / tot) * 100 : 0,
+          dimmed: selectedSub !== null && selectedSub !== id,
+        }
+      })
+  }, [filtered, idToGroup, groups, selectedGroup, selectedSub, monedaBase, settings])
+
+  const total = slices.reduce((a, s) => a + s.amount, 0)
+
+  // ── Detail (nivel 2): transacciones en la subcategoría seleccionada ──
+  const detailTxs = selectedSub
+    ? filtered.filter((t) => t.categoria === selectedSub)
     : []
   const detailTotal = detailTxs.reduce(
     (s, t) => s + toBase(t.monto, t.moneda, monedaBase, settings),
     0
   )
 
-  const centerSlice = selected ? slices.find((s) => s.id === selected) : null
+  // ── Centro del donut ─────────────────────────────────────────────────
+  const centerSlice = selectedSub
+    ? slices.find((s) => s.id === selectedSub)
+    : selectedGroup
+      ? null
+      : null
+  const groupSlice = selectedGroup && !selectedSub
+    ? { amount: total, nombre: groups.find((g) => g.id === selectedGroup)?.nombre ?? '' }
+    : null
   const centerLabel = centerSlice
     ? formatAmount(centerSlice.amount, monedaBase)
-    : formatAmount(total, monedaBase)
-  const centerSub = centerSlice ? centerSlice.nombre : (tipoTab === 'egreso' ? 'Total gastos' : 'Total ingresos')
+    : groupSlice
+      ? formatAmount(groupSlice.amount, monedaBase)
+      : formatAmount(total, monedaBase)
+  const centerSub = centerSlice
+    ? centerSlice.nombre
+    : groupSlice
+      ? groupSlice.nombre
+      : (tipoTab === 'egreso' ? 'Total gastos' : 'Total ingresos')
 
   function fmtShort(n: number) {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
     if (n >= 1_000)     return `${(n / 1_000).toFixed(0)}k`
     return n.toFixed(0)
   }
+
+  const breadcrumb = selectedGroup
+    ? groups.find((g) => g.id === selectedGroup)?.nombre ?? ''
+    : ''
 
   return (
     <div>
@@ -90,7 +160,7 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
         {(['egreso', 'ingreso'] as TipoTab[]).map((t) => (
           <button
             key={t}
-            onClick={() => { setTipoTab(t); setSelected(null) }}
+            onClick={() => { setTipoTab(t); setSelectedGroup(null); setSelectedSub(null) }}
             className={`px-3 py-1.5 text-xs font-semibold rounded-t-lg transition-colors ${
               tipoTab === t
                 ? t === 'egreso'
@@ -115,48 +185,55 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
         />
       </div>
 
+      {/* Breadcrumb / back navigation */}
+      {(selectedGroup || selectedSub) && (
+        <div className="px-4 pb-1">
+          <button
+            onClick={() => {
+              if (selectedSub) setSelectedSub(null)
+              else setSelectedGroup(null)
+            }}
+            className="flex items-center gap-1 text-xs font-semibold text-[#534AB7]"
+          >
+            <ChevronLeft size={14} />
+            {selectedSub ? `Volver a ${breadcrumb}` : 'Volver a categorías'}
+          </button>
+        </div>
+      )}
+
       {/* Legend / Detail */}
       <div className="px-4 pb-3">
-        {selected ? (
-          /* ── Detail view ── */
-          <>
-            <button
-              onClick={() => setSelected(null)}
-              className="flex items-center gap-1 text-xs font-semibold text-[#534AB7] mb-3"
-            >
-              <ChevronLeft size={14} />
-              Volver a categorías
-            </button>
-            <div className="space-y-2">
-              {detailTxs.length === 0 ? (
-                <p className="text-xs text-gray-400">Sin movimientos en esta categoría</p>
-              ) : (
-                detailTxs.map((tx) => {
-                  const amt = toBase(tx.monto, tx.moneda, monedaBase, settings)
-                  const pct = detailTotal > 0 ? (amt / detailTotal) * 100 : 0
-                  const cat = getCatFromSettings(tx.categoria, settings)
-                  return (
-                    <div key={tx.id} className="flex items-center gap-2">
-                      <div
-                        className="w-2 h-2 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: cat?.color ?? '#6B7280' }}
-                      />
-                      <span className="flex-1 text-sm text-gray-700 truncate">
-                        {tx.descripcion || cat?.nombre || tx.categoria}
-                      </span>
-                      <span className="text-xs text-gray-400">{pct.toFixed(0)}%</span>
-                      <span className="text-sm font-semibold text-gray-800 text-right">
-                        {formatAmount(amt, monedaBase)}
-                      </span>
-                    </div>
-                  )
-                })
-              )}
-            </div>
-          </>
+        {selectedSub ? (
+          /* ── Nivel 2: transacciones ── */
+          <div className="space-y-2 mt-2">
+            {detailTxs.length === 0 ? (
+              <p className="text-xs text-gray-400">Sin movimientos en esta categoría</p>
+            ) : (
+              detailTxs.map((tx) => {
+                const amt = toBase(tx.monto, tx.moneda, monedaBase, settings)
+                const pct = detailTotal > 0 ? (amt / detailTotal) * 100 : 0
+                const cat = getCatFromSettings(tx.categoria, settings)
+                return (
+                  <div key={tx.id} className="flex items-center gap-2">
+                    <div
+                      className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: cat?.color ?? DEFAULT_GRAY }}
+                    />
+                    <span className="flex-1 text-sm text-gray-700 truncate">
+                      {tx.descripcion || cat?.nombre || tx.categoria}
+                    </span>
+                    <span className="text-xs text-gray-400">{pct.toFixed(0)}%</span>
+                    <span className="text-sm font-semibold text-gray-800 text-right">
+                      {formatAmount(amt, monedaBase)}
+                    </span>
+                  </div>
+                )
+              })
+            )}
+          </div>
         ) : (
-          /* ── Category legend ── */
-          <div className="space-y-1">
+          /* ── Nivel 0 (grupos) o Nivel 1 (subcategorías) ── */
+          <div className="space-y-1 mt-2">
             {slices.length === 0 ? (
               <p className="text-xs text-gray-400 text-center py-3">
                 No hay movimientos en este período
@@ -175,10 +252,12 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
 
                 return (
                   <div key={slice.id}>
-                    {/* Main row */}
                     <button
                       className="w-full flex items-center gap-2 hover:bg-gray-50 rounded-lg px-1 py-1.5 transition-colors"
-                      onClick={() => setSelected(slice.id)}
+                      onClick={() => {
+                        if (selectedGroup === null) setSelectedGroup(slice.id)
+                        else setSelectedSub(slice.id)
+                      }}
                     >
                       <div
                         className="w-2.5 h-2.5 rounded-full flex-shrink-0"
