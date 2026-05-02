@@ -47,6 +47,23 @@ export default function SnapshotModal({ open, onClose, asset }: Props) {
   const saldoNum  = parseFloat((saldo || '0').replace(',', '.')) || 0
   const reval     = saldoNum - saldoPrev - aporteNum
 
+  // Lista de meses disponibles: desde fechaAlta hasta mes actual
+  // Debe estar antes del early-return para no violar las Rules of Hooks
+  const monthOptions = useMemo(() => {
+    if (!asset) return []
+    const out: string[] = []
+    const fa = asset.fechaAlta.toDate()
+    let m = `${fa.getFullYear()}-${String(fa.getMonth() + 1).padStart(2, '0')}`
+    const current = getCurrentMonth()
+    while (m <= current && out.length < 60) {
+      out.push(m)
+      const [y, mn] = m.split('-').map(Number)
+      const nxt = new Date(y, mn, 1)
+      m = `${nxt.getFullYear()}-${String(nxt.getMonth() + 1).padStart(2, '0')}`
+    }
+    return out.reverse()
+  }, [asset])
+
   // Reset cuando se abre / se cambia de activo
   useEffect(() => {
     if (!open || !asset) return
@@ -88,22 +105,6 @@ export default function SnapshotModal({ open, onClose, asset }: Props) {
   }
 
   if (!asset) return null
-
-  // Lista de meses disponibles: desde fechaAlta hasta mes actual
-  const monthOptions = useMemo(() => {
-    const out: string[] = []
-    const fa = asset.fechaAlta.toDate()
-    let m = `${fa.getFullYear()}-${String(fa.getMonth() + 1).padStart(2, '0')}`
-    const current = getCurrentMonth()
-    while (m <= current && out.length < 60) {
-      out.push(m)
-      // Avanzar 1 mes
-      const [y, mn] = m.split('-').map(Number)
-      const nxt = new Date(y, mn, 1) // mn es 1-12, Date acepta 0-11 → mn = mes siguiente
-      m = `${nxt.getFullYear()}-${String(nxt.getMonth() + 1).padStart(2, '0')}`
-    }
-    return out.reverse() // más recientes primero
-  }, [asset])
 
   const revalIcon = reval > 0 ? <TrendingUp size={12} /> : reval < 0 ? <TrendingDown size={12} /> : <Minus size={12} />
   const revalColor = reval > 0 ? 'text-green-600' : reval < 0 ? 'text-red-500' : 'text-gray-400'
