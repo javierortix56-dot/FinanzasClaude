@@ -25,7 +25,7 @@ function TxRow({ tx, hideAmounts, settings, monedaBase, onEdit }: TxRowProps) {
   const isIngreso = tx.tipo === 'ingreso'
   const dateStr = tx.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
   const dotColor = cat?.color ?? (isIngreso ? '#22c55e' : '#ef4444')
-  const montoBase = toBase(tx.monto, tx.moneda, monedaBase, settings)
+  const montoBase = toBase(tx.monto, tx.moneda, monedaBase, settings ?? DEFAULT_SETTINGS)
 
   return (
     <div
