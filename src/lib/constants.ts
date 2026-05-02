@@ -11,56 +11,56 @@ export const SHARED_USERS = [
 
 export const DEFAULT_GASTO_CATEGORY_GROUPS: CategoryGroup[] = [
   {
-    id: 'grp_esenciales', nombre: 'Esenciales', color: '#8B5CF6', activa: true,
+    id: 'grp_esenciales', nombre: 'Esenciales', color: '#3B82F6', activa: true,
     subcategorias: [
-      { id: 'vivienda',      nombre: 'Vivienda',      color: '#8B5CF6', activa: true },
-      { id: 'alimentacion',  nombre: 'Alimentación',  color: '#10B981', activa: true },
+      { id: 'vivienda',      nombre: 'Vivienda',      color: '#3B82F6', activa: true },
+      { id: 'alimentacion',  nombre: 'Alimentación',  color: '#22C55E', activa: true },
       { id: 'salud',         nombre: 'Salud',          color: '#EF4444', activa: true },
       { id: 'educacion',     nombre: 'Educación',      color: '#6366F1', activa: true },
-      { id: 'servicios',     nombre: 'Servicios',      color: '#14B8A6', activa: true },
+      { id: 'servicios',     nombre: 'Servicios',      color: '#06B6D4', activa: true },
     ],
   },
   {
-    id: 'grp_variable', nombre: 'Variable', color: '#F59E0B', activa: true,
+    id: 'grp_variable', nombre: 'Variable', color: '#F97316', activa: true,
     subcategorias: [
-      { id: 'transporte',      nombre: 'Transporte',      color: '#3B82F6', activa: true },
-      { id: 'entretenimiento', nombre: 'Entretenimiento', color: '#F59E0B', activa: true },
+      { id: 'transporte',      nombre: 'Transporte',      color: '#F97316', activa: true },
+      { id: 'entretenimiento', nombre: 'Entretenimiento', color: '#A855F7', activa: true },
       { id: 'ropa',            nombre: 'Ropa',             color: '#EC4899', activa: true },
     ],
   },
   {
-    id: 'grp_financiero', nombre: 'Financiero', color: '#534AB7', activa: true,
+    id: 'grp_financiero', nombre: 'Financiero', color: '#8B5CF6', activa: true,
     subcategorias: [
-      { id: 'ahorro', nombre: 'Ahorro', color: '#534AB7', activa: true },
+      { id: 'ahorro', nombre: 'Ahorro', color: '#8B5CF6', activa: true },
     ],
   },
   {
-    id: 'grp_otros_gasto', nombre: 'Otros', color: '#6B7280', activa: true,
+    id: 'grp_otros_gasto', nombre: 'Otros', color: '#94A3B8', activa: true,
     subcategorias: [
-      { id: 'otros_gasto', nombre: 'Otros', color: '#6B7280', activa: true },
+      { id: 'otros_gasto', nombre: 'Otros', color: '#94A3B8', activa: true },
     ],
   },
 ]
 
 export const DEFAULT_INGRESO_CATEGORY_GROUPS: CategoryGroup[] = [
   {
-    id: 'grp_laboral', nombre: 'Laboral', color: '#10B981', activa: true,
+    id: 'grp_laboral', nombre: 'Laboral', color: '#22C55E', activa: true,
     subcategorias: [
-      { id: 'sueldo',    nombre: 'Sueldo',    color: '#10B981', activa: true },
-      { id: 'freelance', nombre: 'Freelance', color: '#3B82F6', activa: true },
+      { id: 'sueldo',    nombre: 'Sueldo',    color: '#22C55E', activa: true },
+      { id: 'freelance', nombre: 'Freelance', color: '#06B6D4', activa: true },
     ],
   },
   {
-    id: 'grp_pasivo_ing', nombre: 'Pasivo', color: '#8B5CF6', activa: true,
+    id: 'grp_pasivo_ing', nombre: 'Pasivo', color: '#F59E0B', activa: true,
     subcategorias: [
-      { id: 'inversiones', nombre: 'Inversiones', color: '#8B5CF6', activa: true },
+      { id: 'inversiones', nombre: 'Inversiones', color: '#F59E0B', activa: true },
     ],
   },
   {
-    id: 'grp_otros_ingreso', nombre: 'Otros', color: '#6B7280', activa: true,
+    id: 'grp_otros_ingreso', nombre: 'Otros', color: '#94A3B8', activa: true,
     subcategorias: [
       { id: 'regalo',       nombre: 'Regalo', color: '#EC4899', activa: true },
-      { id: 'otros_ingreso', nombre: 'Otros', color: '#6B7280', activa: true },
+      { id: 'otros_ingreso', nombre: 'Otros', color: '#94A3B8', activa: true },
     ],
   },
 ]

@@ -172,8 +172,8 @@ export default function AssignmentTab() {
   const barGradient = allAssigned
     ? 'linear-gradient(90deg, #22c55e, #10b981)'
     : progressPercent >= 50
-      ? 'linear-gradient(90deg, #6366f1, #8b5cf6)'
-      : 'linear-gradient(90deg, #f59e0b, #f97316)'
+      ? 'linear-gradient(90deg, #3b82f6, #6366f1)'
+      : 'linear-gradient(90deg, #f59e0b, #ef4444)'
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-gray-50/60">

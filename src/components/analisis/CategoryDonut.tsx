@@ -12,12 +12,20 @@ import { useBudgetStore } from '@/store/useBudgetStore'
 import DonutChart, { DonutSlice } from './DonutChart'
 import BudgetModal from './BudgetModal'
 
-// Vibrant palette for categories that lack a color or have the default gray
+// High-contrast palette: colours spaced across the full hue wheel
 const PALETTE = [
-  '#8B5CF6', '#10B981', '#3B82F6', '#F59E0B', '#EC4899',
-  '#EF4444', '#14B8A6', '#6366F1', '#F97316', '#06B6D4',
+  '#EF4444', // red
+  '#F97316', // orange
+  '#EAB308', // yellow
+  '#22C55E', // green
+  '#14B8A6', // teal
+  '#06B6D4', // cyan
+  '#3B82F6', // blue
+  '#8B5CF6', // violet
+  '#EC4899', // pink
+  '#84CC16', // lime
 ]
-const DEFAULT_GRAY = '#6B7280'
+const DEFAULT_GRAY = '#94A3B8'
 
 function resolveColor(color: string | undefined, index: number): string {
   if (!color || color === DEFAULT_GRAY) return PALETTE[index % PALETTE.length]
