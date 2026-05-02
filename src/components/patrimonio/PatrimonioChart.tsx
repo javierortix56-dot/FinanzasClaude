@@ -41,62 +41,53 @@ export default function PatrimonioChart({ data, currency }: Props) {
     ...data.map((d) => Math.abs(d.aportes) + Math.abs(d.reval)),
     1
   )
-  const BAR_H = 100
+  const BAR_H = 64
 
   const last = data[data.length - 1]
 
   return (
-    <div className="px-4 pt-2 pb-4">
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+    <div className="px-4 pt-2 pb-2">
+      {/* Título + leyenda en una sola fila */}
+      <div className="flex items-center justify-between mb-1.5">
+        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">
           Evolución del neto ({currency})
         </p>
-      </div>
-
-      {/* Mini leyenda */}
-      <div className="flex items-center gap-3 mb-2 text-[10px]">
-        <div className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: COLOR_APORTES }} />
-          <span className="text-gray-500">Aportes</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: COLOR_REVAL_POS }} />
-          <span className="text-gray-500">Revalorización</span>
+        <div className="flex items-center gap-2 text-[9px]">
+          <span className="flex items-center gap-0.5">
+            <span className="w-1.5 h-1.5 rounded-sm inline-block" style={{ backgroundColor: COLOR_APORTES }} />
+            <span className="text-gray-400">Aportes</span>
+          </span>
+          <span className="flex items-center gap-0.5">
+            <span className="w-1.5 h-1.5 rounded-sm inline-block" style={{ backgroundColor: COLOR_REVAL_POS }} />
+            <span className="text-gray-400">Reval.</span>
+          </span>
         </div>
       </div>
 
       {/* Barras apiladas */}
-      <div className="flex items-end gap-2 justify-around" style={{ height: `${BAR_H + 28}px` }}>
+      <div className="flex items-end gap-1 justify-around" style={{ height: `${BAR_H + 24}px` }}>
         {data.map((d) => {
           const aportH = Math.round((Math.abs(d.aportes) / maxAbs) * BAR_H)
           const revalH = Math.round((Math.abs(d.reval)   / maxAbs) * BAR_H)
           const revalColor = d.reval >= 0 ? COLOR_REVAL_POS : COLOR_REVAL_NEG
-          const opacity = d.current ? 1 : 0.55
+          const opacity = d.current ? 1 : 0.5
 
           return (
-            <div key={d.label} className="flex flex-col items-center gap-1 flex-1 min-w-0">
+            <div key={d.label} className="flex flex-col items-center gap-0.5 flex-1 min-w-0">
               <div className="w-full flex justify-center items-end" style={{ height: `${BAR_H}px` }}>
-                <div className="w-6 rounded-t-md overflow-hidden flex flex-col-reverse" style={{ height: `${Math.max(4, aportH + revalH)}px` }}>
-                  {/* Aportes (base) */}
+                <div className="w-5 rounded-t overflow-hidden flex flex-col-reverse" style={{ height: `${Math.max(3, aportH + revalH)}px` }}>
                   {aportH > 0 && (
-                    <div
-                      title={`Aportes: ${currency} ${fmt(d.aportes)}`}
-                      style={{ height: `${aportH}px`, backgroundColor: COLOR_APORTES, opacity }}
-                    />
+                    <div style={{ height: `${aportH}px`, backgroundColor: COLOR_APORTES, opacity }} />
                   )}
-                  {/* Revalorización (encima) */}
                   {revalH > 0 && (
-                    <div
-                      title={`Revalorización: ${currency} ${fmt(d.reval)}`}
-                      style={{ height: `${revalH}px`, backgroundColor: revalColor, opacity }}
-                    />
+                    <div style={{ height: `${revalH}px`, backgroundColor: revalColor, opacity }} />
                   )}
                 </div>
               </div>
-              <p className={`text-[10px] font-semibold ${d.neto >= 0 ? 'text-[#534AB7]' : 'text-red-500'}`}>
+              <p className={`text-[9px] font-semibold tabular-nums ${d.neto >= 0 ? 'text-[#534AB7]' : 'text-red-500'}`}>
                 {fmt(d.neto)}
               </p>
-              <p className={`text-[10px] ${d.current ? 'text-gray-700 font-semibold' : 'text-gray-400'}`}>
+              <p className={`text-[9px] ${d.current ? 'text-gray-700 font-semibold' : 'text-gray-400'}`}>
                 {d.label}
               </p>
             </div>
@@ -104,22 +95,19 @@ export default function PatrimonioChart({ data, currency }: Props) {
         })}
       </div>
 
-      {/* Resumen de cambio del último mes */}
+      {/* Resumen delta del último mes */}
       {data.length > 1 && (last.deltaAportes !== 0 || last.deltaReval !== 0) && (
-        <div className="mt-3 flex items-center justify-around text-[10px] bg-gray-50 rounded-lg py-2 px-3">
+        <div className="mt-1.5 flex items-center justify-around text-[9px] bg-gray-50 rounded-lg py-1.5 px-3">
           <div className="text-center">
-            <p className="text-gray-400 mb-0.5">Aportes este mes</p>
+            <p className="text-gray-400">Aportes este mes</p>
             <p className="font-bold tabular-nums" style={{ color: COLOR_APORTES }}>
               {last.deltaAportes >= 0 ? '+' : ''}{fmt(last.deltaAportes)}
             </p>
           </div>
-          <div className="w-px h-6 bg-gray-200" />
+          <div className="w-px h-5 bg-gray-200" />
           <div className="text-center">
-            <p className="text-gray-400 mb-0.5">Revalorización</p>
-            <p
-              className="font-bold tabular-nums"
-              style={{ color: last.deltaReval >= 0 ? COLOR_REVAL_POS : COLOR_REVAL_NEG }}
-            >
+            <p className="text-gray-400">Revalorización</p>
+            <p className="font-bold tabular-nums" style={{ color: last.deltaReval >= 0 ? COLOR_REVAL_POS : COLOR_REVAL_NEG }}>
               {last.deltaReval >= 0 ? '+' : ''}{fmt(last.deltaReval)}
             </p>
           </div>
