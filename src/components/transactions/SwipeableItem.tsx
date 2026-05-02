@@ -165,7 +165,7 @@ export default function SwipeableItem({ tx }: Props) {
             {tx.tipo === 'egreso' && (
               linkedIngreso
                 ? <span className="text-[#534AB7] font-medium"> · {linkedIngreso.descripcion?.trim() || getCatFromSettings(linkedIngreso.categoria, settings ?? null)?.nombre || linkedIngreso.categoria}</span>
-                : <span className="text-gray-300"> · Sin asignar</span>
+                : <span className="text-amber-400 font-medium"> · Sin asignar</span>
             )}
           </p>
         </div>
