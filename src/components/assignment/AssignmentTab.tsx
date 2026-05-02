@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Zap, X, Unlink2 } from 'lucide-react'
+import { Zap, X, Unlink2, Sparkles, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { useTransactionStore } from '@/store/useTransactionStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAuthStore } from '@/store/useAuthStore'
@@ -58,7 +58,9 @@ export default function AssignmentTab() {
     return map
   }, [ingresos, egresos])
 
-  // Auto-asignar respetando capacidad
+  // Auto-asignar: prioriza capacidad + cercanía por fecha; si no entra en
+  // ninguno, asigna al ingreso con más capacidad restante (o al más cercano
+  // por fecha) para que ningún egreso quede sin asignar.
   async function autoAssign() {
     const unassigned = egresos.filter((e) => e.asignadoA === null)
     if (ingresos.length === 0 || unassigned.length === 0) return
@@ -73,18 +75,39 @@ export default function AssignmentTab() {
       capacity.set(inc.id!, incBase - yaAsignado)
     })
 
+    // Procesa primero los egresos más grandes para mejor empaquetado.
+    const ordered = [...unassigned].sort(
+      (a, b) => toBase(b.monto, b.moneda, base, s) - toBase(a.monto, a.moneda, base, s)
+    )
+
     try {
-      for (const exp of unassigned) {
+      for (const exp of ordered) {
         const expBase = toBase(exp.monto, exp.moneda, base, s)
         const expTime = exp.fecha.toDate().getTime()
+
         const elegibles = ingresos.filter((inc) => (capacity.get(inc.id!) ?? 0) >= expBase)
-        if (elegibles.length === 0) continue
-        const closest = elegibles.reduce((prev, curr) =>
-          Math.abs(curr.fecha.toDate().getTime() - expTime) <
-          Math.abs(prev.fecha.toDate().getTime() - expTime) ? curr : prev
-        )
-        capacity.set(closest.id!, (capacity.get(closest.id!) ?? 0) - expBase)
-        await updateTransaction(exp.id!, { asignadoA: closest.id! })
+
+        let target: Transaction
+        if (elegibles.length > 0) {
+          // Más cercano por fecha entre los que tienen capacidad
+          target = elegibles.reduce((prev, curr) =>
+            Math.abs(curr.fecha.toDate().getTime() - expTime) <
+            Math.abs(prev.fecha.toDate().getTime() - expTime) ? curr : prev
+          )
+        } else {
+          // Fallback: ningún ingreso cubre solo. Elegimos el de mayor
+          // capacidad restante (menos sobregiro). En empate, el más
+          // cercano por fecha.
+          target = ingresos.reduce((prev, curr) => {
+            const prevCap = capacity.get(prev.id!) ?? 0
+            const currCap = capacity.get(curr.id!) ?? 0
+            if (currCap !== prevCap) return currCap > prevCap ? curr : prev
+            return Math.abs(curr.fecha.toDate().getTime() - expTime) <
+                   Math.abs(prev.fecha.toDate().getTime() - expTime) ? curr : prev
+          })
+        }
+        capacity.set(target.id!, (capacity.get(target.id!) ?? 0) - expBase)
+        await updateTransaction(exp.id!, { asignadoA: target.id! })
       }
     } finally {
       setAutoLoading(false)
@@ -142,73 +165,95 @@ export default function AssignmentTab() {
     { key: 'unassigned', group: { income: null, expenses: unassignedExpenses } },
   ]
 
-  const barColor = progressPercent >= 100 ? '#22c55e' : progressPercent >= 50 ? '#534AB7' : '#f59e0b'
+  const barGradient = allAssigned
+    ? 'linear-gradient(90deg, #22c55e, #10b981)'
+    : progressPercent >= 50
+      ? 'linear-gradient(90deg, #6366f1, #8b5cf6)'
+      : 'linear-gradient(90deg, #f59e0b, #f97316)'
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden bg-gray-50/60">
 
-      {/* ── Header ── */}
-      <div className="px-4 pt-3 pb-4 bg-white border-b border-gray-100">
-        {/* Stats row */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
-              allAssigned
-                ? 'bg-green-100 text-green-700'
-                : assignedCount === 0
-                  ? 'bg-gray-100 text-gray-500'
-                  : 'bg-[#534AB7]/10 text-[#534AB7]'
-            }`}>
-              {assignedCount}/{totalEgresos} asignados
-            </span>
-          </div>
+      {/* ── Header — hero card ── */}
+      <div className="px-4 pt-3 pb-3 bg-white">
+        <div className="relative rounded-2xl overflow-hidden p-4 bg-gradient-to-br from-[#534AB7] via-[#6366f1] to-[#8b5cf6] shadow-md">
+          {/* glow accent */}
+          <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
+          <div className="absolute -bottom-8 -left-6 w-24 h-24 bg-white/5 rounded-full blur-xl" />
 
-          {/* Action buttons */}
-          <div className="flex items-center gap-2">
-            {assignedCount > 0 && (
-              <button
-                onClick={desassignAll}
-                disabled={unassignLoading}
-                className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all active:scale-95 ${
-                  unassignConfirm
-                    ? 'bg-red-500 border-red-500 text-white'
-                    : 'border-gray-200 text-gray-500 hover:border-red-300 hover:text-red-500'
-                }`}
-              >
-                <Unlink2 size={12} />
-                {unassignConfirm ? '¿Confirmar?' : 'Desasignar todo'}
-              </button>
-            )}
+          <div className="relative flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold text-white/70 uppercase tracking-widest">
+                Asignación
+              </p>
+              <p className="text-2xl font-black text-white mt-1 tabular-nums leading-none">
+                {assignedCount}
+                <span className="text-white/50 text-lg font-bold">/{totalEgresos}</span>
+              </p>
+              <div className="flex items-center gap-1.5 mt-1.5">
+                {allAssigned ? (
+                  <>
+                    <CheckCircle2 size={11} className="text-emerald-300" />
+                    <p className="text-[11px] text-emerald-200 font-semibold">Todo asignado</p>
+                  </>
+                ) : unassignedExpenses.length > 0 ? (
+                  <>
+                    <AlertCircle size={11} className="text-amber-300" />
+                    <p className="text-[11px] text-amber-200 font-semibold">
+                      {unassignedExpenses.length} sin asignar
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-[11px] text-white/60">Sin egresos este mes</p>
+                )}
+              </div>
+            </div>
+
             <button
               onClick={autoAssign}
               disabled={autoLoading || unassignedExpenses.length === 0 || ingresos.length === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#534AB7] text-white text-xs font-semibold disabled:opacity-40 active:scale-95 transition-all shadow-sm"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white text-[#534AB7] text-xs font-bold shadow-sm disabled:opacity-40 active:scale-95 transition-all whitespace-nowrap"
             >
-              <Zap size={12} />
-              {autoLoading ? 'Asignando…' : 'Auto-asignar'}
+              {autoLoading
+                ? <><Sparkles size={13} className="animate-pulse" /> Asignando…</>
+                : <><Zap size={13} /> Auto-asignar</>
+              }
             </button>
           </div>
-        </div>
 
-        {/* Progress bar */}
-        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-          <div
-            className="h-full rounded-full transition-all duration-700"
-            style={{ width: `${progressPercent}%`, backgroundColor: barColor }}
-          />
-        </div>
-        <div className="flex justify-between mt-1">
-          <span className="text-[10px] text-gray-400">{Math.round(progressPercent)}% asignado</span>
-          {unassignedExpenses.length > 0 && (
-            <span className="text-[10px] text-amber-500 font-semibold">
-              {unassignedExpenses.length} sin asignar
-            </span>
-          )}
+          {/* Progress bar */}
+          <div className="relative mt-3">
+            <div className="h-1.5 bg-white/20 rounded-full overflow-hidden backdrop-blur-sm">
+              <div
+                className="h-full rounded-full transition-all duration-700 shadow-[0_0_8px_rgba(255,255,255,0.4)]"
+                style={{ width: `${progressPercent}%`, background: barGradient }}
+              />
+            </div>
+            <div className="flex justify-between items-center mt-1.5">
+              <span className="text-[10px] font-semibold text-white/80 tabular-nums">
+                {Math.round(progressPercent)}%
+              </span>
+              {assignedCount > 0 && (
+                <button
+                  onClick={desassignAll}
+                  disabled={unassignLoading}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold transition-all active:scale-95 ${
+                    unassignConfirm
+                      ? 'bg-red-500 text-white shadow-sm'
+                      : 'bg-white/15 text-white/90 hover:bg-white/25'
+                  }`}
+                >
+                  <Unlink2 size={10} />
+                  {unassignConfirm ? '¿Confirmar?' : 'Desasignar todo'}
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
       {/* ── Groups ── */}
-      <div className="flex-1 overflow-y-auto pt-3 pb-24 bg-gray-50/60">
+      <div className="flex-1 overflow-y-auto pt-2 pb-24">
         {egresos.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center px-6">
             <p className="text-gray-400 text-sm">No hay egresos este mes</p>
