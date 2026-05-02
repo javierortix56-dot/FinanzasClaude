@@ -8,7 +8,7 @@ import { useSettingsStore } from '@/store/useSettingsStore'
 import { useTransactionStore } from '@/store/useTransactionStore'
 import { useAuthStore } from '@/store/useAuthStore'
 import { addTransaction, updateTransaction, deleteTransaction } from '@/lib/transactions'
-import { SHARED_USER_ID, SHARED_USERS, formatAmount, getParentGroup, DEFAULT_GASTO_CATEGORY_GROUPS, DEFAULT_INGRESO_CATEGORY_GROUPS } from '@/lib/constants'
+import { SHARED_USER_ID, SHARED_USERS, formatAmount, getParentGroup, getCatFromSettings, DEFAULT_GASTO_CATEGORY_GROUPS, DEFAULT_INGRESO_CATEGORY_GROUPS } from '@/lib/constants'
 import { DEFAULT_SETTINGS } from '@/lib/settings'
 import { toBase } from '@/lib/currency'
 import { Transaction, Currency, TransactionType, CategoryGroup } from '@/types'
@@ -365,12 +365,13 @@ export default function TransactionModal() {
                   >
                     <option value="">Sin asignar</option>
                     {ingresoOptions.map(({ ing, remaining, wouldExceed }) => {
-                      const user = SHARED_USERS.find((u) => u.id === ing.creadoPor)
+                      const cat = getCatFromSettings(ing.categoria, settings ?? null)
+                      const nombre = ing.descripcion?.trim() || cat?.nombre || ing.categoria
                       const dateStr = ing.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
                       const remainStr = hideAmounts ? '$ ****' : formatAmount(remaining, base)
                       return (
                         <option key={ing.id} value={ing.id} disabled={wouldExceed}>
-                          {wouldExceed ? '🚫 ' : ''}{user?.nombre ?? ing.creadoPor} — {remainStr} ({dateStr})
+                          {wouldExceed ? '🚫 ' : ''}{nombre} — {remainStr} ({dateStr})
                         </option>
                       )
                     })}
