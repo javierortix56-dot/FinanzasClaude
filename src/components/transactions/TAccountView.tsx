@@ -21,11 +21,15 @@ interface TxRowProps {
 }
 
 function TxRow({ tx, hideAmounts, settings, monedaBase, onEdit }: TxRowProps) {
+  const { transactions } = useTransactionStore()
   const cat = getCatFromSettings(tx.categoria, settings)
   const isIngreso = tx.tipo === 'ingreso'
   const dateStr = tx.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
   const dotColor = cat?.color ?? (isIngreso ? '#22c55e' : '#ef4444')
   const montoBase = toBase(tx.monto, tx.moneda, monedaBase, settings ?? DEFAULT_SETTINGS)
+  const linkedIngreso = tx.tipo === 'egreso' && tx.asignadoA
+    ? transactions.find((t) => t.id === tx.asignadoA)
+    : null
 
   return (
     <div
@@ -41,7 +45,14 @@ function TxRow({ tx, hideAmounts, settings, monedaBase, onEdit }: TxRowProps) {
       <div className="flex items-center justify-between mt-0.5 gap-1 min-w-0">
         <div className="flex items-center gap-1 min-w-0 shrink">
           <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: dotColor }} />
-          <span className="text-[10px] text-gray-400 truncate">{dateStr}</span>
+          <span className="text-[10px] text-gray-400 truncate">
+            {dateStr}
+            {tx.tipo === 'egreso' && (
+              linkedIngreso
+                ? <span className="text-[#534AB7] font-medium"> · {linkedIngreso.descripcion?.trim() || getCatFromSettings(linkedIngreso.categoria, settings)?.nombre || linkedIngreso.categoria}</span>
+                : <span className="text-amber-400 font-medium"> · Sin asignar</span>
+            )}
+          </span>
         </div>
         <div className="flex items-center gap-1 shrink-0 max-w-[55%]">
           <span
