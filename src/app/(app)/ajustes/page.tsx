@@ -682,7 +682,7 @@ function RateInput({ label, value, onChange }: { label: string; value: string; o
   return (
     <div className="flex items-center justify-between gap-3">
       <label className="text-sm text-gray-600 flex-1">{label}</label>
-      <input type="number" inputMode="decimal" step="any" value={value} onChange={(e) => onChange(e.target.value)}
+      <input type="text" inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)}
         className="w-28 border border-gray-200 rounded-lg px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-[#534AB7]" />
     </div>
   )

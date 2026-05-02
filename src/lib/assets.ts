@@ -41,7 +41,6 @@ function assetToRow(asset: Omit<Asset, 'id'>) {
     date_created: asset.fechaAlta.toDate().toISOString().slice(0, 10),
     meta_objetivo: asset.metaObjetivo,
     meta_moneda: asset.metaMoneda,
-    snapshots: asset.snapshots ?? [],
   }
 }
 
@@ -78,7 +77,16 @@ export async function addAsset(data: Omit<Asset, 'id'>): Promise<string> {
     .single()
 
   if (error) throw error
-  return row.id as string
+  const id = row.id as string
+  // Intentar guardar snapshots iniciales si la columna existe (falla silenciosa si no)
+  if (data.snapshots && data.snapshots.length > 0) {
+    await supabase
+      .from('cuentas')
+      .update({ snapshots: data.snapshots })
+      .eq('id', id)
+      // no throw — columna puede no existir todavía
+  }
+  return id
 }
 
 export async function updateAsset(id: string, data: Partial<Omit<Asset, 'id'>>) {
@@ -90,10 +98,17 @@ export async function updateAsset(id: string, data: Partial<Omit<Asset, 'id'>>) 
   if (data.saldo !== undefined) partial.init_bal = data.saldo
   if (data.metaObjetivo !== undefined) partial.meta_objetivo = data.metaObjetivo
   if (data.metaMoneda !== undefined) partial.meta_moneda = data.metaMoneda
-  if (data.snapshots !== undefined) partial.snapshots = data.snapshots
 
   const { error } = await supabase.from('cuentas').update(partial).eq('id', id)
   if (error) throw error
+
+  // Snapshots en un UPDATE separado — falla silenciosa si la columna no existe aún
+  if (data.snapshots !== undefined) {
+    await supabase
+      .from('cuentas')
+      .update({ snapshots: data.snapshots })
+      .eq('id', id)
+  }
 }
 
 export async function deleteAsset(id: string) {

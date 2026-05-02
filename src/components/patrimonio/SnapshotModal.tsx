@@ -155,9 +155,8 @@ export default function SnapshotModal({ open, onClose, asset }: Props) {
                 Aporte / retiro del mes ({asset.moneda})
               </label>
               <input
-                type="number"
+                type="text"
                 inputMode="decimal"
-                step="any"
                 placeholder="0"
                 value={aporte}
                 onChange={(e) => setAporte(e.target.value)}
@@ -174,9 +173,8 @@ export default function SnapshotModal({ open, onClose, asset }: Props) {
                 Saldo al cierre del mes ({asset.moneda})
               </label>
               <input
-                type="number"
+                type="text"
                 inputMode="decimal"
-                step="any"
                 placeholder="0"
                 value={saldo}
                 onChange={(e) => setSaldo(e.target.value)}

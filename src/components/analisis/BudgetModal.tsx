@@ -88,9 +88,8 @@ export default function BudgetModal({ open, onClose, categoria, mes }: Props) {
               </label>
               <div className="flex items-center gap-2">
                 <input
-                  type="number"
+                  type="text"
                   inputMode="decimal"
-                  step="any"
                   placeholder="0"
                   value={limite}
                   onChange={(e) => setLimite(e.target.value)}

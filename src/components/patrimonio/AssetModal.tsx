@@ -192,9 +192,8 @@ export default function AssetModal({ open, onClose, editing }: Props) {
               </label>
               <div className="flex items-center gap-2">
                 <input
-                  type="number"
+                  type="text"
                   inputMode="decimal"
-                  step="any"
                   placeholder="0"
                   value={saldo}
                   onChange={(e) => setSaldo(e.target.value)}

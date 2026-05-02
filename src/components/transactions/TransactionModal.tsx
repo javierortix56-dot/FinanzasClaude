@@ -226,10 +226,8 @@ export default function TransactionModal() {
                 style={{ backgroundColor: accentColor + '10' }}
               >
                 <input
-                  type="number"
+                  type="text"
                   inputMode="decimal"
-                  min="0"
-                  step="any"
                   placeholder="0"
                   value={monto}
                   onChange={(e) => setMonto(e.target.value)}
