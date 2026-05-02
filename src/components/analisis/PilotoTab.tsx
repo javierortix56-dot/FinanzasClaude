@@ -95,7 +95,7 @@ export default function PilotoTab() {
   const prevBal = prevInc - prevExp
 
   return (
-    <div className="overflow-y-auto px-4 pt-4 pb-8">
+    <div className="h-full overflow-y-auto px-4 pt-4 pb-8">
       {/* Progress indicator */}
       {isCurrentMonth && (
         <div className="mb-5 bg-[#534AB7]/5 rounded-2xl px-4 py-3 border border-[#534AB7]/10">

@@ -14,13 +14,6 @@ import { Currency } from '@/types'
 
 type MainTab = 'movimientos' | 'asignacion'
 
-function greet() {
-  const h = new Date().getHours()
-  if (h < 12) return 'Buenos días'
-  if (h < 19) return 'Buenas tardes'
-  return 'Buenas noches'
-}
-
 export default function DashboardPage() {
   const { monedaBase } = useAuthStore()
   const { settings, hideAmounts, toggleHideAmounts } = useSettingsStore()

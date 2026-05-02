@@ -131,7 +131,7 @@ export default function PatrimonioPage() {
       </div>
 
       {/* ── Main card ── */}
-      <div className="flex-1 bg-white overflow-hidden flex flex-col">
+      <div className="flex-1 min-h-0 bg-white overflow-hidden flex flex-col">
 
         {/* Chart */}
         {assets.length > 0 && (

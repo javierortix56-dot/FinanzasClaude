@@ -80,7 +80,7 @@ export default function HistoricoTab() {
   ]
 
   return (
-    <div className="overflow-y-auto pb-8">
+    <div className="h-full overflow-y-auto pb-8">
       {/* Section 1: Comparison */}
       <div className="border-b border-gray-50">
         <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-4 pt-3 pb-0.5">

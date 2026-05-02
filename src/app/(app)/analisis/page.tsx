@@ -35,7 +35,7 @@ export default function AnalisisPage() {
       </div>
 
       {/* ── Main card ── */}
-      <div className="flex-1 bg-white overflow-hidden flex flex-col">
+      <div className="flex-1 min-h-0 bg-white overflow-hidden flex flex-col">
 
         {/* Tabs */}
         <div className="flex border-b border-gray-100 px-4 pt-1">
