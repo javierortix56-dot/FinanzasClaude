@@ -178,79 +178,63 @@ export default function AssignmentTab() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-gray-50/60">
 
-      {/* ── Header — hero card ── */}
-      <div className="px-4 pt-3 pb-3 bg-white">
-        <div className="relative rounded-2xl overflow-hidden p-4 bg-gradient-to-br from-[#534AB7] via-[#6366f1] to-[#8b5cf6] shadow-md">
-          {/* glow accent */}
-          <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
-          <div className="absolute -bottom-8 -left-6 w-24 h-24 bg-white/5 rounded-full blur-xl" />
+      {/* ── Header — hero card compacto ── */}
+      <div className="px-3 pt-2 pb-2 bg-white">
+        <div className="relative rounded-xl overflow-hidden px-3 py-2.5 bg-gradient-to-r from-[#534AB7] to-[#8b5cf6] shadow-sm">
+          <div className="absolute -top-6 -right-6 w-20 h-20 bg-white/10 rounded-full blur-xl" />
 
-          <div className="relative flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[10px] font-bold text-white/70 uppercase tracking-widest">
-                Asignación
-              </p>
-              <p className="text-2xl font-black text-white mt-1 tabular-nums leading-none">
-                {assignedCount}
-                <span className="text-white/50 text-lg font-bold">/{totalEgresos}</span>
-              </p>
-              <div className="flex items-center gap-1.5 mt-1.5">
-                {allAssigned ? (
-                  <>
-                    <CheckCircle2 size={11} className="text-emerald-300" />
-                    <p className="text-[11px] text-emerald-200 font-semibold">Todo asignado</p>
-                  </>
-                ) : unassignedExpenses.length > 0 ? (
-                  <>
-                    <AlertCircle size={11} className="text-amber-300" />
-                    <p className="text-[11px] text-amber-200 font-semibold">
-                      {unassignedExpenses.length} sin asignar
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-[11px] text-white/60">Sin egresos este mes</p>
-                )}
+          {/* Una sola fila: número · badge · spacer · barra · % · btn */}
+          <div className="relative flex items-center gap-2.5">
+            <p className="text-xl font-black text-white tabular-nums leading-none flex-shrink-0">
+              {assignedCount}
+              <span className="text-white/50 text-sm font-bold">/{totalEgresos}</span>
+            </p>
+
+            {allAssigned ? (
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <CheckCircle2 size={10} className="text-emerald-300" />
+                <span className="text-[10px] text-emerald-200 font-semibold">Todo asignado</span>
               </div>
+            ) : unassignedExpenses.length > 0 ? (
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <AlertCircle size={10} className="text-amber-300" />
+                <span className="text-[10px] text-amber-200 font-semibold">{unassignedExpenses.length} sin asignar</span>
+              </div>
+            ) : null}
+
+            <div className="flex-1 min-w-0">
+              <div className="h-1 bg-white/20 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-700"
+                  style={{ width: `${progressPercent}%`, background: barGradient }}
+                />
+              </div>
+              <p className="text-[9px] text-white/60 mt-0.5 tabular-nums">{Math.round(progressPercent)}%</p>
             </div>
 
-            <button
-              onClick={autoAssign}
-              disabled={autoLoading || unassignedExpenses.length === 0 || ingresos.length === 0}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white text-[#534AB7] text-xs font-bold shadow-sm disabled:opacity-40 active:scale-95 transition-all whitespace-nowrap"
-            >
-              {autoLoading
-                ? <><Sparkles size={13} className="animate-pulse" /> Asignando…</>
-                : <><Zap size={13} /> Auto-asignar</>
-              }
-            </button>
-          </div>
-
-          {/* Progress bar */}
-          <div className="relative mt-3">
-            <div className="h-1.5 bg-white/20 rounded-full overflow-hidden backdrop-blur-sm">
-              <div
-                className="h-full rounded-full transition-all duration-700 shadow-[0_0_8px_rgba(255,255,255,0.4)]"
-                style={{ width: `${progressPercent}%`, background: barGradient }}
-              />
-            </div>
-            <div className="flex justify-between items-center mt-1.5">
-              <span className="text-[10px] font-semibold text-white/80 tabular-nums">
-                {Math.round(progressPercent)}%
-              </span>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
               {assignedCount > 0 && (
                 <button
                   onClick={desassignAll}
                   disabled={unassignLoading}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold transition-all active:scale-95 ${
-                    unassignConfirm
-                      ? 'bg-red-500 text-white shadow-sm'
-                      : 'bg-white/15 text-white/90 hover:bg-white/25'
+                  className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold transition-all active:scale-95 ${
+                    unassignConfirm ? 'bg-red-500 text-white' : 'bg-white/15 text-white/90'
                   }`}
                 >
-                  <Unlink2 size={10} />
-                  {unassignConfirm ? '¿Confirmar?' : 'Desasignar todo'}
+                  <Unlink2 size={9} />
+                  {unassignConfirm ? '¿Confirmar?' : 'Desasignar'}
                 </button>
               )}
+              <button
+                onClick={autoAssign}
+                disabled={autoLoading || unassignedExpenses.length === 0 || ingresos.length === 0}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white text-[#534AB7] text-[10px] font-bold shadow-sm disabled:opacity-40 active:scale-95 transition-all whitespace-nowrap"
+              >
+                {autoLoading
+                  ? <><Sparkles size={10} className="animate-pulse" /> Asignando…</>
+                  : <><Zap size={10} /> Auto-asignar</>
+                }
+              </button>
             </div>
           </div>
         </div>
