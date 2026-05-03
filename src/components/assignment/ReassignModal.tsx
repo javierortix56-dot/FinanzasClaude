@@ -3,7 +3,7 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { X, CheckCircle2 } from 'lucide-react'
 import { Transaction, Settings, Currency } from '@/types'
-import { getCategoryById, formatAmount } from '@/lib/constants'
+import { getCatFromSettings, formatAmount } from '@/lib/constants'
 import { toBase } from '@/lib/currency'
 
 interface Props {
@@ -65,7 +65,7 @@ export default function ReassignModal({
             ) : (
               <div className="space-y-2">
                 {ingresos.map((inc) => {
-                  const cat = getCategoryById(inc.categoria)
+                  const cat = getCatFromSettings(inc.categoria, settings)
                   const dateStr = inc.fecha.toDate().toLocaleDateString('es-AR', {
                     day: 'numeric',
                     month: 'short',
