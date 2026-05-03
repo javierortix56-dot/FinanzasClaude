@@ -49,13 +49,13 @@ export default function AssignmentGroup({
   const incomeDate = income?.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
 
   return (
-    <div className={`mx-3 mb-2.5 rounded-2xl overflow-hidden shadow-sm border ${
+    <div className={`mx-3 mb-1.5 rounded-2xl overflow-hidden shadow-sm border ${
       isUnassigned ? 'border-amber-200' : 'border-gray-100'
     }`}>
 
       {/* ── Card header ── */}
       <div
-        className={`px-4 pt-3 pb-2.5 cursor-pointer active:opacity-90 transition-opacity ${
+        className={`px-4 pt-2 pb-2 cursor-pointer active:opacity-90 transition-opacity ${
           isUnassigned
             ? 'bg-gradient-to-r from-amber-50 to-orange-50'
             : 'bg-gradient-to-r from-white to-gray-50'
@@ -114,8 +114,8 @@ export default function AssignmentGroup({
 
         {/* ── Barra de progreso ── */}
         {!isUnassigned && incomeBase > 0 && (
-          <div className="mt-2.5">
-            <div className="flex justify-between items-baseline mb-1">
+          <div className="mt-1.5">
+            <div className="flex justify-between items-baseline mb-0.5">
               <span className="text-[10px] text-gray-400">
                 Ingreso:{' '}
                 <span className={`font-semibold text-green-600 ${hideAmounts ? 'blur-sm' : ''}`}>
