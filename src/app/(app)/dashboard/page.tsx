@@ -1,12 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronLeft, ChevronRight, Eye, EyeOff, Search, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Eye, EyeOff, PiggyBank, Search, X } from 'lucide-react'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useTransactionStore } from '@/store/useTransactionStore'
+import { useAssetStore } from '@/store/useAssetStore'
 import TAccountView from '@/components/transactions/TAccountView'
 import AssignmentTab from '@/components/assignment/AssignmentTab'
+import AhorrarBalanceModal from '@/components/transactions/AhorrarBalanceModal'
 import { monthLabel, formatAmount } from '@/lib/constants'
 import { toBase } from '@/lib/currency'
 import { DEFAULT_SETTINGS } from '@/lib/settings'
@@ -29,6 +31,11 @@ export default function DashboardPage() {
   const [mainTab, setMainTab] = useState<MainTab>('movimientos')
   const [search, setSearch]   = useState('')
   const [searching, setSearching] = useState(false)
+  const [ahorrarOpen, setAhorrarOpen] = useState(false)
+  const { assets } = useAssetStore()
+  const hasAhorroAccount = assets.some(
+    (a) => a.clase === 'activo' && a.tipo.toLowerCase() === 'ahorro',
+  )
 
   const s    = settings ?? DEFAULT_SETTINGS
   const base = monedaBase as Currency
@@ -43,7 +50,9 @@ export default function DashboardPage() {
 
   const balance    = totalIngresos - totalEgresos
   const balanceUSD = toBase(balance, base, 'USD', s)
+  const balanceArs = toBase(balance, base, 'ARS', s)
   const blur       = hideAmounts ? 'blur-sm select-none' : ''
+  const canAhorrar = balance > 0 && hasAhorroAccount
 
   return (
     <div className="flex flex-col min-h-full bg-gray-50">
@@ -97,9 +106,21 @@ export default function DashboardPage() {
           <p className="text-gray-400 text-[10px] font-semibold uppercase tracking-widest mb-0.5">
             Balance del mes
           </p>
-          <p className={`text-gray-900 text-3xl font-bold leading-tight ${blur}`}>
-            {formatAmount(balance, base)}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className={`text-gray-900 text-3xl font-bold leading-tight ${blur}`}>
+              {formatAmount(balance, base)}
+            </p>
+            {canAhorrar && (
+              <button
+                onClick={() => setAhorrarOpen(true)}
+                title="Ahorrar saldo del mes en una cuenta"
+                className="flex items-center gap-1 px-2 py-1 rounded-full bg-[#534AB7]/10 hover:bg-[#534AB7]/20 transition-colors text-[#534AB7]"
+              >
+                <PiggyBank size={13} />
+                <span className="text-[10px] font-bold">Ahorrar</span>
+              </button>
+            )}
+          </div>
           <div className={`flex items-center gap-3 mt-1.5 ${blur}`}>
             <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
               <span className="text-[10px]">▲</span>{formatAmount(totalIngresos, base)}
@@ -171,6 +192,13 @@ export default function DashboardPage() {
           <AssignmentTab />
         )}
       </div>
+
+      <AhorrarBalanceModal
+        open={ahorrarOpen}
+        onClose={() => setAhorrarOpen(false)}
+        defaultAmountArs={Math.max(0, balanceArs)}
+        month={currentMonth}
+      />
     </div>
   )
 }

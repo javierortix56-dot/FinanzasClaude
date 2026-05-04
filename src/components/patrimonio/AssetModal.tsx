@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { X, Trash2 } from 'lucide-react'
 import { useSettingsStore } from '@/store/useSettingsStore'
-import { addAsset, updateAsset, deleteAsset } from '@/lib/assets'
+import { addAsset, updateAsset, deleteAsset, countLinkedAhorroTx, deleteLinkedAhorroTx } from '@/lib/assets'
 import { DEFAULT_SETTINGS } from '@/lib/settings'
 import { SHARED_USER_ID } from '@/lib/constants'
 import { Asset, Currency } from '@/types'
@@ -36,11 +36,17 @@ export default function AssetModal({ open, onClose, editing }: Props) {
   const [metaMoneda,   setMetaMoneda]   = useState<Currency>('USD')
   const [saving,       setSaving]       = useState(false)
   const [deleteConfirm,setDeleteConfirm]= useState(false)
+  const [linkedCount,  setLinkedCount]  = useState<number>(0)
 
   const tiposActuales = clase === 'activo' ? ACTIVO_TIPOS : pasivoTipos
 
   useEffect(() => {
-    if (!open) { setDeleteConfirm(false); return }
+    if (!open) { setDeleteConfirm(false); setLinkedCount(0); return }
+    if (editing?.id && editing.clase === 'activo' && editing.tipo.toLowerCase() === 'ahorro') {
+      countLinkedAhorroTx(editing.id).then(setLinkedCount).catch(() => setLinkedCount(0))
+    } else {
+      setLinkedCount(0)
+    }
     if (editing) {
       setNombre(editing.nombre)
       setClase(editing.clase)
@@ -95,8 +101,13 @@ export default function AssetModal({ open, onClose, editing }: Props) {
     if (!editing?.id) return
     if (!deleteConfirm) { setDeleteConfirm(true); return }
     setSaving(true)
-    try { await deleteAsset(editing.id); onClose() }
-    finally { setSaving(false) }
+    try {
+      if (linkedCount > 0) {
+        await deleteLinkedAhorroTx(editing.id)
+      }
+      await deleteAsset(editing.id)
+      onClose()
+    } finally { setSaving(false) }
   }
 
   const canSave = nombre.trim() && saldo && parseFloat(saldo) >= 0
@@ -266,9 +277,16 @@ export default function AssetModal({ open, onClose, editing }: Props) {
               </Button>
             </div>
             {deleteConfirm && (
-              <p className="text-xs text-red-500 text-center -mt-2">
-                Tocá el ícono rojo de nuevo para confirmar
-              </p>
+              <div className="-mt-2 space-y-1 text-center">
+                <p className="text-xs text-red-500">
+                  Tocá el ícono rojo de nuevo para confirmar
+                </p>
+                {linkedCount > 0 && (
+                  <p className="text-[11px] text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                    ⚠️ Esta cuenta tiene <b>{linkedCount}</b> movimiento{linkedCount === 1 ? '' : 's'} de ahorro vinculado{linkedCount === 1 ? '' : 's'}. Al eliminarla también se borrarán esos movimientos.
+                  </p>
+                )}
+              </div>
             )}
           </div>
         </Dialog.Content>

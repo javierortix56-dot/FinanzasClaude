@@ -23,6 +23,9 @@ function TxRow({ tx, hideAmounts, settings, onEdit }: TxRowProps) {
   const isIngreso = tx.tipo === 'ingreso'
   const dateStr = tx.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
   const dotColor = cat?.color ?? (isIngreso ? '#22c55e' : '#ef4444')
+  const s = settings ?? DEFAULT_SETTINGS
+  const showOriginal = tx.moneda !== 'ARS'
+  const montoArs = showOriginal ? toBase(tx.monto, tx.moneda, 'ARS', s) : tx.monto
 
   return (
     <button
@@ -37,14 +40,21 @@ function TxRow({ tx, hideAmounts, settings, onEdit }: TxRowProps) {
           <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: dotColor }} />
           <span className="text-[10px] text-gray-400 truncate">{dateStr}</span>
         </div>
-        <div className="flex items-center gap-1 shrink-0 max-w-[55%]">
-          <span
-            className={`text-[11px] font-semibold tabular-nums truncate ${
-              isIngreso ? 'text-green-600' : 'text-red-500'
-            } ${hideAmounts ? 'blur-sm' : ''}`}
-          >
-            {formatAmount(tx.monto, tx.moneda)}
-          </span>
+        <div className="flex items-center gap-1 shrink-0 max-w-[60%]">
+          <div className="flex flex-col items-end min-w-0">
+            <span
+              className={`text-[11px] font-semibold tabular-nums truncate ${
+                isIngreso ? 'text-green-600' : 'text-red-500'
+              } ${hideAmounts ? 'blur-sm' : ''}`}
+            >
+              {formatAmount(montoArs, 'ARS')}
+            </span>
+            {showOriginal && (
+              <span className={`text-[9px] text-gray-400 tabular-nums truncate leading-tight ${hideAmounts ? 'blur-sm' : ''}`}>
+                {formatAmount(tx.monto, tx.moneda)}
+              </span>
+            )}
+          </div>
           {tx.ejecutado
             ? <CheckCircle2 size={10} className="text-green-400 flex-shrink-0" />
             : <div className="w-[10px] h-[10px] rounded-full border border-gray-200 flex-shrink-0" />

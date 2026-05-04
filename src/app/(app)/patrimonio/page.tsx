@@ -14,8 +14,9 @@ import { Asset, Transaction } from '@/types'
 import AssetCard from '@/components/patrimonio/AssetCard'
 import AssetModal from '@/components/patrimonio/AssetModal'
 import PatrimonioChart from '@/components/patrimonio/PatrimonioChart'
+import AhorroTab from '@/components/patrimonio/AhorroTab'
 
-type Tab = 'activo' | 'pasivo'
+type Tab = 'activo' | 'pasivo' | 'ahorro'
 
 export default function PatrimonioPage() {
   const { assets, setAssets, isLoading } = useAssetStore()
@@ -142,7 +143,7 @@ export default function PatrimonioPage() {
 
         {/* Tabs */}
         <div className="flex border-b border-gray-100 px-4">
-          {(['activo', 'pasivo'] as Tab[]).map((t) => (
+          {(['activo', 'pasivo', 'ahorro'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -152,14 +153,20 @@ export default function PatrimonioPage() {
                   : 'text-gray-400'
               }`}
             >
-              {t === 'activo' ? `Activos (${activos.length})` : `Pasivos (${pasivos.length})`}
+              {t === 'activo'
+                ? `Activos (${activos.length})`
+                : t === 'pasivo'
+                  ? `Pasivos (${pasivos.length})`
+                  : 'Ahorro'}
             </button>
           ))}
         </div>
 
         {/* List */}
         <div className="flex-1 overflow-y-auto pb-24">
-          {isLoading ? (
+          {tab === 'ahorro' ? (
+            <AhorroTab />
+          ) : isLoading ? (
             <div className="flex items-center justify-center py-14">
               <div className="w-6 h-6 border-2 border-[#534AB7] border-t-transparent rounded-full animate-spin" />
             </div>

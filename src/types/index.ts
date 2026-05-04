@@ -28,6 +28,10 @@ export interface Transaction {
   asignadoA: string | null
   creadoPor: string
   recurrente?: boolean
+  /** Si el movimiento está vinculado a una cuenta de ahorro del patrimonio. */
+  ahorroAssetId?: string | null
+  /** Monto efectivamente sumado al activo (en la moneda del activo). Para revertir con precisión. */
+  ahorroDelta?: number | null
 }
 
 export interface Asset {

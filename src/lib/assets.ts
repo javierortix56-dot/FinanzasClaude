@@ -86,3 +86,47 @@ export async function deleteAsset(id: string) {
   const { error } = await supabase.from('cuentas').delete().eq('id', id)
   if (error) throw error
 }
+
+/** Atomically adds `delta` (in asset's own currency) to the asset's saldo. */
+export async function adjustAssetSaldo(id: string, delta: number): Promise<void> {
+  if (delta === 0) return
+  const { data, error } = await supabase
+    .from('cuentas').select('init_bal').eq('id', id).single()
+  if (error) throw error
+  const current = (data?.init_bal as number) ?? 0
+  const next = current + delta
+  const { error: upErr } = await supabase
+    .from('cuentas').update({ init_bal: next }).eq('id', id)
+  if (upErr) throw upErr
+}
+
+/** Returns count of active transactions linked to this asset via children.ahorroAssetId. */
+export async function countLinkedAhorroTx(assetId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from('movimientos')
+    .select('id', { count: 'exact', head: true })
+    .is('deleted_at', null)
+    .filter('children->>ahorroAssetId', 'eq', assetId)
+  if (error) {
+    console.error('[assets] countLinkedAhorroTx error:', error)
+    return 0
+  }
+  return count ?? 0
+}
+
+/** Soft-deletes all active transactions linked to this asset. */
+export async function deleteLinkedAhorroTx(assetId: string): Promise<number> {
+  const { data, error } = await supabase
+    .from('movimientos')
+    .select('id')
+    .is('deleted_at', null)
+    .filter('children->>ahorroAssetId', 'eq', assetId)
+  if (error) throw error
+  if (!data || data.length === 0) return 0
+  const { error: upErr } = await supabase
+    .from('movimientos')
+    .update({ deleted_at: new Date().toISOString() })
+    .in('id', data.map((r) => r.id))
+  if (upErr) throw upErr
+  return data.length
+}

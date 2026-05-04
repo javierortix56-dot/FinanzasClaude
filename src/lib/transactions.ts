@@ -1,5 +1,6 @@
 import { supabase, SHARED_UUID } from './supabase'
 import { Transaction } from '@/types'
+import { adjustAssetSaldo } from './assets'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function rowToTx(row: Record<string, any>): Transaction {
@@ -28,6 +29,8 @@ function rowToTx(row: Record<string, any>): Transaction {
     asignadoA: extra.asignadoA ?? null,
     creadoPor: extra.creadoPor ?? 'shared',
     recurrente: extra.recurrente ?? false,
+    ahorroAssetId: extra.ahorroAssetId ?? null,
+    ahorroDelta: extra.ahorroDelta ?? null,
   }
 }
 
@@ -48,6 +51,8 @@ function txToRow(tx: Omit<Transaction, 'id'>) {
       asignadoA: tx.asignadoA,
       creadoPor: tx.creadoPor,
       recurrente: tx.recurrente ?? false,
+      ahorroAssetId: tx.ahorroAssetId ?? null,
+      ahorroDelta: tx.ahorroDelta ?? null,
     },
   }
 }
@@ -115,6 +120,8 @@ export async function updateTransaction(id: string, data: Partial<Omit<Transacti
   if (data.asignadoA !== undefined) childrenFields.asignadoA = data.asignadoA
   if (data.creadoPor !== undefined) childrenFields.creadoPor = data.creadoPor
   if (data.recurrente !== undefined) childrenFields.recurrente = data.recurrente
+  if (data.ahorroAssetId !== undefined) childrenFields.ahorroAssetId = data.ahorroAssetId
+  if (data.ahorroDelta !== undefined) childrenFields.ahorroDelta = data.ahorroDelta
 
   if (Object.keys(childrenFields).length > 0) {
     const { data: current } = await supabase
@@ -127,11 +134,56 @@ export async function updateTransaction(id: string, data: Partial<Omit<Transacti
 }
 
 export async function deleteTransaction(id: string) {
-  // Soft delete to match existing data pattern
+  // Si la tx está vinculada a una cuenta de ahorro, revertimos el aporte
+  // antes de hacer el soft-delete. Si la lectura falla, igualmente borramos
+  // la transacción (no queremos dejar al usuario sin poder eliminarla).
+  try {
+    const { data } = await supabase
+      .from('movimientos').select('children').eq('id', id).single()
+    const ch = (data?.children ?? {}) as Record<string, unknown>
+    const assetId = ch.ahorroAssetId as string | undefined | null
+    const delta   = ch.ahorroDelta as number | undefined | null
+    if (assetId && typeof delta === 'number' && delta !== 0) {
+      await adjustAssetSaldo(assetId, -delta)
+    }
+  } catch (e) {
+    console.error('[deleteTransaction] revert link error:', e)
+  }
+
   const { error } = await supabase
     .from('movimientos')
     .update({ deleted_at: new Date().toISOString() })
     .eq('id', id)
+  if (error) throw error
+}
+
+/** Reproduce date in another month, clamping the day to that month's last day. */
+function shiftDateToMonth(date: Date, toMonth: string): string {
+  const [ty, tm] = toMonth.split('-').map(Number)
+  const day = Math.min(date.getDate(), new Date(ty, tm, 0).getDate())
+  return `${ty}-${String(tm).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+/** Clones a single transaction into another month, keeping day-of-month. */
+export async function cloneTransactionToMonth(tx: Transaction, toMonth: string): Promise<string> {
+  const newDate = shiftDateToMonth(tx.fecha.toDate(), toMonth)
+  const row = txToRow({ ...tx, ejecutado: false, asignadoA: null })
+  const { data, error } = await supabase
+    .from('movimientos')
+    .insert({ ...row, date: newDate })
+    .select('id')
+    .single()
+  if (error) throw error
+  return data.id as string
+}
+
+/** Moves a single transaction to another month (changes its date). */
+export async function moveTransactionToMonth(tx: Transaction, toMonth: string): Promise<void> {
+  const newDate = shiftDateToMonth(tx.fecha.toDate(), toMonth)
+  const { error } = await supabase
+    .from('movimientos')
+    .update({ date: newDate })
+    .eq('id', tx.id!)
   if (error) throw error
 }
 

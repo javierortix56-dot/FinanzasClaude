@@ -24,6 +24,8 @@ function rowToTx(row: Record<string, unknown>): Transaction {
     asignadoA: (extra.asignadoA as string | null) ?? null,
     creadoPor: (extra.creadoPor as string) ?? 'shared',
     recurrente: (extra.recurrente as boolean) ?? false,
+    ahorroAssetId: (extra.ahorroAssetId as string | null | undefined) ?? null,
+    ahorroDelta: (extra.ahorroDelta as number | null | undefined) ?? null,
   }
 }
 
@@ -46,6 +48,21 @@ export async function fetchMonthTransactions(month: string): Promise<Transaction
     return []
   }
 
+  return (data ?? []).map(rowToTx)
+}
+
+/** Returns all active transactions linked to any ahorro asset (children.ahorroAssetId not null). */
+export async function fetchAllAhorroTx(): Promise<Transaction[]> {
+  const { data, error } = await supabase
+    .from('movimientos')
+    .select('*')
+    .is('deleted_at', null)
+    .not('children->>ahorroAssetId', 'is', null)
+    .order('date', { ascending: false })
+  if (error) {
+    console.error('[analytics] fetchAllAhorroTx error:', error)
+    return []
+  }
   return (data ?? []).map(rowToTx)
 }
 

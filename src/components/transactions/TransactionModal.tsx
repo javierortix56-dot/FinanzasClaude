@@ -2,12 +2,17 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { X, Trash2 } from 'lucide-react'
+import { X, Trash2, Copy, ArrowRightLeft, Repeat, PiggyBank } from 'lucide-react'
 import { useUIStore } from '@/store/useUIStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useTransactionStore } from '@/store/useTransactionStore'
 import { useAuthStore } from '@/store/useAuthStore'
-import { addTransaction, updateTransaction, deleteTransaction } from '@/lib/transactions'
+import { useAssetStore } from '@/store/useAssetStore'
+import {
+  addTransaction, updateTransaction, deleteTransaction,
+  cloneTransactionToMonth, moveTransactionToMonth,
+} from '@/lib/transactions'
+import { adjustAssetSaldo } from '@/lib/assets'
 import { SHARED_USER_ID, SHARED_USERS, formatAmount, getParentGroup, DEFAULT_GASTO_CATEGORY_GROUPS, DEFAULT_INGRESO_CATEGORY_GROUPS } from '@/lib/constants'
 import { DEFAULT_SETTINGS } from '@/lib/settings'
 import { toBase } from '@/lib/currency'
@@ -20,6 +25,7 @@ export default function TransactionModal() {
   const { settings, hideAmounts } = useSettingsStore()
   const { transactions } = useTransactionStore()
   const { monedaBase } = useAuthStore()
+  const { assets } = useAssetStore()
   const s = settings ?? DEFAULT_SETTINGS
   const base = monedaBase as Currency
 
@@ -36,11 +42,17 @@ export default function TransactionModal() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [recurrente, setRecurrente] = useState(false)
+  const [ahorroAssetId, setAhorroAssetId] = useState<string | null>(null)
+  const [moveTargetMonth, setMoveTargetMonth] = useState<string>('')
+  const [moveMode, setMoveMode] = useState<'clone' | 'move' | null>(null)
 
   useEffect(() => {
     if (!isTransactionModalOpen) {
       setDeleteConfirm(false)
       setSaveError(null)
+      setMoveMode(null)
+      setMoveTargetMonth('')
       return
     }
     if (editingTransaction) {
@@ -53,6 +65,8 @@ export default function TransactionModal() {
       setCreadoPor(editingTransaction.creadoPor || SHARED_USERS[0].id)
       setEjecutado(editingTransaction.ejecutado)
       setAsignadoA(editingTransaction.asignadoA ?? null)
+      setRecurrente(editingTransaction.recurrente ?? false)
+      setAhorroAssetId(editingTransaction.ahorroAssetId ?? null)
       const catId = editingTransaction.categoria
       const allGroups = editingTransaction.tipo === 'egreso'
         ? (settings?.categoriasGasto ?? DEFAULT_GASTO_CATEGORY_GROUPS)
@@ -65,6 +79,7 @@ export default function TransactionModal() {
       setSelectedGroup(''); setSelectedSub(''); setDescripcion('')
       setFecha(new Date().toISOString().split('T')[0])
       setCreadoPor(SHARED_USERS[0].id); setEjecutado(false); setAsignadoA(null)
+      setRecurrente(false); setAhorroAssetId(null)
     }
   }, [isTransactionModalOpen, editingTransaction, settings])
 
@@ -113,11 +128,46 @@ export default function TransactionModal() {
   const accentColor  = tipo === 'egreso' ? '#ef4444' : '#22c55e'
   const accentBg     = tipo === 'egreso' ? 'bg-red-500' : 'bg-green-500'
 
+  const isAhorroCategoria = (selectedSub || selectedGroup) === 'ahorro'
+  const ahorroAssets = useMemo(
+    () => assets.filter((a) => a.clase === 'activo' && a.tipo.toLowerCase() === 'ahorro'),
+    [assets],
+  )
+
+  // Si la categoría deja de ser "ahorro", limpiamos el vínculo
+  useEffect(() => {
+    if (!isAhorroCategoria && ahorroAssetId) setAhorroAssetId(null)
+  }, [isAhorroCategoria, ahorroAssetId])
+
   async function handleSave() {
     if (!montoValido) return
     setSaving(true)
     setSaveError(null)
     try {
+      // ── Resolver vínculo con cuenta de ahorro ────────────────────────────
+      // Política: el delta sumado al activo se calcula en la moneda del activo
+      // a partir del monto de la transacción. Si el activo es la misma moneda
+      // que la tx, es 1:1; si no, convertimos vía toBase.
+      const prevAssetId = editingTransaction?.ahorroAssetId ?? null
+      const prevDelta   = editingTransaction?.ahorroDelta ?? 0
+      const wantsLink   = tipo === 'egreso' && isAhorroCategoria && !!ahorroAssetId
+      const targetAsset = wantsLink ? ahorroAssets.find((a) => a.id === ahorroAssetId) : null
+      const newDelta    = targetAsset
+        ? toBase(parsedMonto, moneda, targetAsset.moneda, s)
+        : 0
+
+      // Revertir aporte previo si cambió el activo destino o si ya no hay vínculo
+      if (prevAssetId && (prevAssetId !== ahorroAssetId || !wantsLink) && prevDelta) {
+        await adjustAssetSaldo(prevAssetId, -prevDelta)
+      }
+      // Aplicar nuevo aporte si es vínculo nuevo
+      if (wantsLink && targetAsset && prevAssetId !== ahorroAssetId) {
+        await adjustAssetSaldo(targetAsset.id!, newDelta)
+      } else if (wantsLink && targetAsset && prevAssetId === ahorroAssetId && newDelta !== prevDelta) {
+        // Mismo activo, monto cambió → ajustamos la diferencia
+        await adjustAssetSaldo(targetAsset.id!, newDelta - prevDelta)
+      }
+
       const data: Omit<Transaction, 'id'> = {
         userId: SHARED_USER_ID, tipo, monto: parsedMonto, moneda, categoria,
         descripcion: descripcion.trim(),
@@ -125,7 +175,9 @@ export default function TransactionModal() {
         fecha: { toDate: () => new Date(fecha + 'T12:00:00') },
         ejecutado, asignadoA: tipo === 'egreso' ? (asignadoA || null) : null,
         creadoPor: creadoPor || SHARED_USER_ID,
-        recurrente: editingTransaction?.recurrente ?? false,
+        recurrente,
+        ahorroAssetId: wantsLink ? ahorroAssetId : null,
+        ahorroDelta:   wantsLink ? newDelta : null,
       }
       if (editingTransaction?.id) {
         await updateTransaction(editingTransaction.id, data)
@@ -166,6 +218,34 @@ export default function TransactionModal() {
       setSaving(false)
     }
   }
+
+  async function handleCloneOrMove() {
+    if (!editingTransaction?.id || !moveMode || !moveTargetMonth) return
+    setSaving(true)
+    setSaveError(null)
+    try {
+      if (moveMode === 'clone') {
+        await cloneTransactionToMonth(editingTransaction, moveTargetMonth)
+        showToast(`Clonado a ${moveTargetMonth}`)
+      } else {
+        await moveTransactionToMonth(editingTransaction, moveTargetMonth)
+        showToast(`Trasladado a ${moveTargetMonth}`)
+      }
+      closeTransactionModal()
+    } catch (err) {
+      console.error('[handleCloneOrMove] error:', err)
+      setSaveError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const currentMonthOfTx = editingTransaction
+    ? (() => {
+        const d = editingTransaction.fecha.toDate()
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      })()
+    : ''
 
   return (
     <Dialog.Root
@@ -384,6 +464,43 @@ export default function TransactionModal() {
               </>
             )}
 
+            {/* ── Vincular a cuenta de ahorro (solo si categoría = ahorro y egreso) ── */}
+            {tipo === 'egreso' && isAhorroCategoria && (
+              <>
+                <div className="h-px bg-gray-100 mx-5" />
+                <div className="px-5 py-4">
+                  <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <PiggyBank size={12} className="text-[#534AB7]" />
+                    Sumar al patrimonio
+                    <span className="ml-1 font-normal normal-case tracking-normal text-gray-300">— opcional</span>
+                  </label>
+                  {ahorroAssets.length === 0 ? (
+                    <p className="mt-2 text-[11px] text-gray-400 italic">
+                      No tenés cuentas de tipo &quot;Ahorro&quot; en patrimonio. Creá una desde Patrimonio para vincular este movimiento.
+                    </p>
+                  ) : (
+                    <select
+                      value={ahorroAssetId ?? ''}
+                      onChange={(e) => setAhorroAssetId(e.target.value || null)}
+                      className="mt-2 w-full h-11 rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#534AB7]/30 focus:bg-white"
+                    >
+                      <option value="">Sin vincular</option>
+                      {ahorroAssets.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.nombre} — {formatAmount(a.saldo, a.moneda)}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {ahorroAssetId && (
+                    <p className="text-[10px] text-[#534AB7] mt-1.5">
+                      Al guardar, se sumará al saldo de esta cuenta. Si borrás el movimiento, se revierte.
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+
             <div className="h-px bg-gray-100 mx-5" />
 
             {/* ── Fecha + Estado (grid 2 cols, sin superposición) ── */}
@@ -435,6 +552,105 @@ export default function TransactionModal() {
                 ))}
               </div>
             </div>
+
+            <div className="h-px bg-gray-100 mx-5" />
+
+            {/* ── Recurrente ── */}
+            <div className="px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setRecurrente((v) => !v)}
+                className={`w-full flex items-center justify-between gap-3 rounded-xl border-2 px-3.5 py-3 transition-all ${
+                  recurrente
+                    ? 'bg-[#534AB7]/5 border-[#534AB7]/40 text-[#534AB7]'
+                    : 'bg-gray-50 border-gray-200 text-gray-500'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Repeat size={15} />
+                  <div className="text-left">
+                    <p className="text-sm font-semibold leading-tight">
+                      {recurrente ? 'Movimiento recurrente' : 'Marcar como recurrente'}
+                    </p>
+                    <p className="text-[10px] opacity-70 leading-tight mt-0.5">
+                      Se replicará al crear el próximo mes
+                    </p>
+                  </div>
+                </div>
+                <span className={`w-9 h-5 rounded-full relative transition-colors flex-shrink-0 ${
+                  recurrente ? 'bg-[#534AB7]' : 'bg-gray-300'
+                }`}>
+                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${
+                    recurrente ? 'left-[18px]' : 'left-0.5'
+                  }`} />
+                </span>
+              </button>
+            </div>
+
+            {/* ── Clonar / Trasladar (solo edición) ── */}
+            {editingTransaction && (
+              <>
+                <div className="h-px bg-gray-100 mx-5" />
+                <div className="px-5 py-4">
+                  <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+                    Mover este movimiento
+                  </label>
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMoveMode((m) => m === 'clone' ? null : 'clone')
+                        if (!moveTargetMonth) setMoveTargetMonth(currentMonthOfTx)
+                      }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 h-10 rounded-xl border-2 text-xs font-semibold transition-all ${
+                        moveMode === 'clone'
+                          ? 'bg-[#534AB7] border-[#534AB7] text-white'
+                          : 'bg-white border-gray-200 text-gray-600 hover:border-[#534AB7]/40'
+                      }`}
+                    >
+                      <Copy size={13} /> Clonar a…
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMoveMode((m) => m === 'move' ? null : 'move')
+                        if (!moveTargetMonth) setMoveTargetMonth(currentMonthOfTx)
+                      }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 h-10 rounded-xl border-2 text-xs font-semibold transition-all ${
+                        moveMode === 'move'
+                          ? 'bg-[#534AB7] border-[#534AB7] text-white'
+                          : 'bg-white border-gray-200 text-gray-600 hover:border-[#534AB7]/40'
+                      }`}
+                    >
+                      <ArrowRightLeft size={13} /> Trasladar a…
+                    </button>
+                  </div>
+                  {moveMode && (
+                    <div className="mt-2.5 flex gap-2 items-center">
+                      <input
+                        type="month"
+                        value={moveTargetMonth}
+                        onChange={(e) => setMoveTargetMonth(e.target.value)}
+                        className="flex-1 h-10 bg-gray-50 rounded-xl px-3 text-sm text-gray-700 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#534AB7]/30"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleCloneOrMove}
+                        disabled={saving || !moveTargetMonth || moveTargetMonth === currentMonthOfTx}
+                        className="h-10 px-4 rounded-xl bg-[#534AB7] text-white text-xs font-bold disabled:opacity-40"
+                      >
+                        {moveMode === 'clone' ? 'Clonar' : 'Trasladar'}
+                      </button>
+                    </div>
+                  )}
+                  {moveMode && moveTargetMonth === currentMonthOfTx && (
+                    <p className="text-[10px] text-amber-500 mt-1.5">
+                      Elegí un mes distinto al actual del movimiento
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
 
             {/* ── Error ── */}
             {saveError && (
