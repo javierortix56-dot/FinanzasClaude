@@ -55,13 +55,20 @@ function TxRow({ tx, hideAmounts, settings, monedaBase, onEdit }: TxRowProps) {
           <span className="text-[10px] text-gray-400 truncate">{dateStr}</span>
         </div>
         <div className="flex items-center gap-1 shrink-0 max-w-[55%]">
-          <span
-            className={`text-[11px] font-semibold tabular-nums truncate ${
-              isIngreso ? 'text-green-600' : 'text-red-500'
-            } ${hideAmounts ? 'blur-sm' : ''} ${tx.ejecutado ? 'line-through' : ''}`}
-          >
-            {formatAmount(montoBase, monedaBase)}
-          </span>
+          <div className="flex flex-col items-end min-w-0">
+            <span
+              className={`text-[11px] font-semibold tabular-nums truncate ${
+                isIngreso ? 'text-green-600' : 'text-red-500'
+              } ${hideAmounts ? 'blur-sm' : ''} ${tx.ejecutado ? 'line-through' : ''}`}
+            >
+              {formatAmount(montoBase, monedaBase)}
+            </span>
+            {tx.moneda !== monedaBase && (
+              <span className={`text-[9px] text-gray-400 tabular-nums truncate leading-tight ${hideAmounts ? 'blur-sm' : ''} ${tx.ejecutado ? 'line-through' : ''}`}>
+                {formatAmount(tx.monto, tx.moneda)}
+              </span>
+            )}
+          </div>
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); markEjecutado(tx.id!, !tx.ejecutado) }}
