@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { X, Trash2 } from 'lucide-react'
+import { X, Trash2, Repeat } from 'lucide-react'
 import { useUIStore } from '@/store/useUIStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useTransactionStore } from '@/store/useTransactionStore'
@@ -33,6 +33,7 @@ export default function TransactionModal() {
   const [creadoPor, setCreadoPor] = useState(SHARED_USERS[0].id)
   const [ejecutado, setEjecutado] = useState(false)
   const [asignadoA, setAsignadoA] = useState<string | null>(null)
+  const [recurrente, setRecurrente] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
@@ -53,6 +54,7 @@ export default function TransactionModal() {
       setCreadoPor(editingTransaction.creadoPor || SHARED_USERS[0].id)
       setEjecutado(editingTransaction.ejecutado)
       setAsignadoA(editingTransaction.asignadoA ?? null)
+      setRecurrente(editingTransaction.recurrente ?? false)
       const catId = editingTransaction.categoria
       const allGroups = editingTransaction.tipo === 'egreso'
         ? (settings?.categoriasGasto ?? DEFAULT_GASTO_CATEGORY_GROUPS)
@@ -64,7 +66,7 @@ export default function TransactionModal() {
       setTipo('egreso'); setMonto(''); setMoneda('ARS')
       setSelectedGroup(''); setSelectedSub(''); setDescripcion('')
       setFecha(new Date().toISOString().split('T')[0])
-      setCreadoPor(SHARED_USERS[0].id); setEjecutado(false); setAsignadoA(null)
+      setCreadoPor(SHARED_USERS[0].id); setEjecutado(false); setAsignadoA(null); setRecurrente(false)
     }
   }, [isTransactionModalOpen, editingTransaction, settings])
 
@@ -125,7 +127,7 @@ export default function TransactionModal() {
         fecha: { toDate: () => new Date(fecha + 'T12:00:00') },
         ejecutado, asignadoA: tipo === 'egreso' ? (asignadoA || null) : null,
         creadoPor: creadoPor || SHARED_USER_ID,
-        recurrente: editingTransaction?.recurrente ?? false,
+        recurrente,
       }
       if (editingTransaction?.id) {
         await updateTransaction(editingTransaction.id, data)
@@ -411,6 +413,22 @@ export default function TransactionModal() {
                   {ejecutado ? 'Ejecutado' : 'Pendiente'}
                 </button>
               </div>
+            </div>
+
+            {/* ── Recurrente ── */}
+            <div className="px-5 pb-4">
+              <button
+                type="button"
+                onClick={() => setRecurrente((v) => !v)}
+                className={`w-full h-11 flex items-center justify-center gap-2 rounded-xl border-2 text-sm font-semibold transition-all ${
+                  recurrente
+                    ? 'bg-[#534AB7]/10 border-[#534AB7] text-[#534AB7]'
+                    : 'bg-gray-50 border-gray-200 text-gray-400'
+                }`}
+              >
+                <Repeat size={15} />
+                {recurrente ? 'Recurrente' : 'Marcar como recurrente'}
+              </button>
             </div>
 
             {/* ── Error ── */}
