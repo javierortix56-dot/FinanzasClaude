@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { X, Trash2, Repeat } from 'lucide-react'
+import { X, Trash2, Repeat, Copy, ArrowRight } from 'lucide-react'
 import { useUIStore } from '@/store/useUIStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useTransactionStore } from '@/store/useTransactionStore'
 import { useAuthStore } from '@/store/useAuthStore'
-import { addTransaction, updateTransaction, deleteTransaction } from '@/lib/transactions'
+import { addTransaction, updateTransaction, deleteTransaction, cloneTransactionToMonth, moveTransactionToMonth } from '@/lib/transactions'
 import { SHARED_USER_ID, SHARED_USERS, formatAmount, getParentGroup, getCatFromSettings, DEFAULT_GASTO_CATEGORY_GROUPS, DEFAULT_INGRESO_CATEGORY_GROUPS } from '@/lib/constants'
 import { DEFAULT_SETTINGS } from '@/lib/settings'
 import { toBase } from '@/lib/currency'
@@ -37,11 +37,15 @@ export default function TransactionModal() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [cloneMonth, setCloneMonth] = useState('')
+  const [cloneAction, setCloneAction] = useState<'clone' | 'move' | null>(null)
 
   useEffect(() => {
     if (!isTransactionModalOpen) {
       setDeleteConfirm(false)
       setSaveError(null)
+      setCloneMonth('')
+      setCloneAction(null)
       return
     }
     if (editingTransaction) {
@@ -164,6 +168,26 @@ export default function TransactionModal() {
     try {
       await deleteTransaction(editingTransaction.id)
       closeTransactionModal()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleCloneMove() {
+    if (!editingTransaction?.id || !cloneMonth) return
+    setSaving(true)
+    setSaveError(null)
+    try {
+      if (cloneAction === 'clone') {
+        await cloneTransactionToMonth(editingTransaction.id, cloneMonth)
+        showToast('Movimiento clonado')
+      } else {
+        await moveTransactionToMonth(editingTransaction.id, cloneMonth)
+        showToast('Movimiento movido')
+      }
+      closeTransactionModal()
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Error desconocido')
     } finally {
       setSaving(false)
     }
@@ -430,6 +454,54 @@ export default function TransactionModal() {
                 {recurrente ? 'Recurrente' : 'Marcar como recurrente'}
               </button>
             </div>
+
+            {/* ── Clonar / Mover a otro mes (solo al editar) ── */}
+            {editingTransaction && (
+              <div className="px-5 pb-4">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCloneAction(cloneAction === 'clone' ? null : 'clone')}
+                    className={`flex-1 h-10 flex items-center justify-center gap-1.5 rounded-xl border text-xs font-semibold transition-all ${
+                      cloneAction === 'clone'
+                        ? 'bg-[#534AB7]/10 border-[#534AB7] text-[#534AB7]'
+                        : 'bg-gray-50 border-gray-200 text-gray-400'
+                    }`}
+                  >
+                    <Copy size={13} />Clonar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCloneAction(cloneAction === 'move' ? null : 'move')}
+                    className={`flex-1 h-10 flex items-center justify-center gap-1.5 rounded-xl border text-xs font-semibold transition-all ${
+                      cloneAction === 'move'
+                        ? 'bg-amber-50 border-amber-400 text-amber-600'
+                        : 'bg-gray-50 border-gray-200 text-gray-400'
+                    }`}
+                  >
+                    <ArrowRight size={13} />Mover
+                  </button>
+                </div>
+                {cloneAction && (
+                  <div className="flex gap-2 mt-2">
+                    <input
+                      type="month"
+                      value={cloneMonth}
+                      onChange={(e) => setCloneMonth(e.target.value)}
+                      className="flex-1 h-10 bg-gray-50 rounded-xl px-3 text-sm text-gray-700 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#534AB7]/30"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCloneMove}
+                      disabled={!cloneMonth || saving}
+                      className={`px-4 h-10 rounded-xl text-xs font-bold text-white disabled:opacity-40 ${cloneAction === 'move' ? 'bg-amber-500' : 'bg-[#534AB7]'}`}
+                    >
+                      {saving ? '…' : cloneAction === 'move' ? 'Mover' : 'Clonar'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* ── Error ── */}
             {saveError && (

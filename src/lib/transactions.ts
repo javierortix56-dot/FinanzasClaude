@@ -246,3 +246,27 @@ export async function createRecurringTransactions(toMonth: string): Promise<numb
   if (insErr) throw insErr
   return inserts.length
 }
+
+export async function cloneTransactionToMonth(txId: string, toMonth: string): Promise<string> {
+  const { data: row, error } = await supabase.from('movimientos').select('*').eq('id', txId).single()
+  if (error) throw error
+  const [ty, tm] = toMonth.split('-').map(Number)
+  const origDate = new Date((row.date as string) + 'T12:00:00')
+  const day = Math.min(origDate.getDate(), new Date(ty, tm, 0).getDate())
+  const newDate = `${ty}-${String(tm).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  const insert = { ...txToRow({ ...rowToTx(row), ejecutado: false }), date: newDate }
+  const { data: inserted, error: insErr } = await supabase.from('movimientos').insert(insert).select('id').single()
+  if (insErr) throw insErr
+  return inserted.id as string
+}
+
+export async function moveTransactionToMonth(txId: string, toMonth: string): Promise<void> {
+  const { data: row, error } = await supabase.from('movimientos').select('date').eq('id', txId).single()
+  if (error) throw error
+  const [ty, tm] = toMonth.split('-').map(Number)
+  const origDate = new Date((row.date as string) + 'T12:00:00')
+  const day = Math.min(origDate.getDate(), new Date(ty, tm, 0).getDate())
+  const newDate = `${ty}-${String(tm).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  const { error: updErr } = await supabase.from('movimientos').update({ date: newDate }).eq('id', txId)
+  if (updErr) throw updErr
+}
