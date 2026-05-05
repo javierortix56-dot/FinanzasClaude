@@ -28,6 +28,7 @@ function rowToTx(row: Record<string, any>): Transaction {
     asignadoA: extra.asignadoA ?? null,
     creadoPor: extra.creadoPor ?? 'shared',
     recurrente: extra.recurrente ?? false,
+    ahorroAssetId: extra.ahorroAssetId ?? null,
   }
 }
 
@@ -48,6 +49,7 @@ function txToRow(tx: Omit<Transaction, 'id'>) {
       asignadoA: tx.asignadoA,
       creadoPor: tx.creadoPor,
       recurrente: tx.recurrente ?? false,
+      ahorroAssetId: tx.ahorroAssetId ?? null,
     },
   }
 }
@@ -115,6 +117,7 @@ export async function updateTransaction(id: string, data: Partial<Omit<Transacti
   if (data.asignadoA !== undefined) childrenFields.asignadoA = data.asignadoA
   if (data.creadoPor !== undefined) childrenFields.creadoPor = data.creadoPor
   if (data.recurrente !== undefined) childrenFields.recurrente = data.recurrente
+  if (data.ahorroAssetId !== undefined) childrenFields.ahorroAssetId = data.ahorroAssetId
 
   if (Object.keys(childrenFields).length > 0) {
     const { data: current } = await supabase

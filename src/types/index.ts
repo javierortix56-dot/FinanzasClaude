@@ -28,6 +28,7 @@ export interface Transaction {
   asignadoA: string | null
   creadoPor: string
   recurrente?: boolean
+  ahorroAssetId?: string | null
 }
 
 export interface AssetSnapshot {

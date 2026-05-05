@@ -1,12 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronLeft, ChevronRight, Eye, EyeOff, Search, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Eye, EyeOff, Search, X, PiggyBank } from 'lucide-react'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useTransactionStore } from '@/store/useTransactionStore'
 import TAccountView from '@/components/transactions/TAccountView'
 import AssignmentTab from '@/components/assignment/AssignmentTab'
+import AhorrarModal from '@/components/transactions/AhorrarModal'
 import { monthLabel, formatAmount } from '@/lib/constants'
 import { toBase } from '@/lib/currency'
 import { DEFAULT_SETTINGS } from '@/lib/settings'
@@ -22,6 +23,7 @@ export default function DashboardPage() {
   const [mainTab, setMainTab] = useState<MainTab>('movimientos')
   const [search, setSearch]   = useState('')
   const [searching, setSearching] = useState(false)
+  const [ahorrarOpen, setAhorrarOpen] = useState(false)
 
   const s    = settings ?? DEFAULT_SETTINGS
   const base = monedaBase as Currency
@@ -79,9 +81,19 @@ export default function DashboardPage() {
         {/* Balance + stats inline */}
         <div className="flex items-end justify-between gap-2">
           <div>
-            <p className={`text-gray-900 text-2xl font-black leading-none tabular-nums ${blur}`}>
-              {formatAmount(balance, base)}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className={`text-gray-900 text-2xl font-black leading-none tabular-nums ${blur}`}>
+                {formatAmount(balance, base)}
+              </p>
+              <button
+                onClick={() => setAhorrarOpen(true)}
+                className="flex items-center gap-1 px-2 py-1 rounded-full bg-[#534AB7]/10 hover:bg-[#534AB7]/20 transition-colors"
+                title="Ahorrar"
+              >
+                <PiggyBank size={13} className="text-[#534AB7]" />
+                <span className="text-[10px] font-semibold text-[#534AB7]">Ahorrar</span>
+              </button>
+            </div>
             <div className={`flex items-center gap-2 mt-1 ${blur}`}>
               <span className="flex items-center gap-0.5 text-[11px] text-green-600 font-semibold">
                 <span className="text-[9px]">▲</span>{formatAmount(totalIngresos, base)}
@@ -154,6 +166,8 @@ export default function DashboardPage() {
           <AssignmentTab />
         )}
       </div>
+
+      <AhorrarModal open={ahorrarOpen} onClose={() => setAhorrarOpen(false)} />
     </div>
   )
 }
