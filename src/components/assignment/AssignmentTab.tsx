@@ -1,11 +1,14 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Zap, X, Unlink2, Sparkles, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { Zap, X, Unlink2, Sparkles, AlertCircle, CheckCircle2, Trash2 } from 'lucide-react'
 import { useTransactionStore } from '@/store/useTransactionStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAuthStore } from '@/store/useAuthStore'
-import { updateTransaction } from '@/lib/transactions'
+import { useUIStore } from '@/store/useUIStore'
+import { useAssetStore } from '@/store/useAssetStore'
+import { updateTransaction, deleteTransaction } from '@/lib/transactions'
+import { adjustAssetSaldo } from '@/lib/assets'
 import { DEFAULT_SETTINGS } from '@/lib/settings'
 import { SHARED_USERS } from '@/lib/constants'
 import { toBase } from '@/lib/currency'
@@ -17,6 +20,8 @@ export default function AssignmentTab() {
   const { transactions } = useTransactionStore()
   const { settings } = useSettingsStore()
   const { monedaBase } = useAuthStore()
+  const { openEditModal } = useUIStore()
+  const { assets } = useAssetStore()
   const s = settings ?? DEFAULT_SETTINGS
   const base = monedaBase as Currency
 
@@ -26,6 +31,8 @@ export default function AssignmentTab() {
   const [autoLoading, setAutoLoading]       = useState(false)
   const [unassignLoading, setUnassignLoading] = useState(false)
   const [unassignConfirm, setUnassignConfirm] = useState(false)
+  const [deleteConfirm, setDeleteConfirm]   = useState(false)
+  const [deleteLoading, setDeleteLoading]   = useState(false)
   const userNames = Object.fromEntries(SHARED_USERS.map((u) => [u.id, u.nombre]))
 
   const ingresos = useMemo(
@@ -147,6 +154,27 @@ export default function AssignmentTab() {
     setReassignOpen(false)
   }
 
+  async function deleteSelected() {
+    if (!deleteConfirm) { setDeleteConfirm(true); setTimeout(() => setDeleteConfirm(false), 4000); return }
+    setDeleteLoading(true)
+    setDeleteConfirm(false)
+    try {
+      const toDelete = egresos.filter((e) => selectedIds.has(e.id!))
+      for (const tx of toDelete) {
+        if (tx.ahorroAssetId) {
+          try {
+            const txMonth = tx.fecha.toDate().toISOString().slice(0, 7)
+            await adjustAssetSaldo(tx.ahorroAssetId, -tx.monto, txMonth)
+          } catch { /* non-blocking */ }
+        }
+        await deleteTransaction(tx.id!)
+      }
+      setSelectedIds(new Set())
+    } finally {
+      setDeleteLoading(false)
+    }
+  }
+
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
       const next = new Set(prev)
@@ -261,6 +289,7 @@ export default function AssignmentTab() {
                 expenses={group.expenses}
                 selectedIds={selectedIds}
                 onToggleSelect={toggleSelect}
+                onEdit={openEditModal}
                 onDesassign={() => desassignGroup(key)}
                 isExpanded={expandedGroups.has(key)}
                 onToggleExpand={() => toggleGroup(key)}
@@ -275,13 +304,23 @@ export default function AssignmentTab() {
 
       {/* ── Multi-select action bar ── */}
       {selectedIds.size > 0 && (
-        <div className="fixed bottom-[72px] left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-white border-t border-gray-100 shadow-lg z-30 px-4 py-3 flex items-center gap-3">
-          <button onClick={() => setSelectedIds(new Set())} className="p-2 rounded-full hover:bg-gray-100">
+        <div className="fixed bottom-[72px] left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-white border-t border-gray-100 shadow-lg z-30 px-4 py-3 flex items-center gap-2">
+          <button onClick={() => { setSelectedIds(new Set()); setDeleteConfirm(false) }} className="p-2 rounded-full hover:bg-gray-100">
             <X size={18} className="text-gray-500" />
           </button>
           <span className="flex-1 text-sm font-semibold text-gray-700">
             {selectedIds.size} seleccionado{selectedIds.size !== 1 ? 's' : ''}
           </span>
+          <button
+            onClick={deleteSelected}
+            disabled={deleteLoading}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all ${
+              deleteConfirm ? 'bg-red-500 text-white' : 'bg-red-50 text-red-500'
+            }`}
+          >
+            <Trash2 size={14} />
+            {deleteConfirm ? '¿Confirmar?' : 'Eliminar'}
+          </button>
           <button
             onClick={() => setReassignOpen(true)}
             className="px-4 py-2 rounded-xl bg-[#534AB7] text-white text-sm font-semibold active:scale-95 transition-transform"

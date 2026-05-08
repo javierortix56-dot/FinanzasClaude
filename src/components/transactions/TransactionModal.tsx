@@ -427,7 +427,7 @@ export default function TransactionModal() {
             </div>
 
             {/* ── Destino de ahorro (solo egresos) ── */}
-            {tipo === 'egreso' && assets.some((a) => a.clase === 'activo') && (
+            {tipo === 'egreso' && (
               <>
                 <div className="h-px bg-gray-100 mx-5" />
                 <div className="px-5 py-4">

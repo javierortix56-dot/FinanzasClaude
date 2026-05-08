@@ -12,6 +12,7 @@ interface Props {
   expenses: Transaction[]
   selectedIds: Set<string>
   onToggleSelect: (id: string) => void
+  onEdit: (tx: Transaction) => void
   onDesassign: () => void
   isExpanded: boolean
   onToggleExpand: () => void
@@ -25,6 +26,7 @@ export default function AssignmentGroup({
   expenses,
   selectedIds,
   onToggleSelect,
+  onEdit,
   onDesassign,
   isExpanded,
   onToggleExpand,
@@ -159,34 +161,38 @@ export default function AssignmentGroup({
               return (
                 <div
                   key={exp.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => onToggleSelect(exp.id!)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') onToggleSelect(exp.id!) }}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors cursor-pointer ${
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 transition-colors ${
                     isSelected ? 'bg-[#534AB7]/5' : 'hover:bg-gray-50'
                   } ${exp.ejecutado ? 'opacity-50' : ''}`}
                 >
-                  {/* Checkbox */}
-                  <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${
-                    isSelected ? 'bg-[#534AB7] border-[#534AB7]' : 'border-gray-200'
-                  }`}>
+                  {/* Checkbox — solo selección */}
+                  <button
+                    type="button"
+                    onClick={() => onToggleSelect(exp.id!)}
+                    className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${
+                      isSelected ? 'bg-[#534AB7] border-[#534AB7]' : 'border-gray-200'
+                    }`}
+                  >
                     {isSelected && (
                       <svg width="8" height="6" viewBox="0 0 10 8" fill="none">
                         <path d="M1 4l2.5 2.5L9 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     )}
-                  </div>
+                  </button>
 
-                  {/* Description + meta */}
-                  <div className="flex-1 min-w-0">
+                  {/* Description + meta — abre edición */}
+                  <button
+                    type="button"
+                    onClick={() => onEdit(exp)}
+                    className="flex-1 min-w-0 text-left"
+                  >
                     <p className={`text-xs font-medium text-gray-900 truncate ${exp.ejecutado ? 'line-through' : ''}`}>
                       {exp.descripcion || cat?.nombre || exp.categoria}
                     </p>
                     <p className="text-[10px] text-gray-400 mt-px">
                       {dateStr}{cat ? ` · ${cat.nombre}` : ''}
                     </p>
-                  </div>
+                  </button>
 
                   {/* Amount + status */}
                   <div className="flex-shrink-0 flex items-center gap-1.5">
