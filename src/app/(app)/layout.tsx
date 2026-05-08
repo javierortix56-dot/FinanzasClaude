@@ -5,7 +5,9 @@ import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useUIStore } from '@/store/useUIStore'
 import { useTransactionStore } from '@/store/useTransactionStore'
+import { useAssetStore } from '@/store/useAssetStore'
 import { subscribeToTransactions } from '@/lib/transactions'
+import { subscribeToAssets } from '@/lib/assets'
 import TransactionModal from '@/components/transactions/TransactionModal'
 import Toast from '@/components/ui/Toast'
 import { LayoutDashboard, Wallet, BarChart2, Settings, Plus } from 'lucide-react'
@@ -21,12 +23,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { openAddModal } = useUIStore()
   const pathname = usePathname()
   const { currentMonth, setTransactions } = useTransactionStore()
+  const { setAssets } = useAssetStore()
 
-  // Global transaction subscription — available on all pages
+  // Global subscriptions — available on all pages
   useEffect(() => {
     const unsub = subscribeToTransactions(currentMonth, setTransactions)
     return () => unsub()
   }, [currentMonth, setTransactions])
+
+  useEffect(() => {
+    const unsub = subscribeToAssets(setAssets)
+    return () => unsub()
+  }, [setAssets])
 
   const leftNav  = NAV_ITEMS.slice(0, 2)
   const rightNav = NAV_ITEMS.slice(2)
