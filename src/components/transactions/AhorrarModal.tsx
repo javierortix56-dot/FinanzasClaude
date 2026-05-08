@@ -27,7 +27,7 @@ export default function AhorrarModal({ open, onClose }: Props) {
   const s = settings ?? DEFAULT_SETTINGS
   const base = monedaBase as Currency
 
-  const ahorroAssets = assets.filter((a) => a.clase === 'activo')
+  const ahorroAssets = assets.filter((a) => a.clase === 'activo' && a.saldo > 0)
 
   const [assetId, setAssetId] = useState('')
   const [monto, setMonto] = useState('')
@@ -126,7 +126,7 @@ export default function AhorrarModal({ open, onClose }: Props) {
                 </Link>
               </div>
               {ahorroAssets.length === 0 ? (
-                <p className="text-xs text-gray-400">No hay cuentas activas. Creá una en Patrimonio.</p>
+                <p className="text-xs text-gray-400">No hay cuentas activas con saldo. Cargá saldo en una cuenta de Patrimonio primero.</p>
               ) : (
                 <select
                   value={assetId}

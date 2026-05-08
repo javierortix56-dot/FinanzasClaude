@@ -14,7 +14,7 @@ import AssetModal from '@/components/patrimonio/AssetModal'
 import SnapshotModal from '@/components/patrimonio/SnapshotModal'
 import PatrimonioChart from '@/components/patrimonio/PatrimonioChart'
 
-type Tab = 'activo' | 'pasivo' | 'ahorro'
+type Tab = 'activo' | 'pasivo'
 
 export default function PatrimonioPage() {
   const { assets, setAssets, isLoading } = useAssetStore()
@@ -31,9 +31,8 @@ export default function PatrimonioPage() {
     return () => unsub()
   }, [setAssets])
 
-  const activos = assets.filter((a) => a.clase === 'activo' && a.tipo !== 'ahorro')
+  const activos = assets.filter((a) => a.clase === 'activo')
   const pasivos = assets.filter((a) => a.clase === 'pasivo')
-  const ahorros = assets.filter((a) => a.clase === 'activo' && a.tipo === 'ahorro')
 
   const totalActivosUSD  = activos.reduce((s, a) => s + toUSD(a.saldo, a.moneda, settings ?? DEFAULT_SETTINGS), 0)
   const totalPasivosUSD  = pasivos.reduce((s, a) => s + toUSD(a.saldo, a.moneda, settings ?? DEFAULT_SETTINGS), 0)
@@ -127,7 +126,7 @@ export default function PatrimonioPage() {
   function openEdit(a: Asset) { setEditing(a); setModalOpen(true) }
   function openSnap(a: Asset) { setSnapAsset(a) }
 
-  const listed = tab === 'activo' ? activos : tab === 'pasivo' ? pasivos : ahorros
+  const listed = tab === 'activo' ? activos : pasivos
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
@@ -176,7 +175,7 @@ export default function PatrimonioPage() {
 
         {/* Tabs */}
         <div className="flex border-b border-gray-100 px-4">
-          {([['activo', `Activos (${activos.length})`], ['pasivo', `Pasivos (${pasivos.length})`], ['ahorro', `Ahorro (${ahorros.length})`]] as [Tab, string][]).map(([t, label]) => (
+          {(['activo', 'pasivo'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -186,7 +185,7 @@ export default function PatrimonioPage() {
                   : 'text-gray-400'
               }`}
             >
-              {label}
+              {t === 'activo' ? `Activos (${activos.length})` : `Pasivos (${pasivos.length})`}
             </button>
           ))}
         </div>
@@ -200,7 +199,7 @@ export default function PatrimonioPage() {
           ) : listed.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-14 text-center px-6">
               <p className="text-gray-400 text-sm">
-                No hay {tab === 'activo' ? 'activos' : tab === 'pasivo' ? 'pasivos' : 'cuentas de ahorro'} registrados
+                No hay {tab === 'activo' ? 'activos' : 'pasivos'} registrados
               </p>
               <button
                 onClick={openAdd}
