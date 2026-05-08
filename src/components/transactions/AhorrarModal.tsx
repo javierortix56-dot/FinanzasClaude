@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { X, PiggyBank } from 'lucide-react'
+import Link from 'next/link'
+import { X, PiggyBank, ExternalLink } from 'lucide-react'
 import { useAssetStore } from '@/store/useAssetStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAuthStore } from '@/store/useAuthStore'
@@ -113,7 +114,17 @@ export default function AhorrarModal({ open, onClose }: Props) {
           <div className="px-5 pb-8 space-y-5">
             {/* Cuenta destino */}
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Cuenta destino</label>
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Cuenta destino</label>
+                <Link
+                  href="/patrimonio"
+                  onClick={onClose}
+                  className="flex items-center gap-1 text-[10px] text-[#534AB7] font-medium"
+                >
+                  <ExternalLink size={10} />
+                  Administrar cuentas
+                </Link>
+              </div>
               {ahorroAssets.length === 0 ? (
                 <p className="text-xs text-gray-400">No hay cuentas activas. Creá una en Patrimonio.</p>
               ) : (
