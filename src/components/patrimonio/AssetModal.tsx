@@ -69,10 +69,10 @@ export default function AssetModal({ open, onClose, editing }: Props) {
   }, [clase])
 
   async function handleSave() {
-    if (!nombre || !saldo) return
+    if (!nombre) return
     setSaving(true)
     try {
-      const saldoNum = parseFloat(saldo.replace(',', '.'))
+      const saldoNum = saldo.trim() === '' ? 0 : parseFloat(saldo.replace(',', '.'))
       const altaDate = new Date(fechaAlta + 'T12:00:00')
       const altaMonth = `${altaDate.getFullYear()}-${String(altaDate.getMonth() + 1).padStart(2, '0')}`
       // Mantener snapshots existentes; si no hay ninguno para el mes de alta,
@@ -112,7 +112,7 @@ export default function AssetModal({ open, onClose, editing }: Props) {
     finally { setSaving(false) }
   }
 
-  const canSave = nombre.trim() && saldo && parseFloat(saldo) >= 0
+  const canSave = nombre.trim() && (saldo.trim() === '' || parseFloat(saldo.replace(',', '.')) >= 0)
 
   return (
     <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
