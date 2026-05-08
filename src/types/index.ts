@@ -76,6 +76,11 @@ export interface CategoryGroup {
   subcategorias: Category[]
 }
 
+export interface AhorroLink {
+  categoriaId: string
+  assetId: string
+}
+
 export interface Settings {
   tipoCambio: {
     ARS_USD: number
@@ -87,6 +92,7 @@ export interface Settings {
   tiposActivo: string[]
   tiposPasivo: string[]
   mesesCerrados?: string[]
+  ahorroLinks?: AhorroLink[]
 }
 
 export interface Budget {

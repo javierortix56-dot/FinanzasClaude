@@ -131,6 +131,18 @@ export async function upsertSnapshot(asset: Asset, snap: AssetSnapshot) {
   if (error) throw error
 }
 
+export async function adjustAssetSaldo(assetId: string, delta: number, txMonth: string): Promise<void> {
+  const { data: row, error } = await supabase.from('cuentas').select('*').eq('id', assetId).single()
+  if (error) throw error
+  const asset = rowToAsset(row)
+  const existing = asset.snapshots.find((sn) => sn.month === txMonth)
+  await upsertSnapshot(asset, {
+    month: txMonth,
+    aporte: (existing?.aporte ?? 0) + delta,
+    saldo: asset.saldo + delta,
+  })
+}
+
 export async function deleteSnapshot(asset: Asset, month: string) {
   const next = (asset.snapshots ?? []).filter((s) => s.month !== month)
   const latest = next[next.length - 1]

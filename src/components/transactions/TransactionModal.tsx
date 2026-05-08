@@ -7,9 +7,11 @@ import { useUIStore } from '@/store/useUIStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useTransactionStore } from '@/store/useTransactionStore'
 import { useAuthStore } from '@/store/useAuthStore'
+import { useAssetStore } from '@/store/useAssetStore'
 import { addTransaction, updateTransaction, deleteTransaction, cloneTransactionToMonth, moveTransactionToMonth } from '@/lib/transactions'
 import { SHARED_USER_ID, SHARED_USERS, formatAmount, getParentGroup, getCatFromSettings, DEFAULT_GASTO_CATEGORY_GROUPS, DEFAULT_INGRESO_CATEGORY_GROUPS } from '@/lib/constants'
 import { DEFAULT_SETTINGS } from '@/lib/settings'
+import { adjustAssetSaldo } from '@/lib/assets'
 import { toBase } from '@/lib/currency'
 import { Transaction, Currency, TransactionType, CategoryGroup } from '@/types'
 
@@ -20,6 +22,7 @@ export default function TransactionModal() {
   const { settings, hideAmounts } = useSettingsStore()
   const { transactions } = useTransactionStore()
   const { monedaBase } = useAuthStore()
+  const { assets } = useAssetStore()
   const s = settings ?? DEFAULT_SETTINGS
   const base = monedaBase as Currency
 
@@ -133,6 +136,11 @@ export default function TransactionModal() {
         creadoPor: creadoPor || SHARED_USER_ID,
         recurrente,
       }
+
+      // Resolve ahorroAssetId from link config
+      const link = (s.ahorroLinks ?? []).find((l) => l.categoriaId === categoria)
+      data.ahorroAssetId = link ? link.assetId : null
+
       if (editingTransaction?.id) {
         await updateTransaction(editingTransaction.id, data)
         showToast('Movimiento actualizado')
@@ -140,6 +148,47 @@ export default function TransactionModal() {
         await addTransaction(data)
         showToast('Movimiento guardado')
       }
+
+      // Bidirectional asset sync (non-blocking)
+      try {
+        const txMonth = fecha.slice(0, 7)
+        if (editingTransaction?.id) {
+          const oldAssetId = editingTransaction.ahorroAssetId ?? null
+          const newAssetId = data.ahorroAssetId ?? null
+          if (oldAssetId && oldAssetId !== newAssetId) {
+            // Old asset: reverse old monto
+            const oldAsset = assets.find((a) => a.id === oldAssetId)
+            if (oldAsset && editingTransaction.moneda === oldAsset.moneda) {
+              const oldTxMonth = editingTransaction.fecha.toDate().toISOString().slice(0, 7)
+              await adjustAssetSaldo(oldAssetId, -editingTransaction.monto, oldTxMonth)
+            }
+          }
+          if (newAssetId) {
+            const newAsset = assets.find((a) => a.id === newAssetId)
+            if (newAsset && data.moneda === newAsset.moneda) {
+              if (oldAssetId === newAssetId) {
+                // Same asset: apply delta
+                const delta = parsedMonto - editingTransaction.monto
+                if (delta !== 0) await adjustAssetSaldo(newAssetId, delta, txMonth)
+              } else {
+                // New asset: apply full new monto
+                await adjustAssetSaldo(newAssetId, parsedMonto, txMonth)
+              }
+            }
+          }
+        } else {
+          // Creating new transaction
+          if (data.ahorroAssetId) {
+            const asset = assets.find((a) => a.id === data.ahorroAssetId)
+            if (asset && data.moneda === asset.moneda) {
+              await adjustAssetSaldo(data.ahorroAssetId, parsedMonto, txMonth)
+            }
+          }
+        }
+      } catch (syncErr) {
+        console.error('[handleSave] asset sync error:', syncErr)
+      }
+
       closeTransactionModal()
     } catch (err) {
       console.error('[handleSave] error:', err)
@@ -166,6 +215,18 @@ export default function TransactionModal() {
     if (!deleteConfirm) { setDeleteConfirm(true); return }
     setSaving(true)
     try {
+      // Reverse asset saldo before deleting (non-blocking)
+      if (editingTransaction.ahorroAssetId) {
+        try {
+          const asset = assets.find((a) => a.id === editingTransaction.ahorroAssetId)
+          if (asset && editingTransaction.moneda === asset.moneda) {
+            const txMonth = editingTransaction.fecha.toDate().toISOString().slice(0, 7)
+            await adjustAssetSaldo(editingTransaction.ahorroAssetId, -editingTransaction.monto, txMonth)
+          }
+        } catch (syncErr) {
+          console.error('[handleDelete] asset sync error:', syncErr)
+        }
+      }
       await deleteTransaction(editingTransaction.id)
       closeTransactionModal()
     } finally {

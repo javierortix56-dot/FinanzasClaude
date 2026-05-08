@@ -13,6 +13,7 @@ export const DEFAULT_SETTINGS: Settings = {
   tiposActivo:  ['Banco', 'Efectivo', 'Cripto', 'Inversiones', 'Ahorro'],
   tiposPasivo:  ['Tarjeta de crédito', 'Préstamo', 'Deuda'],
   mesesCerrados: [],
+  ahorroLinks: [],
 }
 
 // ── Migración de formato viejo (Category[]) → nuevo (CategoryGroup[]) ────────
@@ -53,13 +54,14 @@ function rowToSettings(row: Record<string, any>): Settings {
     tiposActivo:  Array.isArray(accountCats.tiposActivo) ? accountCats.tiposActivo : DEFAULT_SETTINGS.tiposActivo,
     tiposPasivo:  Array.isArray(accountCats.tiposPasivo) ? accountCats.tiposPasivo : DEFAULT_SETTINGS.tiposPasivo,
     mesesCerrados: Array.isArray(row.closed_months) ? row.closed_months : [],
+    ahorroLinks: Array.isArray(appSettings.ahorroLinks) ? appSettings.ahorroLinks : [],
   }
 }
 
 function settingsToRow(settings: Settings) {
   return {
     user_id:         SHARED_UUID,
-    app_settings:    { tipoCambio: settings.tipoCambio },
+    app_settings:    { tipoCambio: settings.tipoCambio, ahorroLinks: settings.ahorroLinks ?? [] },
     monthly_rates:   settings.historialTipoCambio,
     transaction_cats: settings.categoriasGasto,
     categories:      settings.categoriasIngreso,

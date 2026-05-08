@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useTransactionStore } from '@/store/useTransactionStore'
+import { useAssetStore } from '@/store/useAssetStore'
 import { updateSettings } from '@/lib/settings'
 import {
   deleteMonthTransactions,
@@ -17,11 +18,11 @@ import {
 import { exportBackup, downloadBackup, importBackup, parseBackupFile } from '@/lib/backup'
 import { monthLabel, SHARED_USER_ID } from '@/lib/constants'
 import dynamic from 'next/dynamic'
-import { Category, CategoryGroup } from '@/types'
+import { Category, CategoryGroup, AhorroLink } from '@/types'
 
 const CategoryModal = dynamic(() => import('@/components/ajustes/CategoryModal'), { ssr: false })
 
-type Section = 'cambio' | 'categorias' | 'categorias_ing' | 'tipos' | 'mes' | 'datos' | null
+type Section = 'cambio' | 'categorias' | 'categorias_ing' | 'tipos' | 'ahorro_links' | 'mes' | 'datos' | null
 
 // ── Modal state types ─────────────────────────────────────────────────────────
 type GroupModalState = {
@@ -39,6 +40,7 @@ type SubModalState = {
 export default function AjustesPage() {
   const { settings, setSettings } = useSettingsStore()
   const { currentMonth } = useTransactionStore()
+  const { assets } = useAssetStore()
   const [openSection, setOpenSection] = useState<Section>(null)
 
   // Tipos de cambio
@@ -82,6 +84,10 @@ export default function AjustesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [backupAction, setBackupAction] = useState<string | null>(null)
   const [backupResult, setBackupResult] = useState<string | null>(null)
+
+  // Ahorro links
+  const [newLinkCatId, setNewLinkCatId] = useState('')
+  const [newLinkAssetId, setNewLinkAssetId] = useState('')
 
   if (!settings) {
     return (
@@ -553,6 +559,102 @@ export default function AjustesPage() {
                 )}
               </div>
             </div>
+          </Section>
+
+          {/* ── Vínculos de ahorro ── */}
+          <Section
+            label="Vínculos de ahorro"
+            open={openSection === 'ahorro_links'}
+            onToggle={() => { toggle('ahorro_links'); setNewLinkCatId(''); setNewLinkAssetId('') }}
+          >
+            {(() => {
+              const ahorroLinks: AhorroLink[] = s.ahorroLinks ?? []
+              const activoAssets = assets.filter((a) => a.clase === 'activo')
+
+              // Flatten all gasto categories
+              const flatCats: { id: string; label: string }[] = []
+              for (const group of s.categoriasGasto) {
+                if (group.subcategorias.length === 0) {
+                  flatCats.push({ id: group.id, label: group.nombre })
+                } else {
+                  flatCats.push({ id: group.id, label: group.nombre })
+                  for (const sub of group.subcategorias) {
+                    flatCats.push({ id: sub.id, label: `${group.nombre} / ${sub.nombre}` })
+                  }
+                }
+              }
+
+              async function addLink() {
+                if (!newLinkCatId || !newLinkAssetId) return
+                const already = ahorroLinks.some((l) => l.categoriaId === newLinkCatId)
+                if (already) return
+                const newList: AhorroLink[] = [...ahorroLinks, { categoriaId: newLinkCatId, assetId: newLinkAssetId }]
+                await updateSettings(SHARED_USER_ID, { ahorroLinks: newList })
+                setSettings({ ...s, ahorroLinks: newList })
+                setNewLinkCatId('')
+                setNewLinkAssetId('')
+              }
+
+              async function removeLink(catId: string) {
+                const newList = ahorroLinks.filter((l) => l.categoriaId !== catId)
+                await updateSettings(SHARED_USER_ID, { ahorroLinks: newList })
+                setSettings({ ...s, ahorroLinks: newList })
+              }
+
+              return (
+                <div className="space-y-3 pt-2">
+                  {ahorroLinks.length === 0 ? (
+                    <p className="text-xs text-gray-400 italic">Sin vínculos configurados</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {ahorroLinks.map((link) => {
+                        const cat = flatCats.find((c) => c.id === link.categoriaId)
+                        const asset = assets.find((a) => a.id === link.assetId)
+                        return (
+                          <div key={link.categoriaId} className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-xl border border-gray-100">
+                            <span className="flex-1 text-xs text-gray-700 truncate">
+                              {cat?.label ?? link.categoriaId} <span className="text-gray-400">→</span> {asset?.nombre ?? link.assetId}
+                            </span>
+                            <button onClick={() => removeLink(link.categoriaId)} className="p-1 rounded hover:bg-red-50 text-red-400 flex-shrink-0">
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                  <div className="flex gap-2 flex-wrap">
+                    <select
+                      value={newLinkCatId}
+                      onChange={(e) => setNewLinkCatId(e.target.value)}
+                      className="flex-1 min-w-0 h-9 rounded-xl border border-gray-200 bg-gray-50 px-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#534AB7]/30"
+                    >
+                      <option value="">Categoría...</option>
+                      {flatCats.map((c) => (
+                        <option key={c.id} value={c.id}>{c.label}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={newLinkAssetId}
+                      onChange={(e) => setNewLinkAssetId(e.target.value)}
+                      className="flex-1 min-w-0 h-9 rounded-xl border border-gray-200 bg-gray-50 px-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#534AB7]/30"
+                    >
+                      <option value="">Activo...</option>
+                      {activoAssets.map((a) => (
+                        <option key={a.id} value={a.id}>{a.nombre}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={addLink}
+                      disabled={!newLinkCatId || !newLinkAssetId}
+                      className="h-9 px-3 rounded-xl bg-[#534AB7] text-white text-xs font-semibold disabled:opacity-40 flex items-center gap-1"
+                    >
+                      <Plus size={13} /> Agregar
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
           </Section>
 
           {/* ── Acciones del mes ── */}
