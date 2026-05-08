@@ -42,7 +42,7 @@ export default function AssetCard({ asset, settings, onClick, onUpdateSnapshot }
   }
 
   const icon = TIPO_ICONS[asset.tipo.toLowerCase()] ?? <Landmark size={18} />
-  const iconBg = isActivo ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'
+  const iconBg = isActivo ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-400'
 
   // Estado del snapshot del mes actual
   const currentMonth = getCurrentMonth()
@@ -68,7 +68,7 @@ export default function AssetCard({ asset, settings, onClick, onUpdateSnapshot }
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-0.5">
           <p className="text-sm font-semibold text-gray-900 truncate pr-2">{asset.nombre}</p>
-          <p className={`text-sm font-bold flex-shrink-0 ${isActivo ? 'text-gray-900' : 'text-red-500'}`}>
+          <p className={`text-sm font-bold flex-shrink-0 ${isActivo ? 'text-gray-900' : 'text-red-400'}`}>
             {isActivo ? '' : '-'}{formatAmount(asset.saldo, asset.moneda)}
           </p>
         </div>

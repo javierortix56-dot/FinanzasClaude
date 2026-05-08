@@ -25,7 +25,7 @@ function TxRow({ tx, hideAmounts, settings, monedaBase, onEdit }: TxRowProps) {
   const cat = getCatFromSettings(tx.categoria, settings)
   const isIngreso = tx.tipo === 'ingreso'
   const dateStr = tx.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
-  const dotColor = cat?.color ?? (isIngreso ? '#22c55e' : '#ef4444')
+  const dotColor = cat?.color ?? (isIngreso ? '#22c55e' : '#f87171')
   const montoBase = toBase(tx.monto, tx.moneda, monedaBase, settings ?? DEFAULT_SETTINGS)
   const linkedIngreso = tx.tipo === 'egreso' && tx.asignadoA
     ? transactions.find((t) => t.id === tx.asignadoA)
@@ -58,7 +58,7 @@ function TxRow({ tx, hideAmounts, settings, monedaBase, onEdit }: TxRowProps) {
           <div className="flex flex-col items-end min-w-0">
             <span
               className={`text-[11px] font-semibold tabular-nums truncate ${
-                isIngreso ? 'text-green-600' : 'text-red-500'
+                isIngreso ? 'text-green-600' : 'text-red-400'
               } ${hideAmounts ? 'blur-sm' : ''} ${tx.ejecutado ? 'line-through' : ''}`}
             >
               {formatAmount(montoBase, monedaBase)}
@@ -150,7 +150,7 @@ export default function TAccountView({ search = '' }: Props) {
   )
 
   const pctGastado = totalIngresos > 0 ? Math.min((totalEgresos / totalIngresos) * 100, 100) : 0
-  const pctColor = pctGastado >= 90 ? 'bg-red-500' : pctGastado >= 70 ? 'bg-amber-400' : 'bg-green-500'
+  const pctColor = pctGastado >= 90 ? 'bg-red-400' : pctGastado >= 70 ? 'bg-amber-400' : 'bg-green-500'
 
   if (isLoading) {
     return (
@@ -185,10 +185,10 @@ export default function TAccountView({ search = '' }: Props) {
       {/* ── Columna Egresos ── */}
       <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
         <div className="px-3 py-2.5 bg-red-50 border-b border-red-100 flex-shrink-0">
-          <p className="text-[10px] font-bold text-red-600 uppercase tracking-wider">
+          <p className="text-[10px] font-bold text-red-400 uppercase tracking-wider">
             Egresos <span className="font-normal opacity-60">({egresos.length})</span>
           </p>
-          <p className={`text-sm font-bold text-red-600 tabular-nums mt-0.5 ${hideAmounts ? 'blur-sm' : ''}`}>
+          <p className={`text-sm font-bold text-red-400 tabular-nums mt-0.5 ${hideAmounts ? 'blur-sm' : ''}`}>
             {formatAmount(totalEgresos, base)}
           </p>
           {/* Barra de progreso: % del ingreso gastado */}

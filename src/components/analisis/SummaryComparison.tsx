@@ -33,7 +33,7 @@ function Metric({ label, value, prev, curr, currency = '', higherIsBetter = true
   const improved = higherIsBetter ? curr >= prev : curr <= prev
   const arrow = diff === 0 ? null : improved
     ? <ArrowUp  size={10} className="text-green-500" />
-    : <ArrowDown size={10} className="text-red-500"  />
+    : <ArrowDown size={10} className="text-red-400"  />
 
   return (
     <div className="bg-gray-50 rounded-xl px-3 py-2.5">
@@ -45,7 +45,7 @@ function Metric({ label, value, prev, curr, currency = '', higherIsBetter = true
         {diff !== 0 && (
           <>
             {arrow}
-            <span className={`text-[9px] font-semibold ${improved ? 'text-green-500' : 'text-red-500'}`}>
+            <span className={`text-[9px] font-semibold ${improved ? 'text-green-500' : 'text-red-400'}`}>
               {Math.abs(diff).toFixed(0)}%
             </span>
           </>

@@ -107,7 +107,7 @@ export default function SnapshotModal({ open, onClose, asset }: Props) {
   if (!asset) return null
 
   const revalIcon = reval > 0 ? <TrendingUp size={12} /> : reval < 0 ? <TrendingDown size={12} /> : <Minus size={12} />
-  const revalColor = reval > 0 ? 'text-green-600' : reval < 0 ? 'text-red-500' : 'text-gray-400'
+  const revalColor = reval > 0 ? 'text-green-600' : reval < 0 ? 'text-red-400' : 'text-gray-400'
 
   return (
     <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>

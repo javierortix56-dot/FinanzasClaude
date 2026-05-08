@@ -453,7 +453,7 @@ export default function AjustesPage() {
                 {rateSaved ? <><Check size={14} /> Guardado</> : savingRate ? 'Guardando...' : 'Actualizar tipo de cambio'}
               </button>
               {rateError && (
-                <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-xs text-red-600 font-medium">
+                <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-xs text-red-400 font-medium">
                   {rateError}
                 </div>
               )}
@@ -672,7 +672,7 @@ export default function AjustesPage() {
             <div className="space-y-2 pt-2">
               {isClosed && (
                 <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
-                  <Lock size={13} className="text-amber-500 flex-shrink-0" />
+                  <Lock size={13} className="text-amber-400 flex-shrink-0" />
                   <p className="text-xs text-amber-700 font-medium">Mes cerrado — tipo de cambio guardado</p>
                 </div>
               )}
@@ -704,7 +704,7 @@ export default function AjustesPage() {
                 </div>
               )}
               {mesError && (
-                <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-xs text-red-600 font-medium">
+                <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-xs text-red-400 font-medium">
                   ✗ {mesError}
                 </div>
               )}
@@ -797,7 +797,7 @@ function ActionButton({ icon, label, sublabel, onClick, loading, color, danger }
     purple: 'text-[#534AB7] bg-[#534AB7]/5 border-[#534AB7]/20',
     blue: 'text-blue-600 bg-blue-50 border-blue-200',
     green: 'text-green-600 bg-green-50 border-green-200',
-    red: 'text-red-500 bg-red-50 border-red-200',
+    red: 'text-red-400 bg-red-50 border-red-200',
   }
   return (
     <button onClick={onClick} disabled={loading}

@@ -130,8 +130,8 @@ export default function TransactionModal() {
   const montoInvalid = !!monto.trim() && !montoValido
   const canSave      = montoValido
 
-  const accentColor  = tipo === 'egreso' ? '#ef4444' : '#22c55e'
-  const accentBg     = tipo === 'egreso' ? 'bg-red-500' : 'bg-green-500'
+  const accentColor  = tipo === 'egreso' ? '#f87171' : '#22c55e'
+  const accentBg     = tipo === 'egreso' ? 'bg-red-400' : 'bg-green-500'
 
   async function handleSave() {
     if (!montoValido) return
@@ -287,7 +287,7 @@ export default function TransactionModal() {
                       onClick={() => { setTipo(t); setSelectedGroup(''); setSelectedSub(''); setAsignadoA(null) }}
                       className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${
                         tipo === t
-                          ? t === 'egreso' ? 'bg-red-500 text-white shadow' : 'bg-green-500 text-white shadow'
+                          ? t === 'egreso' ? 'bg-red-400 text-white shadow' : 'bg-green-500 text-white shadow'
                           : 'text-gray-400'
                       }`}
                     >
@@ -331,7 +331,7 @@ export default function TransactionModal() {
                   ))}
                 </div>
                 {montoInvalid && (
-                  <p className="text-[10px] text-red-500 mt-1.5">Ingresá un monto mayor a 0</p>
+                  <p className="text-[10px] text-red-400 mt-1.5">Ingresá un monto mayor a 0</p>
                 )}
               </div>
             </div>
@@ -480,7 +480,7 @@ export default function TransactionModal() {
                     })}
                   </select>
                   {asignadoA && ingresoOptions.find((o) => o.ing.id === asignadoA)?.wouldExceed && (
-                    <p className="text-[10px] text-red-500 mt-1.5">Excede la capacidad del ingreso seleccionado</p>
+                    <p className="text-[10px] text-red-400 mt-1.5">Excede la capacidad del ingreso seleccionado</p>
                   )}
                 </div>
               </>
@@ -571,7 +571,7 @@ export default function TransactionModal() {
                       type="button"
                       onClick={handleCloneMove}
                       disabled={!cloneMonth || saving}
-                      className={`px-4 h-10 rounded-xl text-xs font-bold text-white disabled:opacity-40 ${cloneAction === 'move' ? 'bg-amber-500' : 'bg-[#534AB7]'}`}
+                      className={`px-4 h-10 rounded-xl text-xs font-bold text-white disabled:opacity-40 ${cloneAction === 'move' ? 'bg-amber-400' : 'bg-[#534AB7]'}`}
                     >
                       {saving ? '…' : cloneAction === 'move' ? 'Mover' : 'Clonar'}
                     </button>
@@ -582,7 +582,7 @@ export default function TransactionModal() {
 
             {/* ── Error ── */}
             {saveError && (
-              <div className="mx-5 mb-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-xs text-red-600 font-medium break-all">
+              <div className="mx-5 mb-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-xs text-red-400 font-medium break-all">
                 Error: {saveError}
               </div>
             )}
@@ -595,7 +595,7 @@ export default function TransactionModal() {
                   disabled={saving}
                   className={`w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-2xl border-2 transition-all ${
                     deleteConfirm
-                      ? 'bg-red-500 border-red-500 text-white'
+                      ? 'bg-red-400 border-red-400 text-white'
                       : 'border-red-100 text-red-400 hover:bg-red-50'
                   }`}
                   title={deleteConfirm ? 'Confirmar eliminación' : 'Eliminar'}
@@ -620,7 +620,7 @@ export default function TransactionModal() {
             </div>
 
             {deleteConfirm && (
-              <p className="text-[11px] text-red-500 text-center pb-3 -mt-1">
+              <p className="text-[11px] text-red-400 text-center pb-3 -mt-1">
                 Tocá el ícono rojo de nuevo para confirmar
               </p>
             )}

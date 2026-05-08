@@ -95,7 +95,7 @@ export default function ReassignModal({
                           const disponible = toBase(inc.monto, inc.moneda, monedaBase, settings) - totalAsignado
                           const isOver = disponible < 0
                           return (
-                            <p className={`text-sm font-semibold ${isOver ? 'text-red-500' : 'text-green-600'}`}>
+                            <p className={`text-sm font-semibold ${isOver ? 'text-red-400' : 'text-green-600'}`}>
                               {isOver ? 'Excedido' : 'Disponible'}: {formatAmount(Math.abs(disponible), monedaBase)}
                             </p>
                           )
