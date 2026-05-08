@@ -37,6 +37,7 @@ export default function TransactionModal() {
   const [ejecutado, setEjecutado] = useState(false)
   const [asignadoA, setAsignadoA] = useState<string | null>(null)
   const [recurrente, setRecurrente] = useState(false)
+  const [ahorroAssetId, setAhorroAssetId] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
@@ -62,6 +63,7 @@ export default function TransactionModal() {
       setEjecutado(editingTransaction.ejecutado)
       setAsignadoA(editingTransaction.asignadoA ?? null)
       setRecurrente(editingTransaction.recurrente ?? false)
+      setAhorroAssetId(editingTransaction.ahorroAssetId ?? '')
       const catId = editingTransaction.categoria
       const allGroups = editingTransaction.tipo === 'egreso'
         ? (settings?.categoriasGasto ?? DEFAULT_GASTO_CATEGORY_GROUPS)
@@ -73,9 +75,18 @@ export default function TransactionModal() {
       setTipo('egreso'); setMonto(''); setMoneda('ARS')
       setSelectedGroup(''); setSelectedSub(''); setDescripcion('')
       setFecha(new Date().toISOString().split('T')[0])
-      setCreadoPor(SHARED_USERS[0].id); setEjecutado(false); setAsignadoA(null); setRecurrente(false)
+      setCreadoPor(SHARED_USERS[0].id); setEjecutado(false); setAsignadoA(null); setRecurrente(false); setAhorroAssetId('')
     }
   }, [isTransactionModalOpen, editingTransaction, settings])
+
+  // Auto-fill cuenta de ahorro from ahorroLinks config when category changes (new transactions only)
+  useEffect(() => {
+    if (editingTransaction || !isTransactionModalOpen) return
+    const cat = selectedSub || selectedGroup
+    const link = (s.ahorroLinks ?? []).find((l) => l.categoriaId === cat)
+    if (link) setAhorroAssetId(link.assetId)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSub, selectedGroup])
 
   const categoryGroups: CategoryGroup[] = tipo === 'egreso'
     ? (s.categoriasGasto.length > 0 ? s.categoriasGasto : DEFAULT_GASTO_CATEGORY_GROUPS)
@@ -137,9 +148,8 @@ export default function TransactionModal() {
         recurrente,
       }
 
-      // Resolve ahorroAssetId from link config
-      const link = (s.ahorroLinks ?? []).find((l) => l.categoriaId === categoria)
-      data.ahorroAssetId = link ? link.assetId : null
+      // Use the explicitly selected cuenta de ahorro
+      data.ahorroAssetId = ahorroAssetId || null
 
       if (editingTransaction?.id) {
         await updateTransaction(editingTransaction.id, data)
@@ -149,41 +159,25 @@ export default function TransactionModal() {
         showToast('Movimiento guardado')
       }
 
-      // Bidirectional asset sync (non-blocking)
+      // Sync asset saldo (non-blocking, fetches asset from DB directly)
       try {
         const txMonth = fecha.slice(0, 7)
+        const oldAssetId = editingTransaction?.ahorroAssetId ?? ''
+        const newAssetId = ahorroAssetId
         if (editingTransaction?.id) {
-          const oldAssetId = editingTransaction.ahorroAssetId ?? null
-          const newAssetId = data.ahorroAssetId ?? null
           if (oldAssetId && oldAssetId !== newAssetId) {
-            // Old asset: reverse old monto
-            const oldAsset = assets.find((a) => a.id === oldAssetId)
-            if (oldAsset && editingTransaction.moneda === oldAsset.moneda) {
-              const oldTxMonth = editingTransaction.fecha.toDate().toISOString().slice(0, 7)
-              await adjustAssetSaldo(oldAssetId, -editingTransaction.monto, oldTxMonth)
-            }
+            // Asset changed — reverse the old one
+            const oldMonth = editingTransaction.fecha.toDate().toISOString().slice(0, 7)
+            await adjustAssetSaldo(oldAssetId, -editingTransaction.monto, oldMonth)
           }
           if (newAssetId) {
-            const newAsset = assets.find((a) => a.id === newAssetId)
-            if (newAsset && data.moneda === newAsset.moneda) {
-              if (oldAssetId === newAssetId) {
-                // Same asset: apply delta
-                const delta = parsedMonto - editingTransaction.monto
-                if (delta !== 0) await adjustAssetSaldo(newAssetId, delta, txMonth)
-              } else {
-                // New asset: apply full new monto
-                await adjustAssetSaldo(newAssetId, parsedMonto, txMonth)
-              }
-            }
+            const delta = oldAssetId === newAssetId
+              ? parsedMonto - editingTransaction.monto   // same asset: only the diff
+              : parsedMonto                              // new asset: full amount
+            if (delta !== 0) await adjustAssetSaldo(newAssetId, delta, txMonth)
           }
-        } else {
-          // Creating new transaction
-          if (data.ahorroAssetId) {
-            const asset = assets.find((a) => a.id === data.ahorroAssetId)
-            if (asset && data.moneda === asset.moneda) {
-              await adjustAssetSaldo(data.ahorroAssetId, parsedMonto, txMonth)
-            }
-          }
+        } else if (newAssetId) {
+          await adjustAssetSaldo(newAssetId, parsedMonto, txMonth)
         }
       } catch (syncErr) {
         console.error('[handleSave] asset sync error:', syncErr)
@@ -215,14 +209,10 @@ export default function TransactionModal() {
     if (!deleteConfirm) { setDeleteConfirm(true); return }
     setSaving(true)
     try {
-      // Reverse asset saldo before deleting (non-blocking)
       if (editingTransaction.ahorroAssetId) {
         try {
-          const asset = assets.find((a) => a.id === editingTransaction.ahorroAssetId)
-          if (asset && editingTransaction.moneda === asset.moneda) {
-            const txMonth = editingTransaction.fecha.toDate().toISOString().slice(0, 7)
-            await adjustAssetSaldo(editingTransaction.ahorroAssetId, -editingTransaction.monto, txMonth)
-          }
+          const txMonth = editingTransaction.fecha.toDate().toISOString().slice(0, 7)
+          await adjustAssetSaldo(editingTransaction.ahorroAssetId, -editingTransaction.monto, txMonth)
         } catch (syncErr) {
           console.error('[handleDelete] asset sync error:', syncErr)
         }
@@ -435,6 +425,32 @@ export default function TransactionModal() {
                 </div>
               )}
             </div>
+
+            {/* ── Destino de ahorro (solo egresos) ── */}
+            {tipo === 'egreso' && assets.some((a) => a.clase === 'activo') && (
+              <>
+                <div className="h-px bg-gray-100 mx-5" />
+                <div className="px-5 py-4">
+                  <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+                    Destino de ahorro
+                    <span className="ml-1 font-normal normal-case tracking-normal text-gray-300">— opcional</span>
+                  </label>
+                  <select
+                    value={ahorroAssetId}
+                    onChange={(e) => setAhorroAssetId(e.target.value)}
+                    className="mt-2 w-full h-11 rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#534AB7]/30 focus:bg-white"
+                  >
+                    <option value="">Sin destino de ahorro</option>
+                    {assets.filter((a) => a.clase === 'activo').map((a) => (
+                      <option key={a.id} value={a.id}>{a.nombre} ({a.moneda})</option>
+                    ))}
+                  </select>
+                  {ahorroAssetId && (
+                    <p className="text-[10px] text-[#534AB7] mt-1.5">El saldo de esta cuenta se actualizará al guardar</p>
+                  )}
+                </div>
+              </>
+            )}
 
             {/* ── Asignar a Ingreso (solo egresos) ── */}
             {tipo === 'egreso' && (
