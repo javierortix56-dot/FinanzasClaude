@@ -139,7 +139,7 @@ export default function CategoryModal({ open, category, onClose, onSave, onDelet
                     onDelete(category.id)
                   }}
                   className={`w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-2xl border-2 transition-all ${
-                    deleteConfirm ? 'bg-red-500 border-red-500 text-white' : 'border-red-100 text-red-400 hover:bg-red-50'
+                    deleteConfirm ? 'bg-red-400 border-red-400 text-white' : 'border-red-100 text-red-400 hover:bg-red-50'
                   }`}
                 >
                   <Trash2 size={17} />
@@ -154,7 +154,7 @@ export default function CategoryModal({ open, category, onClose, onSave, onDelet
               </button>
             </div>
             {deleteConfirm && (
-              <p className="text-[11px] text-red-500 text-center -mt-2">
+              <p className="text-[11px] text-red-400 text-center -mt-2">
                 Tocá el ícono rojo de nuevo para confirmar
               </p>
             )}

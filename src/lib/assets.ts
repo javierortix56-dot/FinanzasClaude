@@ -143,11 +143,3 @@ export async function adjustAssetSaldo(assetId: string, delta: number, txMonth: 
   })
 }
 
-export async function deleteSnapshot(asset: Asset, month: string) {
-  const next = (asset.snapshots ?? []).filter((s) => s.month !== month)
-  const latest = next[next.length - 1]
-  const partial: Record<string, unknown> = { snapshots: next }
-  if (latest) partial.init_bal = latest.saldo
-  const { error } = await supabase.from('cuentas').update(partial).eq('id', asset.id!)
-  if (error) throw error
-}

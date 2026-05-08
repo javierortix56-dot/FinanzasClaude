@@ -89,7 +89,7 @@ export default function DashboardPage() {
                 <span className="text-[9px]">▲</span>{formatAmount(totalIngresos, base)}
               </span>
               <span className="text-gray-200 text-xs">|</span>
-              <span className="flex items-center gap-0.5 text-[11px] text-red-500 font-semibold">
+              <span className="flex items-center gap-0.5 text-[11px] text-red-400 font-semibold">
                 <span className="text-[9px]">▼</span>{formatAmount(totalEgresos, base)}
               </span>
               <span className="text-gray-200 text-xs">|</span>

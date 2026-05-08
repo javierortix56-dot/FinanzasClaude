@@ -172,7 +172,7 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
             className={`px-3 py-1.5 text-xs font-semibold rounded-t-lg transition-colors ${
               tipoTab === t
                 ? t === 'egreso'
-                  ? 'text-red-500 border-b-2 border-red-400'
+                  ? 'text-red-400 border-b-2 border-red-400'
                   : 'text-green-600 border-b-2 border-green-500'
                 : 'text-gray-400'
             }`}
@@ -297,13 +297,13 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
                         <div className="flex justify-between text-[9px] text-gray-400 mb-0.5">
                           <span>{budget.moneda} {fmtShort(spentInBudgetMoneda)} / {fmtShort(budget.limite)}</span>
                           <span className={`font-semibold ${
-                            budgetPct >= 100 ? 'text-red-500' : budgetPct >= 80 ? 'text-orange-500' : 'text-green-600'
+                            budgetPct >= 100 ? 'text-red-400' : budgetPct >= 80 ? 'text-orange-400' : 'text-green-600'
                           }`}>{Math.round(budgetPct)}%</span>
                         </div>
                         <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
                           <div
                             className={`h-full rounded-full transition-all ${
-                              budgetPct >= 100 ? 'bg-red-500' : budgetPct >= 80 ? 'bg-orange-400' : 'bg-green-500'
+                              budgetPct >= 100 ? 'bg-red-400' : budgetPct >= 80 ? 'bg-orange-300' : 'bg-green-500'
                             }`}
                             style={{ width: `${budgetPct}%` }}
                           />

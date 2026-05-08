@@ -268,7 +268,7 @@ export default function AssetModal({ open, onClose, editing }: Props) {
                   onClick={handleDelete}
                   disabled={saving}
                   className={`w-11 h-11 flex-shrink-0 flex items-center justify-center rounded-xl border-2 transition-colors ${
-                    deleteConfirm ? 'bg-red-500 border-red-500 text-white' : 'border-red-100 text-red-500 hover:bg-red-50'
+                    deleteConfirm ? 'bg-red-400 border-red-400 text-white' : 'border-red-100 text-red-400 hover:bg-red-50'
                   }`}
                   title={deleteConfirm ? 'Confirmar eliminación' : 'Eliminar cuenta'}
                 >
@@ -280,7 +280,7 @@ export default function AssetModal({ open, onClose, editing }: Props) {
               </Button>
             </div>
             {deleteConfirm && (
-              <p className="text-xs text-red-500 text-center -mt-2">
+              <p className="text-xs text-red-400 text-center -mt-2">
                 Tocá el ícono rojo de nuevo para confirmar
               </p>
             )}

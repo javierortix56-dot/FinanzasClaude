@@ -31,7 +31,7 @@ function fmt(n: number): string {
 
 const COLOR_APORTES = '#534AB7' // violeta
 const COLOR_REVAL_POS = '#22c55e' // verde
-const COLOR_REVAL_NEG = '#ef4444' // rojo
+const COLOR_REVAL_NEG = '#f87171' // rojo
 
 export default function PatrimonioChart({ data, currency }: Props) {
   if (data.length === 0) return null
@@ -84,7 +84,7 @@ export default function PatrimonioChart({ data, currency }: Props) {
                   )}
                 </div>
               </div>
-              <p className={`text-[9px] font-semibold tabular-nums ${d.neto >= 0 ? 'text-[#534AB7]' : 'text-red-500'}`}>
+              <p className={`text-[9px] font-semibold tabular-nums ${d.neto >= 0 ? 'text-[#534AB7]' : 'text-red-400'}`}>
                 {fmt(d.neto)}
               </p>
               <p className={`text-[9px] ${d.current ? 'text-gray-700 font-semibold' : 'text-gray-400'}`}>

@@ -152,11 +152,11 @@ export default function PatrimonioPage() {
           </div>
           <div className="bg-red-50 rounded-lg px-2 py-1.5 text-center">
             <p className="text-gray-400 text-[9px] mb-0.5">Pasivos</p>
-            <p className="text-red-500 text-xs font-bold">{formatAmount(totalPasivosUSD, 'USD')}</p>
+            <p className="text-red-400 text-xs font-bold">{formatAmount(totalPasivosUSD, 'USD')}</p>
           </div>
           <div className="bg-[#534AB7]/10 rounded-lg px-2 py-1.5 text-center border border-[#534AB7]/20">
             <p className="text-gray-400 text-[9px] mb-0.5">Neto</p>
-            <p className={`text-xs font-bold ${netoUSD >= 0 ? 'text-[#534AB7]' : 'text-red-500'}`}>
+            <p className={`text-xs font-bold ${netoUSD >= 0 ? 'text-[#534AB7]' : 'text-red-400'}`}>
               {formatAmount(netoUSD, 'USD')}
             </p>
           </div>

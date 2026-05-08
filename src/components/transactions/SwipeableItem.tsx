@@ -40,7 +40,7 @@ export default function SwipeableItem({ tx }: Props) {
   const startX = useRef(0)
   const dragging = useRef(false)
 
-  const dotColor = tx.tipo === 'ingreso' ? '#22c55e' : '#ef4444'
+  const dotColor = tx.tipo === 'ingreso' ? '#22c55e' : '#f87171'
   const dateStr = tx.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
 
   function onTouchStart(e: React.TouchEvent) {
@@ -119,8 +119,8 @@ export default function SwipeableItem({ tx }: Props) {
           onClick={handleDelete}
           className="flex flex-col items-center justify-center gap-1 px-4 hover:bg-red-50 transition-colors"
         >
-          <Trash2 size={17} className="text-red-500" />
-          <span className="text-[10px] font-medium text-red-500">Eliminar</span>
+          <Trash2 size={17} className="text-red-400" />
+          <span className="text-[10px] font-medium text-red-400">Eliminar</span>
         </button>
         {tx.asignadoA && (
           <button
@@ -128,8 +128,8 @@ export default function SwipeableItem({ tx }: Props) {
             onClick={handleDesasignar}
             className="flex flex-col items-center justify-center gap-1 px-4 hover:bg-orange-50 transition-colors"
           >
-            <Unlink size={17} className="text-orange-500" />
-            <span className="text-[10px] font-medium text-orange-500">Desasignar</span>
+            <Unlink size={17} className="text-orange-400" />
+            <span className="text-[10px] font-medium text-orange-400">Desasignar</span>
           </button>
         )}
       </div>
@@ -174,7 +174,7 @@ export default function SwipeableItem({ tx }: Props) {
         <div className="flex-shrink-0 flex items-center gap-1.5">
           <p
             className={`text-xs font-semibold tabular-nums leading-tight text-right transition-all ${
-              tx.tipo === 'ingreso' ? 'text-green-600' : 'text-red-500'
+              tx.tipo === 'ingreso' ? 'text-green-600' : 'text-red-400'
             } ${hideAmounts ? 'blur-sm' : ''} ${tx.ejecutado ? 'line-through' : ''}`}
           >
             {tx.tipo === 'ingreso' ? '+' : '-'}{formatAmount(montoBase, base)}

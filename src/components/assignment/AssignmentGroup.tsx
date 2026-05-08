@@ -46,7 +46,7 @@ export default function AssignmentGroup({
   const usedPercent = incomeBase > 0 ? Math.min((totalGastado / incomeBase) * 100, 100) : 0
   const isOver      = disponible < 0
 
-  const barColor = isOver ? '#ef4444' : usedPercent >= 85 ? '#f59e0b' : '#22c55e'
+  const barColor = isOver ? '#f87171' : usedPercent >= 85 ? '#fbbf24' : '#22c55e'
 
   const incomeDate = income?.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
 
@@ -124,7 +124,7 @@ export default function AssignmentGroup({
                   +{formatAmount(incomeBase, monedaBase)}
                 </span>
               </span>
-              <span className={`text-[10px] font-semibold ${isOver ? 'text-red-500' : 'text-gray-500'}`}>
+              <span className={`text-[10px] font-semibold ${isOver ? 'text-red-400' : 'text-gray-500'}`}>
                 <span className={hideAmounts ? 'blur-sm' : ''}>
                   {isOver ? 'Excedido' : 'Disponible'}: {formatAmount(Math.abs(disponible), monedaBase)}
                 </span>
@@ -196,7 +196,7 @@ export default function AssignmentGroup({
 
                   {/* Amount + status */}
                   <div className="flex-shrink-0 flex items-center gap-1.5">
-                    <p className={`text-xs font-semibold text-red-500 ${hideAmounts ? 'blur-sm' : ''} ${exp.ejecutado ? 'line-through' : ''}`}>
+                    <p className={`text-xs font-semibold text-red-400 ${hideAmounts ? 'blur-sm' : ''} ${exp.ejecutado ? 'line-through' : ''}`}>
                       -{formatAmount(toBase(exp.monto, exp.moneda, monedaBase, settings), monedaBase)}
                     </p>
                     <button

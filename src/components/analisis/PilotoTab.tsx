@@ -33,7 +33,7 @@ function ProjectionCard({ label, projected, previous, currency, higherIsBetter =
   const improved = higherIsBetter ? projected >= previous : projected <= previous
 
   const Icon = diff === 0 ? Minus : improved ? TrendingUp : TrendingDown
-  const color = diff === 0 ? 'text-gray-400' : improved ? 'text-green-500' : 'text-red-500'
+  const color = diff === 0 ? 'text-gray-400' : improved ? 'text-green-500' : 'text-red-400'
 
   return (
     <div className="bg-gray-50 rounded-2xl p-4">

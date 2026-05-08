@@ -201,7 +201,7 @@ export default function AssignmentTab() {
     ? 'linear-gradient(90deg, #22c55e, #10b981)'
     : progressPercent >= 50
       ? 'linear-gradient(90deg, #3b82f6, #6366f1)'
-      : 'linear-gradient(90deg, #f59e0b, #ef4444)'
+      : 'linear-gradient(90deg, #fbbf24, #f87171)'
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-gray-50/60">
@@ -262,7 +262,7 @@ export default function AssignmentTab() {
                 onClick={desassignAll}
                 disabled={unassignLoading}
                 className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold transition-all active:scale-95 flex-shrink-0 whitespace-nowrap ${
-                  unassignConfirm ? 'bg-red-500 text-white' : 'bg-white/15 text-white/90'
+                  unassignConfirm ? 'bg-red-400 text-white' : 'bg-white/15 text-white/90'
                 }`}
               >
                 <Unlink2 size={9} />
@@ -315,7 +315,7 @@ export default function AssignmentTab() {
             onClick={deleteSelected}
             disabled={deleteLoading}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all ${
-              deleteConfirm ? 'bg-red-500 text-white' : 'bg-red-50 text-red-500'
+              deleteConfirm ? 'bg-red-400 text-white' : 'bg-red-50 text-red-400'
             }`}
           >
             <Trash2 size={14} />
