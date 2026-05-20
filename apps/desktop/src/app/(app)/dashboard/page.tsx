@@ -48,9 +48,10 @@ function TLedgerRow({ t, settings, asignadoLabel }: { t: Transaction; settings: 
   const cat = getCatFromSettings(t.categoria, settings)
   const fechaStr = t.fecha.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })
   const done = t.ejecutado
+  const showDesc = t.descripcion && t.descripcion.trim() !== (cat?.nombre ?? '').trim()
   return (
-    <div className="px-3 py-2 hover:bg-surface-2/40 transition-colors">
-      <div className="flex items-start justify-between gap-2">
+    <div className="px-3 py-1.5 hover:bg-surface-2/40 transition-colors">
+      <div className="flex items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             {cat?.color && (
@@ -59,12 +60,12 @@ function TLedgerRow({ t, settings, asignadoLabel }: { t: Transaction; settings: 
             <span className={`text-xs font-medium truncate ${done ? 'line-through text-muted' : 'text-foreground'}`}>
               {cat?.nombre ?? '—'}
             </span>
+            {showDesc && (
+              <span className={`text-[11px] truncate ${done ? 'line-through text-muted-2' : 'text-muted'}`}>
+                · {t.descripcion}
+              </span>
+            )}
           </div>
-          {t.descripcion && (
-            <div className={`text-[11px] truncate mt-0.5 pl-3 ${done ? 'line-through text-muted-2' : 'text-muted'}`}>
-              {t.descripcion}
-            </div>
-          )}
           {asignadoLabel && (
             <div className="mt-1 pl-3">
               <span className="inline-flex items-center gap-1 text-[10px] font-medium text-income bg-income/10 rounded px-1.5 py-0.5 max-w-full">
