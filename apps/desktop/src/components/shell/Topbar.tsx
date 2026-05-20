@@ -11,7 +11,6 @@ import { useState } from 'react'
 
 const titles: Record<string, string> = {
   '/dashboard':    'Dashboard',
-  '/movimientos':  'Movimientos',
   '/asignaciones': 'Asignaciones',
   '/cuentas':      'Cuentas y patrimonio',
   '/analisis':     'Análisis',
