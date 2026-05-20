@@ -12,7 +12,7 @@ import { LineChart } from '@/components/charts/LineChart'
 import { fetchLastNMonths, fetchMonthTransactions } from '@finanzas/core/lib/analytics'
 import { toBase } from '@finanzas/core/lib/currency'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
-import { getCatFromSettings, monthLabel, shiftMonth, formatAmount } from '@finanzas/core/lib/constants'
+import { getCatFromSettings, monthLabel, shiftMonth, formatAmount, CHART_PALETTE } from '@finanzas/core/lib/constants'
 import { Currency, Transaction } from '@finanzas/core/types'
 
 type TabBig = 'historico' | 'piloto'
@@ -60,6 +60,7 @@ export default function AnalisisPage() {
       return { id, label: c?.nombre ?? id, color: c?.color ?? '#94a3b8', value }
     })
     .sort((a, b) => b.value - a.value)
+    .map((s, i) => ({ ...s, color: CHART_PALETTE[i % CHART_PALETTE.length] }))
 
   const months = Object.keys(historico).sort()
   const lineLabels = months.map((m) => monthLabel(m).slice(0, 3))

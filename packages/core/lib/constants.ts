@@ -102,6 +102,33 @@ export function getParentGroup(subId: string, groups: CategoryGroup[]): Category
   return groups.find((g) => g.subcategorias.some((s) => s.id === subId))
 }
 
+/** Retorna el grupo de primer nivel al que pertenece un catId (sea grupo o subcategoría). */
+export function getTopGroup(catId: string, settings: Settings | null): { id: string; nombre: string; color: string } | null {
+  const allGroups = [
+    ...(settings?.categoriasGasto   ?? DEFAULT_GASTO_CATEGORY_GROUPS),
+    ...(settings?.categoriasIngreso ?? DEFAULT_INGRESO_CATEGORY_GROUPS),
+  ]
+  for (const g of allGroups) {
+    if (g.id === catId) return { id: g.id, nombre: g.nombre, color: g.color }
+    if (g.subcategorias.some((s) => s.id === catId)) return { id: g.id, nombre: g.nombre, color: g.color }
+  }
+  return null
+}
+
+/** Paleta cualitativa de colores diferenciados para gráficos. */
+export const CHART_PALETTE = [
+  '#6366F1', // indigo
+  '#06B6D4', // cyan
+  '#F59E0B', // amber
+  '#EC4899', // pink
+  '#10B981', // emerald
+  '#F97316', // orange
+  '#8B5CF6', // violet
+  '#EF4444', // red
+  '#14B8A6', // teal
+  '#A3A3A3', // slate
+]
+
 export function formatAmount(monto: number, moneda: string): string {
   const num = new Intl.NumberFormat('es-AR', {
     minimumFractionDigits: 0,
