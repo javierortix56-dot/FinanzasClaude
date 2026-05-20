@@ -1,16 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, KeyboardEvent } from 'react'
 import { Modal } from '@/components/ui/modal'
 import { Input, Select, Textarea, Label } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
+import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { addTransaction, updateTransaction, deleteTransaction } from '@finanzas/core/lib/transactions'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { Currency, Transaction, TransactionType, CategoryGroup } from '@finanzas/core/types'
 import { SHARED_USERS } from '@finanzas/core/lib/constants'
-import { Trash2 } from 'lucide-react'
+import { Trash2, X } from 'lucide-react'
 
 interface Props {
   open: boolean
@@ -62,6 +63,7 @@ function Form({
 }) {
   const settings = useSettingsStore((s) => s.settings) ?? DEFAULT_SETTINGS
   const showToast = useUIStore((s) => s.showToast)
+  const { transactions } = useTransactionStore()
 
   const [tipo, setTipo]             = useState<TransactionType>(editing?.tipo ?? initialType)
   const [monto, setMonto]           = useState(editing ? String(editing.monto) : '')
@@ -75,7 +77,28 @@ function Form({
   const [creadoPor, setCreadoPor]   = useState(editing?.creadoPor || SHARED_USERS[0].id)
   const [ejecutado, setEjecutado]   = useState(editing?.ejecutado ?? false)
   const [recurrente, setRecurrente] = useState(editing?.recurrente ?? false)
+  const [tags, setTags]             = useState<string[]>(editing?.tags ?? [])
+  const [tagInput, setTagInput]     = useState('')
+  const [asignadoA, setAsignadoA]   = useState<string | null>(editing?.asignadoA ?? null)
   const [saving, setSaving]         = useState(false)
+
+  const ingresos = transactions.filter((t) => t.tipo === 'ingreso' && t.id && t.id !== editing?.id)
+
+  function addTag() {
+    const t = tagInput.trim().toLowerCase()
+    if (t && !tags.includes(t)) setTags([...tags, t])
+    setTagInput('')
+  }
+
+  function handleTagKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault()
+      addTag()
+    }
+    if (e.key === 'Backspace' && tagInput === '' && tags.length > 0) {
+      setTags(tags.slice(0, -1))
+    }
+  }
 
   const cats = flattenCategories(
     tipo === 'ingreso' ? settings.categoriasIngreso : settings.categoriasGasto,
@@ -94,10 +117,10 @@ function Form({
       categoria,
       descripcion,
       nota,
-      tags: [],
+      tags,
       fecha: { toDate: () => new Date(fecha + 'T12:00:00') },
       ejecutado,
-      asignadoA: editing?.asignadoA ?? null,
+      asignadoA: tipo === 'egreso' ? asignadoA : null,
       creadoPor,
       recurrente,
     }
@@ -203,6 +226,42 @@ function Form({
         <Label>Nota (opcional)</Label>
         <Textarea value={nota} onChange={(e) => setNota(e.target.value)} />
       </div>
+
+      <div>
+        <Label>Etiquetas</Label>
+        <div className="flex flex-wrap gap-1.5 min-h-[40px] w-full rounded-md border border-border bg-surface px-2 py-1.5 focus-within:ring-2 focus-within:ring-ring focus-within:border-ring">
+          {tags.map((tag) => (
+            <span key={tag} className="inline-flex items-center gap-1 text-xs bg-surface-2 border border-border rounded px-2 py-0.5">
+              {tag}
+              <button type="button" onClick={() => setTags(tags.filter((t) => t !== tag))} className="text-muted hover:text-foreground">
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          <input
+            value={tagInput}
+            onChange={(e) => setTagInput(e.target.value)}
+            onKeyDown={handleTagKeyDown}
+            onBlur={addTag}
+            placeholder={tags.length === 0 ? 'Escribí y presioná Enter…' : ''}
+            className="flex-1 min-w-[120px] bg-transparent text-sm text-foreground placeholder:text-muted-2 focus:outline-none"
+          />
+        </div>
+      </div>
+
+      {tipo === 'egreso' && (
+        <div>
+          <Label>Asignado a ingreso (opcional)</Label>
+          <Select value={asignadoA ?? ''} onChange={(e) => setAsignadoA(e.target.value || null)}>
+            <option value="">Sin asignar</option>
+            {ingresos.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.descripcion || '(sin concepto)'} — {t.fecha.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
+              </option>
+            ))}
+          </Select>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <div>
