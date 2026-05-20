@@ -78,7 +78,6 @@ export function Topbar() {
         <div className="absolute top-16 left-0 right-0 lg:hidden border-b border-border bg-surface shadow-lg p-3 space-y-1">
           {[
             ['/dashboard', 'Dashboard'],
-            ['/movimientos', 'Movimientos'],
             ['/asignaciones', 'Asignaciones'],
             ['/cuentas', 'Cuentas'],
             ['/analisis', 'Análisis'],

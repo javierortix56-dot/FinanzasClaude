@@ -2,14 +2,16 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
-import { TrendingUp, TrendingDown, ArrowRight, ArrowUpRight, ArrowDownRight, ChevronRight, ChevronLeft, Link2 } from 'lucide-react'
+import { TrendingUp, TrendingDown, ArrowRight, ArrowUpRight, ArrowDownRight, ChevronRight, ChevronLeft, Link2, Plus, Search, X as XIcon } from 'lucide-react'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import { MoneyText } from '@/components/MoneyText'
 import { Donut } from '@/components/charts/Donut'
+import { TransactionModal } from '@/components/modals/TransactionModal'
 import { toBase } from '@finanzas/core/lib/currency'
 import {
   formatAmount,
@@ -44,13 +46,16 @@ function TrendChip({ delta, invert = false }: { delta: number | null; invert?: b
   )
 }
 
-function TLedgerRow({ t, settings, asignadoLabel }: { t: Transaction; settings: Settings; asignadoLabel?: string }) {
+function TLedgerRow({ t, settings, asignadoLabel, onClick }: { t: Transaction; settings: Settings; asignadoLabel?: string; onClick?: () => void }) {
   const cat = getCatFromSettings(t.categoria, settings)
   const fechaStr = t.fecha.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })
   const done = t.ejecutado
   const showDesc = t.descripcion && t.descripcion.trim() !== (cat?.nombre ?? '').trim()
   return (
-    <div className="px-3 py-1.5 hover:bg-surface-2/40 transition-colors">
+    <div
+      className="px-3 py-1.5 hover:bg-surface-2/60 transition-colors cursor-pointer"
+      onClick={onClick}
+    >
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
@@ -238,6 +243,21 @@ export default function DashboardPage() {
   const base = monedaBase as Currency
 
   const [history, setHistory] = useState<MonthAgg[]>([])
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editingTx, setEditingTx] = useState<Transaction | null>(null)
+  const [initialType, setInitialType] = useState<'ingreso' | 'egreso'>('egreso')
+  const [filter, setFilter] = useState('')
+
+  function openNew(tipo: 'ingreso' | 'egreso') {
+    setEditingTx(null)
+    setInitialType(tipo)
+    setModalOpen(true)
+  }
+  function openEdit(t: Transaction) {
+    setEditingTx(t)
+    setInitialType(t.tipo)
+    setModalOpen(true)
+  }
 
   useEffect(() => {
     let cancel = false
@@ -269,8 +289,19 @@ export default function DashboardPage() {
   const dEgr = prev ? pctDelta(totalEgresos, prev.egresos) : null
   const dBal = prev ? pctDelta(balance, prev.balance) : null
 
-  const ingresosSort = [...ingresos].sort((a, b) => b.fecha.toDate().getTime() - a.fecha.toDate().getTime())
-  const egresosSort = [...egresos].sort((a, b) => b.fecha.toDate().getTime() - a.fecha.toDate().getTime())
+  const filterFn = (t: Transaction) => {
+    if (!filter.trim()) return true
+    const q = filter.toLowerCase()
+    const catNombre = getCatFromSettings(t.categoria, s)?.nombre?.toLowerCase() ?? ''
+    return catNombre.includes(q) || t.descripcion?.toLowerCase().includes(q) || t.nota?.toLowerCase().includes(q)
+  }
+
+  const ingresosSort = [...ingresos]
+    .sort((a, b) => b.fecha.toDate().getTime() - a.fecha.toDate().getTime())
+    .filter(filterFn)
+  const egresosSort = [...egresos]
+    .sort((a, b) => b.fecha.toDate().getTime() - a.fecha.toDate().getTime())
+    .filter(filterFn)
 
   const ingresoLabelById = new Map<string, string>(
     ingresos.map((t) => [t.id ?? '', getCatFromSettings(t.categoria, s)?.nombre ?? t.descripcion ?? 'Ingreso']),
@@ -337,47 +368,75 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
         {/* Cuentas T */}
         <Card className="xl:col-span-2">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-            <div className="text-sm font-semibold text-foreground">Movimientos del mes</div>
-            <Link
-              href="/movimientos"
-              className="text-xs text-primary hover:text-primary-hover font-medium inline-flex items-center gap-1"
+          {/* Toolbar */}
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
+            <div className="relative flex-1">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted pointer-events-none" />
+              <input
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                placeholder="Buscar…"
+                className="w-full h-7 pl-7 pr-7 text-xs bg-surface-2 border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary/50 text-foreground placeholder:text-muted"
+              />
+              {filter && (
+                <button
+                  onClick={() => setFilter('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+                >
+                  <XIcon className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            <button
+              onClick={() => openNew('ingreso')}
+              className="h-7 px-2.5 inline-flex items-center gap-1 text-[11px] font-semibold text-income bg-income/10 hover:bg-income/20 rounded transition-colors"
             >
-              Ver todos <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
+              <Plus className="h-3 w-3" /> Ingreso
+            </button>
+            <button
+              onClick={() => openNew('egreso')}
+              className="h-7 px-2.5 inline-flex items-center gap-1 text-[11px] font-semibold text-expense bg-expense/10 hover:bg-expense/20 rounded transition-colors"
+            >
+              <Plus className="h-3 w-3" /> Egreso
+            </button>
           </div>
           <div className="grid grid-cols-2 divide-x divide-border min-h-0">
             {/* Ingresos */}
             <div className="min-w-0">
-              <div className="px-3 py-2 border-b border-border bg-income/[0.03]">
+              <div className="px-3 py-1.5 border-b border-border bg-income/[0.03]">
                 <div className="text-[11px] font-semibold text-income uppercase tracking-wide">
-                  Ingresos · {ingresos.length}
+                  Ingresos · {ingresosSort.length}{filter && ingresos.length !== ingresosSort.length ? `/${ingresos.length}` : ''}
                 </div>
               </div>
               <div className="overflow-y-auto max-h-72 divide-y divide-border/60">
-                {ingresos.length === 0 ? (
-                  <div className="px-3 py-8 text-center text-xs text-muted">Sin ingresos</div>
+                {ingresosSort.length === 0 ? (
+                  <div className="px-3 py-8 text-center text-xs text-muted">
+                    {filter ? 'Sin resultados' : 'Sin ingresos'}
+                  </div>
                 ) : ingresosSort.map((t) => (
-                  <TLedgerRow key={t.id} t={t} settings={s} />
+                  <TLedgerRow key={t.id} t={t} settings={s} onClick={() => openEdit(t)} />
                 ))}
               </div>
             </div>
             {/* Egresos */}
             <div className="min-w-0">
-              <div className="px-3 py-2 border-b border-border bg-expense/[0.03]">
+              <div className="px-3 py-1.5 border-b border-border bg-expense/[0.03]">
                 <div className="text-[11px] font-semibold text-expense uppercase tracking-wide">
-                  Egresos · {egresos.length}
+                  Egresos · {egresosSort.length}{filter && egresos.length !== egresosSort.length ? `/${egresos.length}` : ''}
                 </div>
               </div>
               <div className="overflow-y-auto max-h-72 divide-y divide-border/60">
-                {egresos.length === 0 ? (
-                  <div className="px-3 py-8 text-center text-xs text-muted">Sin egresos</div>
+                {egresosSort.length === 0 ? (
+                  <div className="px-3 py-8 text-center text-xs text-muted">
+                    {filter ? 'Sin resultados' : 'Sin egresos'}
+                  </div>
                 ) : egresosSort.map((t) => (
                   <TLedgerRow
                     key={t.id}
                     t={t}
                     settings={s}
                     asignadoLabel={t.asignadoA ? ingresoLabelById.get(t.asignadoA) : undefined}
+                    onClick={() => openEdit(t)}
                   />
                 ))}
               </div>
@@ -388,6 +447,13 @@ export default function DashboardPage() {
         {/* Top categorías */}
         <TopCategorias transactions={transactions} settings={s} base={base} />
       </div>
+
+      <TransactionModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        initialType={initialType}
+        editing={editingTx}
+      />
     </div>
   )
 }

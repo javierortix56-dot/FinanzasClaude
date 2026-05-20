@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
-  ArrowRightLeft,
   Wallet,
   PieChart,
   Settings,
@@ -14,7 +13,6 @@ import { cn } from '@finanzas/core/lib/utils'
 
 const items = [
   { href: '/dashboard',     label: 'Dashboard',    icon: LayoutDashboard },
-  { href: '/movimientos',   label: 'Movimientos',  icon: ArrowRightLeft },
   { href: '/asignaciones',  label: 'Asignaciones', icon: Link2 },
   { href: '/cuentas',       label: 'Cuentas',      icon: Wallet },
   { href: '/analisis',      label: 'Análisis',     icon: PieChart },
