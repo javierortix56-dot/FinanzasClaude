@@ -12,9 +12,10 @@ interface Props {
   thickness?: number
   centerLabel?: string
   centerValue?: string
+  onSliceClick?: (index: number) => void
 }
 
-export function Donut({ data, size = 200, thickness = 28, centerLabel, centerValue }: Props) {
+export function Donut({ data, size = 200, thickness = 28, centerLabel, centerValue, onSliceClick }: Props) {
   const total = data.reduce((s, d) => s + d.value, 0)
   const radius = size / 2
   const inner = radius - thickness
@@ -57,7 +58,13 @@ export function Donut({ data, size = 200, thickness = 28, centerLabel, centerVal
     <div className="relative inline-block">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         {segments.map((s, i) => (
-          <path key={i} d={s.d} fill={s.color} />
+          <path
+            key={i}
+            d={s.d}
+            fill={s.color}
+            className={onSliceClick ? 'cursor-pointer transition-opacity hover:opacity-75' : undefined}
+            onClick={onSliceClick ? () => onSliceClick(i) : undefined}
+          />
         ))}
       </svg>
       {(centerLabel || centerValue) && (

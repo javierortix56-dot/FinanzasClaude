@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
-import { TrendingUp, TrendingDown, ArrowRight, ArrowUpRight, ArrowDownRight, ChevronDown, ChevronRight } from 'lucide-react'
+import { TrendingUp, TrendingDown, ArrowRight, ArrowUpRight, ArrowDownRight, ChevronRight, ChevronLeft, Link2 } from 'lucide-react'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
@@ -44,28 +44,38 @@ function TrendChip({ delta, invert = false }: { delta: number | null; invert?: b
   )
 }
 
-function TLedgerRow({ t, settings }: { t: Transaction; settings: Settings }) {
+function TLedgerRow({ t, settings, asignadoLabel }: { t: Transaction; settings: Settings; asignadoLabel?: string }) {
   const cat = getCatFromSettings(t.categoria, settings)
   const fechaStr = t.fecha.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })
+  const done = t.ejecutado
   return (
     <div className="px-3 py-2 hover:bg-surface-2/40 transition-colors">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             {cat?.color && (
-              <span className="h-1.5 w-1.5 rounded-full shrink-0 mt-0.5" style={{ background: cat.color }} />
+              <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: cat.color }} />
             )}
-            <span className="text-xs font-medium text-foreground truncate">{cat?.nombre ?? '—'}</span>
+            <span className={`text-xs font-medium truncate ${done ? 'line-through text-muted' : 'text-foreground'}`}>
+              {cat?.nombre ?? '—'}
+            </span>
           </div>
           {t.descripcion && (
-            <div className="text-[11px] text-muted truncate mt-0.5 pl-3">{t.descripcion}</div>
+            <div className={`text-[11px] truncate mt-0.5 pl-3 ${done ? 'line-through text-muted-2' : 'text-muted'}`}>
+              {t.descripcion}
+            </div>
           )}
-          {!t.ejecutado && (
-            <div className="text-[10px] text-unassigned font-semibold mt-0.5 pl-3">PENDIENTE</div>
+          {asignadoLabel && (
+            <div className="mt-1 pl-3">
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-income bg-income/10 rounded px-1.5 py-0.5 max-w-full">
+                <Link2 className="h-2.5 w-2.5 shrink-0" />
+                <span className="truncate">{asignadoLabel}</span>
+              </span>
+            </div>
           )}
         </div>
         <div className="text-right shrink-0">
-          <div className={`text-xs font-semibold tnum ${t.tipo === 'ingreso' ? 'text-income' : 'text-expense'}`}>
+          <div className={`text-xs font-semibold tnum ${done ? 'line-through opacity-70' : ''} ${t.tipo === 'ingreso' ? 'text-income' : 'text-expense'}`}>
             <MoneyText amount={t.monto} currency={t.moneda} />
           </div>
           <div className="text-[10px] text-muted">{fechaStr}</div>
@@ -85,7 +95,7 @@ function TopCategorias({
   base: Currency
 }) {
   const [tab, setTab] = useState<CatTab>('egresos')
-  const [expanded, setExpanded] = useState<string | null>(null)
+  const [drill, setDrill] = useState<string | null>(null)
 
   const { grupos, total } = useMemo(() => {
     const target = transactions.filter((t) => t.tipo === (tab === 'egresos' ? 'egreso' : 'ingreso'))
@@ -128,15 +138,40 @@ function TopCategorias({
     return { grupos: gruposArr, total: totalAmt }
   }, [transactions, tab, settings, base])
 
+  const activeGroup = drill ? grupos.find((g) => g.id === drill) ?? null : null
+
+  const items = activeGroup
+    ? activeGroup.subs.map((s, i) => ({
+        id: s.id, nombre: s.nombre, total: s.total,
+        color: CHART_PALETTE[i % CHART_PALETTE.length], hasChildren: false,
+      }))
+    : grupos.map((g) => ({
+        id: g.id, nombre: g.nombre, total: g.total,
+        color: g.chartColor, hasChildren: g.subs.length > 1,
+      }))
+
+  const denom = activeGroup ? activeGroup.total : total
+
   return (
     <Card>
-      <div className="px-4 pt-4 pb-3 border-b border-border flex items-center justify-between">
-        <div className="text-sm font-semibold">Top categorías</div>
-        <div className="inline-flex p-0.5 rounded bg-surface-2 border border-border">
+      <div className="px-4 pt-4 pb-3 border-b border-border flex items-center justify-between gap-2">
+        <div className="text-sm font-semibold flex items-center gap-1 min-w-0">
+          {activeGroup && (
+            <button
+              type="button"
+              onClick={() => setDrill(null)}
+              className="text-muted hover:text-foreground shrink-0 -ml-1"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+          )}
+          <span className="truncate">{activeGroup ? activeGroup.nombre : 'Top categorías'}</span>
+        </div>
+        <div className="inline-flex p-0.5 rounded bg-surface-2 border border-border shrink-0">
           {(['egresos', 'ingresos'] as CatTab[]).map((c) => (
             <button
               key={c}
-              onClick={() => { setTab(c); setExpanded(null) }}
+              onClick={() => { setTab(c); setDrill(null) }}
               className={`px-2.5 h-6 text-[11px] font-medium rounded transition-colors ${
                 tab === c ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'
               }`}
@@ -155,57 +190,36 @@ function TopCategorias({
               <Donut
                 size={160}
                 thickness={22}
-                data={grupos.map((g) => ({ label: g.nombre, value: g.total, color: g.chartColor }))}
-                centerLabel={tab}
-                centerValue={formatAmount(total, base)}
+                data={items.map((it) => ({ label: it.nombre, value: it.total, color: it.color }))}
+                centerLabel={activeGroup ? activeGroup.nombre : tab}
+                centerValue={formatAmount(denom, base)}
+                onSliceClick={activeGroup ? undefined : (i) => {
+                  if (grupos[i]?.subs.length > 1) setDrill(grupos[i].id)
+                }}
               />
             </div>
             <div className="space-y-0.5">
-              {grupos.map((g) => (
-                <div key={g.id}>
-                  <button
-                    type="button"
-                    onClick={() => setExpanded(expanded === g.id ? null : g.id)}
-                    className="w-full flex items-center justify-between text-xs py-1.5 px-1 rounded hover:bg-surface-2/60 transition-colors"
+              {items.map((it) => {
+                const Row = it.hasChildren ? 'button' : 'div'
+                return (
+                  <Row
+                    key={it.id}
+                    {...(it.hasChildren ? { type: 'button' as const, onClick: () => setDrill(it.id) } : {})}
+                    className={`w-full flex items-center justify-between text-xs py-1.5 px-1 rounded transition-colors ${
+                      it.hasChildren ? 'hover:bg-surface-2/60 cursor-pointer' : ''
+                    }`}
                   >
                     <span className="flex items-center gap-2 text-foreground font-medium truncate min-w-0">
-                      <span
-                        className="h-2.5 w-2.5 rounded-full shrink-0"
-                        style={{ background: g.chartColor }}
-                      />
-                      <span className="truncate">{g.nombre}</span>
-                      {g.subs.length > 1 && (
-                        <span className="text-muted-2 shrink-0">
-                          {expanded === g.id
-                            ? <ChevronDown className="h-3 w-3" />
-                            : <ChevronRight className="h-3 w-3" />}
-                        </span>
-                      )}
+                      <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: it.color }} />
+                      <span className="truncate">{it.nombre}</span>
+                      {it.hasChildren && <ChevronRight className="h-3 w-3 text-muted-2 shrink-0" />}
                     </span>
                     <span className="text-muted tnum shrink-0 ml-2">
-                      {total > 0 ? ((g.total / total) * 100).toFixed(0) : 0}%
+                      {denom > 0 ? ((it.total / denom) * 100).toFixed(0) : 0}%
                     </span>
-                  </button>
-                  {expanded === g.id && (
-                    <div className="ml-4 space-y-0.5 mb-0.5">
-                      {g.subs.map((sub) => (
-                        <div key={sub.id} className="flex items-center justify-between text-[11px] py-1 px-1">
-                          <span className="flex items-center gap-1.5 text-muted truncate min-w-0">
-                            <span
-                              className="h-1.5 w-1.5 rounded-full shrink-0"
-                              style={{ background: sub.color }}
-                            />
-                            <span className="truncate">{sub.nombre}</span>
-                          </span>
-                          <span className="text-muted tnum shrink-0 ml-2">
-                            {total > 0 ? ((sub.total / total) * 100).toFixed(0) : 0}%
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
+                  </Row>
+                )
+              })}
             </div>
           </>
         )}
@@ -257,14 +271,17 @@ export default function DashboardPage() {
   const ingresosSort = [...ingresos].sort((a, b) => b.fecha.toDate().getTime() - a.fecha.toDate().getTime())
   const egresosSort = [...egresos].sort((a, b) => b.fecha.toDate().getTime() - a.fecha.toDate().getTime())
 
+  const ingresoLabelById = new Map<string, string>(
+    ingresos.map((t) => [t.id ?? '', getCatFromSettings(t.categoria, s)?.nombre ?? t.descripcion ?? 'Ingreso']),
+  )
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs text-muted capitalize">{monthLabel(currentMonth)}</p>
-          <h2 className="text-xl font-semibold tracking-tight text-foreground">Resumen del mes</h2>
-        </div>
+        <h2 className="text-lg font-semibold tracking-tight text-foreground">
+          Resumen <span className="text-muted font-normal capitalize">· {monthLabel(currentMonth)}</span>
+        </h2>
         <div className="flex items-center gap-2 text-xs">
           <Badge tone="neutral">USD/ARS · {s.tipoCambio.ARS_USD.toLocaleString('es-AR')}</Badge>
           <Badge tone="neutral">USD/COP · {s.tipoCambio.COP_USD.toLocaleString('es-AR')}</Badge>
@@ -274,12 +291,12 @@ export default function DashboardPage() {
       {/* Compact stats — balance, ingresos, egresos */}
       <Card className="overflow-hidden">
         <div className="grid grid-cols-3 divide-x divide-border">
-          <div className="px-5 py-4">
+          <div className="px-4 py-2.5">
             <div className="text-[11px] font-medium text-muted uppercase tracking-wide">Balance</div>
-            <div className="mt-1.5 text-2xl font-bold tnum text-foreground leading-none">
+            <div className="mt-1 text-xl font-bold tnum text-foreground leading-none">
               <MoneyText amount={balance} currency={base} />
             </div>
-            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted">
               <MoneyText amount={balanceUSD} currency="USD" />
               <span className="text-border">·</span>
               <span>{tasaAhorro.toFixed(0)}% ahorro</span>
@@ -287,28 +304,28 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="px-5 py-4 bg-income/[0.03]">
+          <div className="px-4 py-2.5 bg-income/[0.03]">
             <div className="flex items-center gap-1.5">
               <TrendingUp className="h-3.5 w-3.5 text-income" />
               <div className="text-[11px] font-medium text-muted uppercase tracking-wide">Ingresos</div>
             </div>
-            <div className="mt-1.5 text-2xl font-semibold tnum text-income leading-none">
+            <div className="mt-1 text-xl font-semibold tnum text-income leading-none">
               <MoneyText amount={totalIngresos} currency={base} />
             </div>
-            <div className="mt-2">
+            <div className="mt-1.5">
               <TrendChip delta={dIng} />
             </div>
           </div>
 
-          <div className="px-5 py-4 bg-expense/[0.03]">
+          <div className="px-4 py-2.5 bg-expense/[0.03]">
             <div className="flex items-center gap-1.5">
               <TrendingDown className="h-3.5 w-3.5 text-expense" />
               <div className="text-[11px] font-medium text-muted uppercase tracking-wide">Egresos</div>
             </div>
-            <div className="mt-1.5 text-2xl font-semibold tnum text-expense leading-none">
+            <div className="mt-1 text-xl font-semibold tnum text-expense leading-none">
               <MoneyText amount={totalEgresos} currency={base} />
             </div>
-            <div className="mt-2">
+            <div className="mt-1.5">
               <TrendChip delta={dEgr} invert />
             </div>
           </div>
@@ -316,7 +333,7 @@ export default function DashboardPage() {
       </Card>
 
       {/* Main: cuentas T + top categorías */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
         {/* Cuentas T */}
         <Card className="xl:col-span-2">
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
@@ -355,7 +372,12 @@ export default function DashboardPage() {
                 {egresos.length === 0 ? (
                   <div className="px-3 py-8 text-center text-xs text-muted">Sin egresos</div>
                 ) : egresosSort.map((t) => (
-                  <TLedgerRow key={t.id} t={t} settings={s} />
+                  <TLedgerRow
+                    key={t.id}
+                    t={t}
+                    settings={s}
+                    asignadoLabel={t.asignadoA ? ingresoLabelById.get(t.asignadoA) : undefined}
+                  />
                 ))}
               </div>
             </div>
