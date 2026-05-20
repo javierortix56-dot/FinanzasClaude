@@ -37,16 +37,24 @@ export default function AsignacionesPage() {
   const sinAsignarUSD     = totalEgresosUSD - asignadosUSD
   const pctAsignado = totalEgresosUSD > 0 ? (asignadosUSD / totalEgresosUSD) * 100 : 0
 
+  const byDate = (a: Transaction, b: Transaction) =>
+    a.fecha.toDate().getTime() - b.fecha.toDate().getTime()
+
   const grupos = useMemo(() => {
     return ingresos.map((ing) => {
-      const asignados = egresos.filter((e) => e.asignadoA === ing.id)
+      const asignados = egresos
+        .filter((e) => e.asignadoA === ing.id)
+        .sort(byDate)
       const totalUSD = asignados.reduce((s, t) => s + toBase(t.monto, t.moneda, 'USD', settings), 0)
       const ingresoUSD = toBase(ing.monto, ing.moneda, 'USD', settings)
       return { ingreso: ing, asignados, totalUSD, ingresoUSD, restante: ingresoUSD - totalUSD }
     })
   }, [ingresos, egresos, settings])
 
-  const sinAsignar = egresos.filter((e) => !e.asignadoA)
+  const sinAsignar = useMemo(
+    () => egresos.filter((e) => !e.asignadoA).sort(byDate),
+    [egresos],
+  )
 
   function toggle(id: string) {
     setExpanded((e) => ({ ...e, [id]: !e[id] }))

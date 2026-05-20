@@ -1,15 +1,14 @@
 'use client'
 
-import { useState, KeyboardEvent } from 'react'
+import { useMemo, useState, KeyboardEvent } from 'react'
 import { Modal } from '@/components/ui/modal'
-import { Select } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { addTransaction, updateTransaction, deleteTransaction } from '@finanzas/core/lib/transactions'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
-import { Currency, Transaction, TransactionType, CategoryGroup } from '@finanzas/core/types'
+import { Currency, Transaction, TransactionType, CategoryGroup, Settings } from '@finanzas/core/types'
 import { SHARED_USERS } from '@finanzas/core/lib/constants'
 import { Trash2, X, ChevronDown } from 'lucide-react'
 
@@ -22,17 +21,92 @@ interface Props {
 
 const CURRENCIES: Currency[] = ['ARS', 'COP', 'USD']
 
-function flattenCategories(groups: CategoryGroup[]): { id: string; nombre: string; group: string }[] {
-  const out: { id: string; nombre: string; group: string }[] = []
-  for (const g of groups) {
-    if (!g.activa) continue
-    for (const sub of g.subcategorias) {
-      if (sub.activa) out.push({ id: sub.id, nombre: sub.nombre, group: g.nombre })
+// ── Category chip picker ──────────────────────────────────────────────────────
+
+function CategoryPicker({
+  tipo, value, onChange, settings,
+}: {
+  tipo: TransactionType
+  value: string
+  onChange: (id: string) => void
+  settings: Settings
+}) {
+  const groups = (tipo === 'ingreso' ? settings.categoriasIngreso : settings.categoriasGasto)
+    .filter((g) => g.activa)
+
+  const parentGroupId = useMemo(() => {
+    for (const g of groups) {
+      if (g.id === value) return g.id
+      if (g.subcategorias.some((s) => s.id === value)) return g.id
     }
-    if (g.subcategorias.length === 0) out.push({ id: g.id, nombre: g.nombre, group: g.nombre })
+    return null
+  }, [value, groups])
+
+  const [expandedId, setExpandedId] = useState<string | null>(parentGroupId)
+
+  const expandedGroup = groups.find((g) => g.id === expandedId) ?? null
+
+  function handleGroupClick(g: CategoryGroup) {
+    const subs = g.subcategorias.filter((s) => s.activa)
+    if (subs.length === 0) {
+      onChange(g.id)
+      setExpandedId(g.id)
+    } else {
+      const next = expandedId === g.id ? null : g.id
+      setExpandedId(next)
+      if (next !== null && parentGroupId !== g.id) onChange('')
+    }
   }
-  return out
+
+  return (
+    <div className="space-y-2">
+      {/* Grupos */}
+      <div className="flex flex-wrap gap-1.5">
+        {groups.map((g) => {
+          const active = parentGroupId === g.id || (expandedId === g.id && parentGroupId !== g.id)
+          return (
+            <button
+              type="button"
+              key={g.id}
+              onClick={() => handleGroupClick(g)}
+              className={`px-3 h-7 text-xs font-medium rounded-full border transition-all ${
+                active
+                  ? 'text-white border-transparent shadow-sm'
+                  : 'bg-surface text-muted border-border hover:text-foreground'
+              }`}
+              style={active ? { background: g.color } : {}}
+            >
+              {g.nombre}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Subcategorías */}
+      {expandedGroup && expandedGroup.subcategorias.filter((s) => s.activa).length > 0 && (
+        <div className="flex flex-wrap gap-1.5 pl-2 border-l-2 border-border/50">
+          {expandedGroup.subcategorias.filter((s) => s.activa).map((sub) => (
+            <button
+              type="button"
+              key={sub.id}
+              onClick={() => onChange(sub.id)}
+              className={`px-2.5 h-6 text-xs rounded-full border transition-all ${
+                value === sub.id
+                  ? 'text-white border-transparent shadow-sm'
+                  : 'bg-surface-2 text-foreground border-border hover:border-primary/50'
+              }`}
+              style={value === sub.id ? { background: sub.color } : {}}
+            >
+              {sub.nombre}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
+
+// ── Modal wrapper ─────────────────────────────────────────────────────────────
 
 export function TransactionModal({ open, onClose, initialType = 'egreso', editing }: Props) {
   return (
@@ -54,17 +128,23 @@ export function TransactionModal({ open, onClose, initialType = 'egreso', editin
   )
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="text-[11px] font-medium text-muted mb-1">{label}</div>
+      <div className="text-[11px] font-medium text-muted mb-1.5">{label}</div>
       {children}
     </div>
   )
 }
 
-const inputCls = 'h-8 w-full rounded border border-border bg-surface px-2.5 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-primary/50'
-const selectCls = 'h-8 w-full rounded border border-border bg-surface px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50'
+const inputCls =
+  'h-8 w-full rounded border border-border bg-surface px-2.5 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-primary/50'
+const selectCls =
+  'h-8 w-full rounded border border-border bg-surface px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50'
+
+// ── Form ──────────────────────────────────────────────────────────────────────
 
 function Form({
   editing, initialType, onClose,
@@ -86,17 +166,22 @@ function Form({
   const [fecha, setFecha]             = useState(
     editing ? editing.fecha.toDate().toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
   )
-  const [creadoPor, setCreadoPor]     = useState(editing?.creadoPor || SHARED_USERS[0].id)
   const [ejecutado, setEjecutado]     = useState(editing?.ejecutado ?? false)
   const [recurrente, setRecurrente]   = useState(editing?.recurrente ?? false)
   const [tags, setTags]               = useState<string[]>(editing?.tags ?? [])
   const [tagInput, setTagInput]       = useState('')
   const [asignadoA, setAsignadoA]     = useState<string | null>(editing?.asignadoA ?? null)
   const [saving, setSaving]           = useState(false)
-  const [expanded, setExpanded]       = useState(!!(editing?.nota || (editing?.tags?.length) || editing?.asignadoA))
+  const [expanded, setExpanded]       = useState(
+    !!(editing?.nota || editing?.tags?.length || editing?.asignadoA),
+  )
 
   const ingresos = transactions.filter((t) => t.tipo === 'ingreso' && t.id && t.id !== editing?.id)
-  const cats = flattenCategories(tipo === 'ingreso' ? settings.categoriasIngreso : settings.categoriasGasto)
+
+  function handleTipoChange(t: TransactionType) {
+    setTipo(t)
+    setCategoria('')
+  }
 
   function addTag() {
     const t = tagInput.trim().toLowerCase()
@@ -115,7 +200,9 @@ function Form({
     const payload = {
       userId: 'shared', tipo, monto: m, moneda, categoria, descripcion, nota, tags,
       fecha: { toDate: () => new Date(fecha + 'T12:00:00') },
-      ejecutado, asignadoA: tipo === 'egreso' ? asignadoA : null, creadoPor, recurrente,
+      ejecutado, asignadoA: tipo === 'egreso' ? asignadoA : null,
+      creadoPor: editing?.creadoPor || SHARED_USERS[0].id,
+      recurrente,
     }
     setSaving(true)
     try {
@@ -152,12 +239,12 @@ function Form({
 
   return (
     <div className="space-y-3">
-      {/* Tipo toggle */}
+      {/* Tipo */}
       <div className="inline-flex p-0.5 rounded-md bg-surface-2 border border-border">
         {(['egreso', 'ingreso'] as TransactionType[]).map((t) => (
           <button
             key={t}
-            onClick={() => setTipo(t)}
+            onClick={() => handleTipoChange(t)}
             className={`px-4 h-7 text-sm font-medium rounded transition-colors ${
               tipo === t
                 ? t === 'ingreso' ? 'bg-income text-white' : 'bg-expense text-white'
@@ -169,7 +256,7 @@ function Form({
         ))}
       </div>
 
-      {/* Fila 1: Monto + Moneda + Fecha */}
+      {/* Monto + Moneda + Fecha */}
       <div className="grid grid-cols-5 gap-2">
         <div className="col-span-2">
           <Field label="Monto">
@@ -194,17 +281,18 @@ function Form({
         </div>
       </div>
 
-      {/* Fila 2: Categoría */}
+      {/* Categoría — chips */}
       <Field label="Categoría">
-        <select value={categoria} onChange={(e) => setCategoria(e.target.value)} className={selectCls}>
-          <option value="">Seleccionar…</option>
-          {cats.map((c) => (
-            <option key={c.id} value={c.id}>{c.group} · {c.nombre}</option>
-          ))}
-        </select>
+        <CategoryPicker
+          key={tipo}
+          tipo={tipo}
+          value={categoria}
+          onChange={setCategoria}
+          settings={settings as Settings}
+        />
       </Field>
 
-      {/* Fila 3: Concepto */}
+      {/* Concepto */}
       <Field label="Concepto">
         <input
           value={descripcion} onChange={(e) => setDescripcion(e.target.value)}
@@ -213,34 +301,25 @@ function Form({
         />
       </Field>
 
-      {/* Fila 4: Cargado por + checkboxes */}
-      <div className="flex items-end gap-4">
-        <div className="w-32">
-          <Field label="Cargado por">
-            <select value={creadoPor} onChange={(e) => setCreadoPor(e.target.value)} className={selectCls}>
-              {SHARED_USERS.map((u) => <option key={u.id} value={u.id}>{u.nombre}</option>)}
-            </select>
-          </Field>
-        </div>
-        <div className="flex items-center gap-4 pb-0.5">
-          <label className="inline-flex items-center gap-1.5 text-sm text-foreground cursor-pointer">
-            <input
-              type="checkbox" checked={ejecutado} onChange={(e) => setEjecutado(e.target.checked)}
-              className="h-3.5 w-3.5 rounded border-border accent-primary"
-            />
-            {tipo === 'ingreso' ? 'Recibido' : 'Pagado'}
-          </label>
-          <label className="inline-flex items-center gap-1.5 text-sm text-foreground cursor-pointer">
-            <input
-              type="checkbox" checked={recurrente} onChange={(e) => setRecurrente(e.target.checked)}
-              className="h-3.5 w-3.5 rounded border-border accent-primary"
-            />
-            Recurrente
-          </label>
-        </div>
+      {/* Checkboxes */}
+      <div className="flex items-center gap-5">
+        <label className="inline-flex items-center gap-1.5 text-sm text-foreground cursor-pointer">
+          <input
+            type="checkbox" checked={ejecutado} onChange={(e) => setEjecutado(e.target.checked)}
+            className="h-3.5 w-3.5 rounded border-border accent-primary"
+          />
+          {tipo === 'ingreso' ? 'Recibido' : 'Pagado'}
+        </label>
+        <label className="inline-flex items-center gap-1.5 text-sm text-foreground cursor-pointer">
+          <input
+            type="checkbox" checked={recurrente} onChange={(e) => setRecurrente(e.target.checked)}
+            className="h-3.5 w-3.5 rounded border-border accent-primary"
+          />
+          Recurrente
+        </label>
       </div>
 
-      {/* Más opciones (nota, etiquetas, asignación) */}
+      {/* Más opciones */}
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
@@ -251,8 +330,8 @@ function Form({
       </button>
 
       {expanded && (
-        <div className="space-y-3 pt-0.5">
-          <Field label="Nota (opcional)">
+        <div className="space-y-3">
+          <Field label="Nota">
             <textarea
               value={nota} onChange={(e) => setNota(e.target.value)} rows={2}
               className="w-full rounded border border-border bg-surface px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none"

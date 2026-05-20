@@ -297,10 +297,10 @@ export default function DashboardPage() {
   }
 
   const ingresosSort = [...ingresos]
-    .sort((a, b) => b.fecha.toDate().getTime() - a.fecha.toDate().getTime())
+    .sort((a, b) => a.fecha.toDate().getTime() - b.fecha.toDate().getTime())
     .filter(filterFn)
   const egresosSort = [...egresos]
-    .sort((a, b) => b.fecha.toDate().getTime() - a.fecha.toDate().getTime())
+    .sort((a, b) => a.fecha.toDate().getTime() - b.fecha.toDate().getTime())
     .filter(filterFn)
 
   const ingresoLabelById = new Map<string, string>(
