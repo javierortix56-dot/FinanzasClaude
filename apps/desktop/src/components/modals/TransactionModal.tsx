@@ -1,16 +1,20 @@
 'use client'
 
-import { useMemo, useState, KeyboardEvent } from 'react'
+import { useMemo, useState } from 'react'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
+import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { addTransaction, updateTransaction, deleteTransaction } from '@finanzas/core/lib/transactions'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
+import { toBase } from '@finanzas/core/lib/currency'
+import { getCatFromSettings } from '@finanzas/core/lib/constants'
 import { Currency, Transaction, TransactionType, CategoryGroup, Settings } from '@finanzas/core/types'
 import { SHARED_USERS } from '@finanzas/core/lib/constants'
-import { Trash2, X, ChevronDown } from 'lucide-react'
+import { Trash2, CalendarArrowUp, Check } from 'lucide-react'
+import { MoneyText } from '@/components/MoneyText'
 
 interface Props {
   open: boolean
@@ -20,6 +24,12 @@ interface Props {
 }
 
 const CURRENCIES: Currency[] = ['ARS', 'COP', 'USD']
+
+function advanceMonth(fecha: string) {
+  const d = new Date(fecha + 'T12:00:00')
+  d.setMonth(d.getMonth() + 1)
+  return d.toISOString().slice(0, 10)
+}
 
 // ── Category chip picker ──────────────────────────────────────────────────────
 
@@ -43,7 +53,6 @@ function CategoryPicker({
   }, [value, groups])
 
   const [expandedId, setExpandedId] = useState<string | null>(parentGroupId)
-
   const expandedGroup = groups.find((g) => g.id === expandedId) ?? null
 
   function handleGroupClick(g: CategoryGroup) {
@@ -60,7 +69,6 @@ function CategoryPicker({
 
   return (
     <div className="space-y-2">
-      {/* Grupos */}
       <div className="flex flex-wrap gap-1.5">
         {groups.map((g) => {
           const active = parentGroupId === g.id || (expandedId === g.id && parentGroupId !== g.id)
@@ -81,8 +89,6 @@ function CategoryPicker({
           )
         })}
       </div>
-
-      {/* Subcategorías */}
       {expandedGroup && expandedGroup.subcategorias.filter((s) => s.activa).length > 0 && (
         <div className="flex flex-wrap gap-1.5 pl-2 border-l-2 border-border/50">
           {expandedGroup.subcategorias.filter((s) => s.activa).map((sub) => (
@@ -102,6 +108,68 @@ function CategoryPicker({
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Ingreso assignment chips ──────────────────────────────────────────────────
+
+function IngresoChips({
+  ingresos, transactions, editingId, value, onChange, settings, base,
+}: {
+  ingresos: Transaction[]
+  transactions: Transaction[]
+  editingId?: string
+  value: string | null
+  onChange: (id: string | null) => void
+  settings: Settings
+  base: Currency
+}) {
+  if (ingresos.length === 0) {
+    return <p className="text-xs text-muted">No hay ingresos en este mes.</p>
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {ingresos.map((ing) => {
+        const total = toBase(ing.monto, ing.moneda, base, settings)
+        const assigned = transactions
+          .filter((t) => t.tipo === 'egreso' && t.asignadoA === ing.id && t.id !== editingId)
+          .reduce((s, t) => s + toBase(t.monto, t.moneda, base, settings), 0)
+        const remaining = total - assigned
+        const over = remaining < 0
+        const selected = value === ing.id
+        const catName = getCatFromSettings(ing.categoria, settings)?.nombre ?? ''
+        const label = ing.descripcion || catName || 'Ingreso'
+
+        return (
+          <button
+            type="button"
+            key={ing.id}
+            onClick={() => onChange(selected ? null : ing.id!)}
+            className={`group relative flex flex-col items-start px-3 py-2 rounded-lg border text-left transition-all ${
+              selected
+                ? over
+                  ? 'border-expense bg-expense/10 text-expense'
+                  : 'border-primary bg-primary/10 text-primary'
+                : 'border-border bg-surface hover:border-primary/40 hover:bg-surface-2'
+            }`}
+          >
+            {selected && (
+              <span className="absolute top-1.5 right-1.5">
+                <Check className="h-3 w-3" />
+              </span>
+            )}
+            <span className="text-xs font-medium leading-tight pr-4">{label}</span>
+            <span className={`text-[10px] mt-0.5 ${
+              over ? 'text-expense' : selected ? 'text-primary/80' : 'text-muted'
+            }`}>
+              disp.&nbsp;
+              <MoneyText amount={remaining} currency={base} className="inline" />
+            </span>
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -130,19 +198,22 @@ export function TransactionModal({ open, onClose, initialType = 'egreso', editin
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
   return (
     <div>
-      <div className="text-[11px] font-medium text-muted mb-1.5">{label}</div>
+      <div className="flex items-baseline justify-between mb-1.5">
+        <span className="text-[11px] font-medium text-muted uppercase tracking-wide">{label}</span>
+        {hint && <span className="text-[10px] text-muted-2">{hint}</span>}
+      </div>
       {children}
     </div>
   )
 }
 
 const inputCls =
-  'h-8 w-full rounded border border-border bg-surface px-2.5 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-primary/50'
+  'h-9 w-full rounded-lg border border-border bg-surface px-3 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-primary/50'
 const selectCls =
-  'h-8 w-full rounded border border-border bg-surface px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50'
+  'h-9 w-full rounded-lg border border-border bg-surface px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50'
 
 // ── Form ──────────────────────────────────────────────────────────────────────
 
@@ -156,41 +227,31 @@ function Form({
   const settings = useSettingsStore((s) => s.settings) ?? DEFAULT_SETTINGS
   const showToast = useUIStore((s) => s.showToast)
   const { transactions } = useTransactionStore()
+  const { monedaBase } = useAuthStore()
+  const base = monedaBase as Currency
 
   const [tipo, setTipo]               = useState<TransactionType>(editing?.tipo ?? initialType)
   const [monto, setMonto]             = useState(editing ? String(editing.monto) : '')
   const [moneda, setMoneda]           = useState<Currency>(editing?.moneda ?? 'ARS')
   const [categoria, setCategoria]     = useState(editing?.categoria ?? '')
   const [descripcion, setDescripcion] = useState(editing?.descripcion ?? '')
-  const [nota, setNota]               = useState(editing?.nota ?? '')
   const [fecha, setFecha]             = useState(
     editing ? editing.fecha.toDate().toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
   )
   const [ejecutado, setEjecutado]     = useState(editing?.ejecutado ?? false)
   const [recurrente, setRecurrente]   = useState(editing?.recurrente ?? false)
-  const [tags, setTags]               = useState<string[]>(editing?.tags ?? [])
-  const [tagInput, setTagInput]       = useState('')
   const [asignadoA, setAsignadoA]     = useState<string | null>(editing?.asignadoA ?? null)
   const [saving, setSaving]           = useState(false)
-  const [expanded, setExpanded]       = useState(
-    !!(editing?.nota || editing?.tags?.length || editing?.asignadoA),
-  )
 
-  const ingresos = transactions.filter((t) => t.tipo === 'ingreso' && t.id && t.id !== editing?.id)
+  const ingresos = useMemo(
+    () => transactions.filter((t) => t.tipo === 'ingreso' && t.id && t.id !== editing?.id),
+    [transactions, editing?.id],
+  )
 
   function handleTipoChange(t: TransactionType) {
     setTipo(t)
     setCategoria('')
-  }
-
-  function addTag() {
-    const t = tagInput.trim().toLowerCase()
-    if (t && !tags.includes(t)) setTags([...tags, t])
-    setTagInput('')
-  }
-  function handleTagKeyDown(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag() }
-    if (e.key === 'Backspace' && tagInput === '' && tags.length > 0) setTags(tags.slice(0, -1))
+    if (t === 'ingreso') setAsignadoA(null)
   }
 
   async function handleSave() {
@@ -198,7 +259,8 @@ function Form({
     if (!m || m <= 0) return showToast('Ingresá un monto válido', 'error')
     if (!categoria) return showToast('Seleccioná una categoría', 'error')
     const payload = {
-      userId: 'shared', tipo, monto: m, moneda, categoria, descripcion, nota, tags,
+      userId: 'shared', tipo, monto: m, moneda, categoria, descripcion,
+      nota: editing?.nota ?? '', tags: editing?.tags ?? [],
       fecha: { toDate: () => new Date(fecha + 'T12:00:00') },
       ejecutado, asignadoA: tipo === 'egreso' ? asignadoA : null,
       creadoPor: editing?.creadoPor || SHARED_USERS[0].id,
@@ -237,51 +299,55 @@ function Form({
     }
   }
 
+  const isIngreso = tipo === 'ingreso'
+  const accentBg = isIngreso ? 'bg-income/8' : 'bg-expense/8'
+  const accentRing = isIngreso ? 'ring-income/20' : 'ring-expense/20'
+
   return (
-    <div className="space-y-3">
-      {/* Tipo */}
-      <div className="inline-flex p-0.5 rounded-md bg-surface-2 border border-border">
-        {(['egreso', 'ingreso'] as TransactionType[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => handleTipoChange(t)}
-            className={`px-4 h-7 text-sm font-medium rounded transition-colors ${
-              tipo === t
-                ? t === 'ingreso' ? 'bg-income text-white' : 'bg-expense text-white'
-                : 'text-muted hover:text-foreground'
-            }`}
-          >
-            {t === 'ingreso' ? 'Ingreso' : 'Egreso'}
-          </button>
-        ))}
+    <div className="space-y-4">
+      {/* Tipo toggle */}
+      <div className={`-mx-6 -mt-2 px-6 pt-4 pb-4 ${accentBg} ring-1 ${accentRing} mb-1`}>
+        <div className="inline-flex p-0.5 rounded-lg bg-surface border border-border mb-4">
+          {(['egreso', 'ingreso'] as TransactionType[]).map((t) => (
+            <button
+              key={t}
+              onClick={() => handleTipoChange(t)}
+              className={`px-5 h-8 text-sm font-semibold rounded-[6px] transition-all ${
+                tipo === t
+                  ? t === 'ingreso'
+                    ? 'bg-income text-white shadow-sm'
+                    : 'bg-expense text-white shadow-sm'
+                  : 'text-muted hover:text-foreground'
+              }`}
+            >
+              {t === 'ingreso' ? '↑ Ingreso' : '↓ Egreso'}
+            </button>
+          ))}
+        </div>
+
+        {/* Monto + Moneda */}
+        <div className="flex items-end gap-2">
+          <div className="flex-1">
+            <Field label="Monto">
+              <input
+                type="number" inputMode="decimal" value={monto}
+                onChange={(e) => setMonto(e.target.value)}
+                placeholder="0.00"
+                className={`${inputCls} text-xl font-semibold h-11`}
+              />
+            </Field>
+          </div>
+          <div className="w-24">
+            <Field label="Moneda">
+              <select value={moneda} onChange={(e) => setMoneda(e.target.value as Currency)} className={selectCls}>
+                {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </Field>
+          </div>
+        </div>
       </div>
 
-      {/* Monto + Moneda + Fecha */}
-      <div className="grid grid-cols-5 gap-2">
-        <div className="col-span-2">
-          <Field label="Monto">
-            <input
-              type="number" inputMode="decimal" value={monto}
-              onChange={(e) => setMonto(e.target.value)}
-              placeholder="0.00" className={inputCls}
-            />
-          </Field>
-        </div>
-        <div>
-          <Field label="Moneda">
-            <select value={moneda} onChange={(e) => setMoneda(e.target.value as Currency)} className={selectCls}>
-              {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </Field>
-        </div>
-        <div className="col-span-2">
-          <Field label="Fecha">
-            <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className={inputCls} />
-          </Field>
-        </div>
-      </div>
-
-      {/* Categoría — chips */}
+      {/* Categoría */}
       <Field label="Categoría">
         <CategoryPicker
           key={tipo}
@@ -301,79 +367,64 @@ function Form({
         />
       </Field>
 
+      {/* Fecha + Mes siguiente */}
+      <Field label="Fecha">
+        <div className="flex gap-2">
+          <input
+            type="date" value={fecha} onChange={(e) => setFecha(e.target.value)}
+            className={`${inputCls} flex-1`}
+          />
+          <button
+            type="button"
+            onClick={() => setFecha(advanceMonth(fecha))}
+            title="Enviar a mes siguiente"
+            className="inline-flex items-center gap-1.5 px-3 h-9 rounded-lg border border-border bg-surface text-xs text-muted hover:text-foreground hover:border-primary/50 hover:bg-surface-2 transition-all shrink-0"
+          >
+            <CalendarArrowUp className="h-3.5 w-3.5" />
+            Mes siguiente
+          </button>
+        </div>
+      </Field>
+
       {/* Checkboxes */}
-      <div className="flex items-center gap-5">
-        <label className="inline-flex items-center gap-1.5 text-sm text-foreground cursor-pointer">
-          <input
-            type="checkbox" checked={ejecutado} onChange={(e) => setEjecutado(e.target.checked)}
-            className="h-3.5 w-3.5 rounded border-border accent-primary"
-          />
-          {tipo === 'ingreso' ? 'Recibido' : 'Pagado'}
+      <div className="flex items-center gap-4">
+        <label className="inline-flex items-center gap-2 text-sm text-foreground cursor-pointer select-none">
+          <span className={`h-4 w-4 rounded border flex items-center justify-center transition-colors ${
+            ejecutado ? 'bg-primary border-primary' : 'border-border bg-surface'
+          }`} onClick={() => setEjecutado(!ejecutado)}>
+            {ejecutado && <Check className="h-2.5 w-2.5 text-white" />}
+          </span>
+          <input type="checkbox" checked={ejecutado} onChange={(e) => setEjecutado(e.target.checked)} className="sr-only" />
+          {isIngreso ? 'Recibido' : 'Pagado'}
         </label>
-        <label className="inline-flex items-center gap-1.5 text-sm text-foreground cursor-pointer">
-          <input
-            type="checkbox" checked={recurrente} onChange={(e) => setRecurrente(e.target.checked)}
-            className="h-3.5 w-3.5 rounded border-border accent-primary"
-          />
+        <label className="inline-flex items-center gap-2 text-sm text-foreground cursor-pointer select-none">
+          <span className={`h-4 w-4 rounded border flex items-center justify-center transition-colors ${
+            recurrente ? 'bg-primary border-primary' : 'border-border bg-surface'
+          }`} onClick={() => setRecurrente(!recurrente)}>
+            {recurrente && <Check className="h-2.5 w-2.5 text-white" />}
+          </span>
+          <input type="checkbox" checked={recurrente} onChange={(e) => setRecurrente(e.target.checked)} className="sr-only" />
           Recurrente
         </label>
       </div>
 
-      {/* Más opciones */}
-      <button
-        type="button"
-        onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-1 text-xs text-muted hover:text-foreground transition-colors"
-      >
-        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-        {expanded ? 'Menos opciones' : 'Más opciones'}
-      </button>
-
-      {expanded && (
-        <div className="space-y-3">
-          <Field label="Nota">
-            <textarea
-              value={nota} onChange={(e) => setNota(e.target.value)} rows={2}
-              className="w-full rounded border border-border bg-surface px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none"
-            />
-          </Field>
-
-          <Field label="Etiquetas">
-            <div className="flex flex-wrap gap-1.5 min-h-[32px] w-full rounded border border-border bg-surface px-2 py-1 focus-within:ring-1 focus-within:ring-primary/50">
-              {tags.map((tag) => (
-                <span key={tag} className="inline-flex items-center gap-1 text-xs bg-surface-2 border border-border rounded px-1.5 py-0.5">
-                  {tag}
-                  <button type="button" onClick={() => setTags(tags.filter((t) => t !== tag))} className="text-muted hover:text-foreground">
-                    <X className="h-2.5 w-2.5" />
-                  </button>
-                </span>
-              ))}
-              <input
-                value={tagInput} onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={handleTagKeyDown} onBlur={addTag}
-                placeholder={tags.length === 0 ? 'Enter para agregar…' : ''}
-                className="flex-1 min-w-[100px] bg-transparent text-sm text-foreground placeholder:text-muted-2 focus:outline-none"
-              />
-            </div>
-          </Field>
-
-          {tipo === 'egreso' && (
-            <Field label="Asignado a ingreso">
-              <select value={asignadoA ?? ''} onChange={(e) => setAsignadoA(e.target.value || null)} className={selectCls}>
-                <option value="">Sin asignar</option>
-                {ingresos.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.descripcion || '(sin concepto)'} — {t.fecha.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          )}
-        </div>
+      {/* Asignar a ingreso — solo para egresos */}
+      {tipo === 'egreso' && (
+        <Field label="Asignar a ingreso" hint={asignadoA ? 'click para desasignar' : 'opcional'}>
+          <IngresoChips
+            ingresos={ingresos}
+            transactions={transactions}
+            editingId={editing?.id}
+            value={asignadoA}
+            onChange={setAsignadoA}
+            settings={settings as Settings}
+            base={base}
+          />
+        </Field>
       )}
 
       {/* Footer */}
-      <div className="flex items-center justify-between gap-2 pt-3 border-t border-border -mx-6 px-6 -mb-5 pb-5 mt-4">
+      <div className="flex items-center justify-between gap-2 pt-3 border-t border-border -mx-6 px-6 -mb-5 pb-5 mt-2">
         {editing ? (
           <Button variant="ghost" onClick={handleDelete} disabled={saving}>
             <Trash2 className="h-4 w-4 text-expense" />
@@ -383,7 +434,7 @@ function Form({
         <div className="flex gap-2">
           <Button variant="secondary" onClick={onClose} disabled={saving}>Cancelar</Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving ? 'Guardando…' : editing ? 'Guardar' : 'Crear'}
+            {saving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Crear'}
           </Button>
         </div>
       </div>
