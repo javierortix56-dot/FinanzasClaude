@@ -1,9 +1,10 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, Link2, Wand2, Unlink } from 'lucide-react'
+import { ChevronDown, ChevronRight, Wand2, Unlink, Link2 } from 'lucide-react'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
+import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -14,42 +15,42 @@ import { updateTransaction } from '@finanzas/core/lib/transactions'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { toBase } from '@finanzas/core/lib/currency'
 import { getCatFromSettings } from '@finanzas/core/lib/constants'
-import { Transaction } from '@finanzas/core/types'
+import { Transaction, Currency } from '@finanzas/core/types'
 
 export default function AsignacionesPage() {
   const { transactions } = useTransactionStore()
   const settings = useSettingsStore((s) => s.settings) ?? DEFAULT_SETTINGS
   const showToast = useUIStore((s) => s.showToast)
+  const base = useAuthStore((s) => s.monedaBase) as Currency
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [reassignOpen, setReassignOpen] = useState(false)
 
   const ingresos = useMemo(
-    () => transactions.filter((t) => t.tipo === 'ingreso')
-                       .sort((a, b) => a.fecha.toDate().getTime() - b.fecha.toDate().getTime()),
+    () => transactions
+      .filter((t) => t.tipo === 'ingreso')
+      .sort((a, b) => a.fecha.toDate().getTime() - b.fecha.toDate().getTime()),
     [transactions],
   )
   const egresos = useMemo(() => transactions.filter((t) => t.tipo === 'egreso'), [transactions])
 
-  const totalEgresosUSD   = egresos.reduce((s, t) => s + toBase(t.monto, t.moneda, 'USD', settings), 0)
-  const asignadosUSD      = egresos.filter((e) => e.asignadoA).reduce((s, t) => s + toBase(t.monto, t.moneda, 'USD', settings), 0)
-  const sinAsignarUSD     = totalEgresosUSD - asignadosUSD
-  const pctAsignado = totalEgresosUSD > 0 ? (asignadosUSD / totalEgresosUSD) * 100 : 0
-
   const byDate = (a: Transaction, b: Transaction) =>
     a.fecha.toDate().getTime() - b.fecha.toDate().getTime()
 
+  const totalEgresosB = egresos.reduce((s, t) => s + toBase(t.monto, t.moneda, base, settings), 0)
+  const asignadosB    = egresos.filter((e) => e.asignadoA).reduce((s, t) => s + toBase(t.monto, t.moneda, base, settings), 0)
+  const sinAsignarB   = totalEgresosB - asignadosB
+  const pctAsignado   = totalEgresosB > 0 ? (asignadosB / totalEgresosB) * 100 : 0
+
   const grupos = useMemo(() => {
     return ingresos.map((ing) => {
-      const asignados = egresos
-        .filter((e) => e.asignadoA === ing.id)
-        .sort(byDate)
-      const totalUSD = asignados.reduce((s, t) => s + toBase(t.monto, t.moneda, 'USD', settings), 0)
-      const ingresoUSD = toBase(ing.monto, ing.moneda, 'USD', settings)
-      return { ingreso: ing, asignados, totalUSD, ingresoUSD, restante: ingresoUSD - totalUSD }
+      const asignados = egresos.filter((e) => e.asignadoA === ing.id).sort(byDate)
+      const totalB    = asignados.reduce((s, t) => s + toBase(t.monto, t.moneda, base, settings), 0)
+      const ingresoB  = toBase(ing.monto, ing.moneda, base, settings)
+      return { ingreso: ing, asignados, totalB, ingresoB }
     })
-  }, [ingresos, egresos, settings])
+  }, [ingresos, egresos, settings, base])
 
   const sinAsignar = useMemo(
     () => egresos.filter((e) => !e.asignadoA).sort(byDate),
@@ -59,7 +60,6 @@ export default function AsignacionesPage() {
   function toggle(id: string) {
     setExpanded((e) => ({ ...e, [id]: !e[id] }))
   }
-
   function toggleSelect(id: string) {
     setSelected((s) => {
       const next = new Set(s)
@@ -74,7 +74,6 @@ export default function AsignacionesPage() {
     if (ingresos.length === 0) return showToast('No hay ingresos para asignar', 'error')
     let count = 0
     for (const e of sinAsignar) {
-      // ingreso más cercano en fecha
       const eDate = e.fecha.toDate().getTime()
       let best = ingresos[0]
       let bestDiff = Math.abs(eDate - best.fecha.toDate().getTime())
@@ -82,10 +81,7 @@ export default function AsignacionesPage() {
         const d = Math.abs(eDate - ing.fecha.toDate().getTime())
         if (d < bestDiff) { best = ing; bestDiff = d }
       }
-      if (e.id && best.id) {
-        await updateTransaction(e.id, { asignadoA: best.id })
-        count++
-      }
+      if (e.id && best.id) { await updateTransaction(e.id, { asignadoA: best.id }); count++ }
     }
     showToast(`Asignados ${count} egresos`)
   }
@@ -101,37 +97,44 @@ export default function AsignacionesPage() {
     showToast(toIngresoId ? `Reasignados ${count}` : `Desasignados ${count}`)
   }
 
+  function ingresoLabel(t: Transaction) {
+    return t.descripcion || getCatFromSettings(t.categoria, settings)?.nombre || '—'
+  }
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
+      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-2xl font-semibold tracking-tight">Asignación de egresos</h2>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={autoAsignar}>
-            <Wand2 className="h-4 w-4" /> Auto-asignar
-          </Button>
-        </div>
+        <h2 className="text-xl font-semibold tracking-tight">Asignaciones</h2>
+        <Button variant="secondary" onClick={autoAsignar}>
+          <Wand2 className="h-4 w-4" /> Auto-asignar
+        </Button>
       </div>
 
+      {/* Barra de progreso global */}
       <Card>
-        <CardContent className="pt-5">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-sm font-medium text-foreground">
-              Asignado <MoneyText amount={asignadosUSD} currency="USD" /> de <MoneyText amount={totalEgresosUSD} currency="USD" />
+        <CardContent className="pt-4 pb-3">
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="text-xs text-muted">
+              Asignado <span className="text-foreground font-medium"><MoneyText amount={asignadosB} currency={base} /></span>
+              {' '}de <MoneyText amount={totalEgresosB} currency={base} />
             </div>
-            <div className="text-sm font-semibold tabular-nums">{pctAsignado.toFixed(0)}%</div>
+            <div className="text-xs font-semibold">{pctAsignado.toFixed(0)}%</div>
           </div>
-          <div className="h-2 bg-surface-2 rounded-full overflow-hidden">
+          <div className="h-1.5 bg-surface-2 rounded-full overflow-hidden">
             <div className="h-full bg-primary transition-all" style={{ width: `${pctAsignado}%` }} />
           </div>
-          <div className="flex justify-between text-xs text-muted mt-2">
-            <span>Sin asignar: <MoneyText amount={sinAsignarUSD} currency="USD" /></span>
-            <span>{sinAsignar.length} egresos pendientes</span>
-          </div>
+          {sinAsignar.length > 0 && (
+            <div className="text-[11px] text-muted mt-1.5">
+              Sin asignar: <MoneyText amount={sinAsignarB} currency={base} /> · {sinAsignar.length} egresos
+            </div>
+          )}
         </CardContent>
       </Card>
 
+      {/* Selección múltiple */}
       {selected.size > 0 && (
-        <div className="sticky top-20 z-20 flex items-center justify-between gap-2 px-4 py-3 rounded-lg bg-primary text-primary-foreground shadow-md">
+        <div className="sticky top-20 z-20 flex items-center justify-between gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground shadow-md">
           <div className="text-sm font-medium">{selected.size} seleccionados</div>
           <div className="flex gap-2">
             <Button variant="ghost" className="text-primary-foreground hover:bg-white/10" onClick={() => reasignar(null)}>
@@ -147,16 +150,17 @@ export default function AsignacionesPage() {
         </div>
       )}
 
+      {/* Sin asignar */}
       {sinAsignar.length > 0 && (
         <GrupoCard
           titulo="Sin asignar"
           tone="warning"
-          subtitulo={`${sinAsignar.length} egresos · ${''}`}
-          totalUSD={sinAsignarUSD}
+          fecha=""
+          totalB={sinAsignarB}
+          base={base}
           color="#ea580c"
           expanded={expanded['_sin'] ?? true}
           onToggle={() => toggle('_sin')}
-          
           settings={settings}
           egresos={sinAsignar}
           selected={selected}
@@ -164,17 +168,18 @@ export default function AsignacionesPage() {
         />
       )}
 
+      {/* Grupos por ingreso */}
       {grupos.map((g) => (
         <GrupoCard
           key={g.ingreso.id}
-          titulo={g.ingreso.descripcion || '(sin descripción)'}
-          subtitulo={`Ingreso · ${g.ingreso.fecha.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}`}
-          totalUSD={g.totalUSD}
-          ingresoUSD={g.ingresoUSD}
+          titulo={ingresoLabel(g.ingreso)}
+          fecha={g.ingreso.fecha.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
+          totalB={g.totalB}
+          ingresoB={g.ingresoB}
+          base={base}
           color="#534AB7"
           expanded={expanded[g.ingreso.id ?? ''] ?? false}
           onToggle={() => toggle(g.ingreso.id ?? '')}
-          
           settings={settings}
           egresos={g.asignados}
           selected={selected}
@@ -190,22 +195,18 @@ export default function AsignacionesPage() {
         </Card>
       )}
 
-      <Modal
-        open={reassignOpen}
-        onClose={() => setReassignOpen(false)}
-        title="Reasignar a un ingreso"
-      >
-        <div className="space-y-2 max-h-[400px] overflow-auto">
+      {/* Modal reasignar */}
+      <Modal open={reassignOpen} onClose={() => setReassignOpen(false)} title="Reasignar a…">
+        <div className="space-y-1.5 max-h-[400px] overflow-auto">
           {ingresos.map((ing) => (
             <button
               key={ing.id}
               onClick={() => reasignar(ing.id ?? null)}
-              className="w-full text-left p-3 rounded-md border border-border hover:bg-surface-2 transition-colors"
+              className="w-full text-left px-3 py-2.5 rounded-md border border-border hover:bg-surface-2 transition-colors"
             >
-              <div className="text-sm font-medium text-foreground">{ing.descripcion}</div>
+              <div className="text-sm font-medium text-foreground">{ingresoLabel(ing)}</div>
               <div className="text-xs text-muted mt-0.5">
-                {ing.fecha.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })} ·{' '}
-                <MoneyText amount={ing.monto} currency={ing.moneda} />
+                {ing.fecha.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })} · <MoneyText amount={ing.monto} currency={ing.moneda} />
               </div>
             </button>
           ))}
@@ -217,12 +218,13 @@ export default function AsignacionesPage() {
 }
 
 function GrupoCard({
-  titulo, subtitulo, totalUSD, ingresoUSD, color, expanded, onToggle, settings, egresos, selected, onSelect, tone,
+  titulo, fecha, totalB, ingresoB, base, color, expanded, onToggle, settings, egresos, selected, onSelect, tone,
 }: {
   titulo: string
-  subtitulo: string
-  totalUSD: number
-  ingresoUSD?: number
+  fecha: string
+  totalB: number
+  ingresoB?: number
+  base: Currency
   color: string
   expanded: boolean
   onToggle: () => void
@@ -232,70 +234,72 @@ function GrupoCard({
   onSelect: (id: string) => void
   tone?: 'warning'
 }) {
-  const pct = ingresoUSD && ingresoUSD > 0 ? Math.min(100, (totalUSD / ingresoUSD) * 100) : 0
+  const pct = ingresoB && ingresoB > 0 ? Math.min(100, (totalB / ingresoB) * 100) : 0
   return (
     <Card className={tone === 'warning' ? 'border-unassigned/30' : ''}>
       <button
         onClick={onToggle}
-        className="w-full px-5 py-4 flex items-center justify-between gap-3 hover:bg-surface-2/60"
+        className="w-full px-4 py-3 flex items-center justify-between gap-3 hover:bg-surface-2/60 transition-colors"
       >
-        <div className="flex items-center gap-3 min-w-0">
-          {expanded ? <ChevronDown className="h-4 w-4 text-muted" /> : <ChevronRight className="h-4 w-4 text-muted" />}
+        <div className="flex items-center gap-2.5 min-w-0">
+          {expanded
+            ? <ChevronDown className="h-3.5 w-3.5 text-muted shrink-0" />
+            : <ChevronRight className="h-3.5 w-3.5 text-muted shrink-0" />}
           <span className="h-2 w-2 rounded-full shrink-0" style={{ background: color }} />
           <div className="text-left min-w-0">
             <div className="text-sm font-semibold text-foreground truncate">{titulo}</div>
-            <div className="text-xs text-muted">{subtitulo} · {egresos.length} egresos</div>
+            <div className="text-[11px] text-muted">
+              {fecha && `${fecha} · `}{egresos.length} egreso{egresos.length !== 1 ? 's' : ''}
+            </div>
           </div>
         </div>
-        <div className="text-right whitespace-nowrap">
-          <div className="text-sm font-semibold tabular-nums">
-            <MoneyText amount={totalUSD} currency="USD" />
+        <div className="text-right whitespace-nowrap shrink-0">
+          <div className="text-sm font-semibold tnum">
+            <MoneyText amount={totalB} currency={base} />
           </div>
-          {ingresoUSD !== undefined && (
-            <div className="text-xs text-muted">
-              de <MoneyText amount={ingresoUSD} currency="USD" /> ({pct.toFixed(0)}%)
+          {ingresoB !== undefined && (
+            <div className="text-[11px] text-muted">
+              de <MoneyText amount={ingresoB} currency={base} /> · {pct.toFixed(0)}%
             </div>
           )}
         </div>
       </button>
+
       {expanded && (
         <div className="border-t border-border">
           {egresos.length === 0 ? (
-            <p className="text-sm text-muted text-center py-6">Sin egresos asignados.</p>
-          ) : (
-            <div>
-              {egresos.map((e) => {
-                const cat = getCatFromSettings(e.categoria, settings)
-                const isSel = e.id ? selected.has(e.id) : false
-                return (
-                  <label
-                    key={e.id}
-                    className={`flex items-center gap-3 px-5 py-2.5 border-b border-border last:border-0 cursor-pointer hover:bg-surface-2/60 ${
-                      isSel ? 'bg-primary/5' : ''
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isSel}
-                      onChange={() => e.id && onSelect(e.id)}
-                      className="h-4 w-4 rounded border-border accent-primary"
-                    />
-                    <span className="h-2 w-2 rounded-full shrink-0" style={{ background: cat?.color ?? '#94a3b8' }} />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm text-foreground truncate">{e.descripcion || '(sin descripción)'}</div>
-                      <div className="text-xs text-muted">
-                        {cat?.nombre ?? '—'} · {e.fecha.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
-                      </div>
-                    </div>
-                    {!e.ejecutado && <Badge tone="warning">Pendiente</Badge>}
-                    <span className="text-sm font-semibold text-expense tabular-nums whitespace-nowrap">
-                      −<MoneyText amount={e.monto} currency={e.moneda} />
-                    </span>
-                  </label>
-                )
-              })}
-            </div>
-          )}
+            <p className="text-xs text-muted text-center py-5">Sin egresos asignados.</p>
+          ) : egresos.map((e) => {
+            const cat = getCatFromSettings(e.categoria, settings)
+            const label = e.descripcion || cat?.nombre || '—'
+            const isSel = e.id ? selected.has(e.id) : false
+            return (
+              <label
+                key={e.id}
+                className={`flex items-center gap-3 px-4 py-2 border-b border-border last:border-0 cursor-pointer hover:bg-surface-2/60 ${
+                  isSel ? 'bg-primary/5' : ''
+                }`}
+              >
+                <input
+                  type="checkbox" checked={isSel}
+                  onChange={() => e.id && onSelect(e.id)}
+                  className="h-3.5 w-3.5 rounded border-border accent-primary shrink-0"
+                />
+                <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: cat?.color ?? '#94a3b8' }} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-medium text-foreground truncate">{label}</div>
+                  <div className="text-[11px] text-muted">
+                    {cat?.nombre !== label ? `${cat?.nombre ?? '—'} · ` : ''}
+                    {e.fecha.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
+                  </div>
+                </div>
+                {!e.ejecutado && <Badge tone="warning">Pendiente</Badge>}
+                <span className="text-xs font-semibold text-expense tnum whitespace-nowrap shrink-0">
+                  <MoneyText amount={e.monto} currency={e.moneda} />
+                </span>
+              </label>
+            )
+          })}
         </div>
       )}
     </Card>

@@ -220,8 +220,9 @@ function TopCategorias({
                       <span className="truncate">{it.nombre}</span>
                       {it.hasChildren && <ChevronRight className="h-3 w-3 text-muted-2 shrink-0" />}
                     </span>
-                    <span className="text-muted tnum shrink-0 ml-2">
-                      {denom > 0 ? ((it.total / denom) * 100).toFixed(0) : 0}%
+                    <span className="text-right shrink-0 ml-2">
+                      <span className="text-[11px] text-muted tnum block">{formatAmount(it.total, base)}</span>
+                      <span className="text-[10px] text-muted-2 tnum">{denom > 0 ? ((it.total / denom) * 100).toFixed(0) : 0}%</span>
                     </span>
                   </Row>
                 )
