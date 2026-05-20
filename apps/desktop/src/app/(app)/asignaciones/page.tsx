@@ -10,7 +10,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Modal } from '@/components/ui/modal'
-import { MoneyText } from '@/components/MoneyText'
+import { MoneyText, PercentText } from '@/components/MoneyText'
 import { updateTransaction } from '@finanzas/core/lib/transactions'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { toBase } from '@finanzas/core/lib/currency'
@@ -119,7 +119,7 @@ export default function AsignacionesPage() {
               Asignado <span className="text-foreground font-medium"><MoneyText amount={asignadosB} currency={base} /></span>
               {' '}de <MoneyText amount={totalEgresosB} currency={base} />
             </div>
-            <div className="text-xs font-semibold">{pctAsignado.toFixed(0)}%</div>
+            <div className="text-xs font-semibold"><PercentText value={pctAsignado} /></div>
           </div>
           <div className="h-1.5 bg-surface-2 rounded-full overflow-hidden">
             <div className="h-full bg-primary transition-all" style={{ width: `${pctAsignado}%` }} />
@@ -259,7 +259,7 @@ function GrupoCard({
           </div>
           {ingresoB !== undefined && (
             <div className="text-[11px] text-muted">
-              de <MoneyText amount={ingresoB} currency={base} /> · {pct.toFixed(0)}%
+              de <MoneyText amount={ingresoB} currency={base} /> · <PercentText value={pct} />
             </div>
           )}
         </div>
@@ -291,11 +291,12 @@ function GrupoCard({
                   <div className="text-[11px] text-muted">
                     {cat?.nombre !== label ? `${cat?.nombre ?? '—'} · ` : ''}
                     {e.fecha.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
+                    {e.moneda !== base && <> · <MoneyText amount={e.monto} currency={e.moneda} /></>}
                   </div>
                 </div>
                 {!e.ejecutado && <Badge tone="warning">Pendiente</Badge>}
                 <span className="text-xs font-semibold text-expense tnum whitespace-nowrap shrink-0">
-                  <MoneyText amount={e.monto} currency={e.moneda} />
+                  <MoneyText amount={toBase(e.monto, e.moneda, base, settings)} currency={base} />
                 </span>
               </label>
             )

@@ -1,5 +1,7 @@
 'use client'
 
+import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
+
 interface Slice {
   label: string
   value: number
@@ -16,6 +18,7 @@ interface Props {
 }
 
 export function Donut({ data, size = 200, thickness = 28, centerLabel, centerValue, onSliceClick }: Props) {
+  const hide = useSettingsStore((s) => s.hideAmounts)
   const total = data.reduce((s, d) => s + d.value, 0)
   const radius = size / 2
   const inner = radius - thickness
@@ -70,7 +73,7 @@ export function Donut({ data, size = 200, thickness = 28, centerLabel, centerVal
       {(centerLabel || centerValue) && (
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
           {centerLabel && <span className="text-xs text-muted">{centerLabel}</span>}
-          {centerValue && <span className="text-base font-semibold text-foreground">{centerValue}</span>}
+          {centerValue && <span className={`text-base font-semibold text-foreground ${hide ? 'blur-amount' : ''}`}>{centerValue}</span>}
         </div>
       )}
     </div>

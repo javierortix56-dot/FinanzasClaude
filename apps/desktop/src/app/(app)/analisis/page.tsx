@@ -6,21 +6,22 @@ import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { Card, CardContent } from '@/components/ui/card'
-import { MoneyText } from '@/components/MoneyText'
-import { Donut } from '@/components/charts/Donut'
+import { MoneyText, PercentText } from '@/components/MoneyText'
+import { CategoryChart } from '@/components/charts/CategoryChart'
 import { LineChart } from '@/components/charts/LineChart'
+import { BarChart } from '@/components/charts/BarChart'
 import { fetchLastNMonths, fetchMonthTransactions } from '@finanzas/core/lib/analytics'
 import { toBase } from '@finanzas/core/lib/currency'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
-import { getCatFromSettings, monthLabel, shiftMonth, formatAmount, CHART_PALETTE } from '@finanzas/core/lib/constants'
-import { Currency, Transaction } from '@finanzas/core/types'
+import { monthLabel, shiftMonth } from '@finanzas/core/lib/constants'
+import { Currency, Transaction, Settings } from '@finanzas/core/types'
 
 type TabBig = 'historico' | 'piloto'
 type TabCat = 'gastos' | 'ingresos'
 
 export default function AnalisisPage() {
   const { transactions, currentMonth } = useTransactionStore()
-  const settings = useSettingsStore((s) => s.settings) ?? DEFAULT_SETTINGS
+  const settings = (useSettingsStore((s) => s.settings) ?? DEFAULT_SETTINGS) as Settings
   const { monedaBase } = useAuthStore()
   const base = monedaBase as Currency
 
@@ -45,30 +46,23 @@ export default function AnalisisPage() {
   const egresosPrev  = sumByType(prevTxs, 'egreso')
   const balancePrev  = ingresosPrev - egresosPrev
 
-  const target = tabCat === 'gastos'
-    ? transactions.filter((t) => t.tipo === 'egreso')
-    : transactions.filter((t) => t.tipo === 'ingreso')
-
-  const totalCat = target.reduce((s, t) => s + toBase(t.monto, t.moneda, base, settings), 0)
-  const byCat = new Map<string, number>()
-  for (const t of target) {
-    byCat.set(t.categoria, (byCat.get(t.categoria) ?? 0) + toBase(t.monto, t.moneda, base, settings))
-  }
-  const slices = [...byCat.entries()]
-    .map(([id, value]) => {
-      const c = getCatFromSettings(id, settings)
-      return { id, label: c?.nombre ?? id, color: c?.color ?? '#94a3b8', value }
-    })
-    .sort((a, b) => b.value - a.value)
-    .map((s, i) => ({ ...s, color: CHART_PALETTE[i % CHART_PALETTE.length] }))
-
   const months = Object.keys(historico).sort()
-  const lineLabels = months.map((m) => monthLabel(m).slice(0, 3))
+  const monthLabels = months.map((m) => monthLabel(m).slice(0, 3))
+  const ingresosByMonth = months.map((m) => sumByType(historico[m], 'ingreso'))
+  const egresosByMonth  = months.map((m) => sumByType(historico[m], 'egreso'))
+
   const lineSeries = [
-    { label: 'Ingresos', color: '#16a34a', values: months.map((m) => sumByType(historico[m], 'ingreso')) },
-    { label: 'Egresos',  color: '#dc2626', values: months.map((m) => sumByType(historico[m], 'egreso')) },
-    { label: 'Balance',  color: '#534AB7', values: months.map((m) => sumByType(historico[m], 'ingreso') - sumByType(historico[m], 'egreso')) },
+    { label: 'Ingresos', color: '#16a34a', values: ingresosByMonth },
+    { label: 'Egresos',  color: '#dc2626', values: egresosByMonth },
+    { label: 'Balance',  color: '#534AB7', values: months.map((m, i) => ingresosByMonth[i] - egresosByMonth[i]) },
   ]
+
+  const barSeries = [
+    { label: 'Ingresos', color: '#16a34a', values: ingresosByMonth },
+    { label: 'Egresos',  color: '#dc2626', values: egresosByMonth },
+  ]
+
+  const yFmt = (n: number) => Math.abs(n) >= 1000 ? `${(n / 1000).toFixed(0)}k` : n.toFixed(0)
 
   function variation(cur: number, prev: number) {
     if (prev === 0) return null
@@ -120,29 +114,16 @@ export default function AnalisisPage() {
                 </div>
               </div>
               <CardContent className="pt-5">
-                <div className="flex flex-col sm:flex-row items-center gap-6">
-                  <Donut
-                    data={slices}
-                    centerLabel="Total"
-                    centerValue={formatAmount(totalCat, base)}
-                  />
-                  <div className="flex-1 w-full space-y-2">
-                    {slices.length === 0 ? (
-                      <p className="text-sm text-muted py-6 text-center">Sin datos.</p>
-                    ) : slices.map((s) => (
-                      <div key={s.id} className="flex items-center justify-between text-sm">
-                        <span className="flex items-center gap-2 text-foreground">
-                          <span className="h-2.5 w-2.5 rounded-full" style={{ background: s.color }} />
-                          {s.label}
-                        </span>
-                        <div className="text-right tabular-nums">
-                          <div className="text-foreground"><MoneyText amount={s.value} currency={base} /></div>
-                          <div className="text-xs text-muted">{((s.value / totalCat) * 100).toFixed(0)}%</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <CategoryChart
+                  key={tabCat}
+                  transactions={transactions}
+                  tipo={tabCat === 'gastos' ? 'egreso' : 'ingreso'}
+                  base={base}
+                  settings={settings}
+                  layout="horizontal"
+                  donutSize={180}
+                  centerLabel="Total"
+                />
               </CardContent>
             </Card>
 
@@ -151,21 +132,22 @@ export default function AnalisisPage() {
                 <div className="text-sm font-semibold">Evolución (últimos 6 meses)</div>
               </div>
               <CardContent className="pt-5">
-                <LineChart
-                  labels={lineLabels}
-                  series={lineSeries}
-                  yFormatter={(n) => Math.abs(n) >= 1000 ? `${(n / 1000).toFixed(0)}k` : n.toFixed(0)}
-                />
+                <LineChart labels={monthLabels} series={lineSeries} yFormatter={yFmt} />
               </CardContent>
             </Card>
           </div>
+
+          <Card>
+            <div className="px-5 py-4 border-b border-border">
+              <div className="text-sm font-semibold">Ingresos vs egresos por mes</div>
+            </div>
+            <CardContent className="pt-5">
+              <BarChart labels={monthLabels} series={barSeries} yFormatter={yFmt} />
+            </CardContent>
+          </Card>
         </>
       ) : (
-        <PilotoView
-          ingresos={ingresosCur}
-          egresos={egresosCur}
-          base={base}
-        />
+        <PilotoView ingresos={ingresosCur} egresos={egresosCur} base={base} />
       )}
     </div>
   )
@@ -195,9 +177,9 @@ function ComparisonCard({
             <span className="text-muted">— vs mes anterior</span>
           ) : (
             <>
-              <span className={good ? 'text-income' : 'text-expense'}>
+              <span className={`inline-flex items-center ${good ? 'text-income' : 'text-expense'}`}>
                 {up ? <ArrowUp className="h-3 w-3 inline" /> : <ArrowDown className="h-3 w-3 inline" />}
-                {Math.abs(variation).toFixed(0)}%
+                <PercentText value={Math.abs(variation)} />
               </span>
               <span className="text-muted">vs mes anterior</span>
             </>
@@ -224,7 +206,9 @@ function PilotoView({ ingresos, egresos, base }: { ingresos: number; egresos: nu
         <CardContent className="pt-5">
           <div className="text-xs font-medium text-muted">Proyección Ingresos</div>
           <div className="mt-2 text-xl font-semibold text-income"><MoneyText amount={proyIngresos} currency={base} /></div>
-          <div className="text-xs text-muted mt-1">Actual: <MoneyText amount={ingresos} currency={base} /> · {(elapsed * 100).toFixed(0)}% del mes</div>
+          <div className="text-xs text-muted mt-1">
+            Actual: <MoneyText amount={ingresos} currency={base} /> · <PercentText value={elapsed * 100} /> del mes
+          </div>
         </CardContent>
       </Card>
       <Card>

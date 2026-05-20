@@ -7,7 +7,7 @@ import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { MoneyText } from '@/components/MoneyText'
+import { MoneyText, PercentText } from '@/components/MoneyText'
 import { AssetModal } from '@/components/modals/AssetModal'
 import { toBase } from '@finanzas/core/lib/currency'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
@@ -137,7 +137,7 @@ export default function CuentasPage() {
                             <span className="text-muted">
                               <MoneyText amount={meta} currency={a.metaMoneda ?? 'USD'} />
                             </span>
-                            <span className="font-semibold">{metaPct.toFixed(0)}%</span>
+                            <span className="font-semibold"><PercentText value={metaPct} /></span>
                           </div>
                           <div className="h-1.5 bg-surface-2 rounded-full overflow-hidden">
                             <div className="h-full bg-primary" style={{ width: `${metaPct}%` }} />

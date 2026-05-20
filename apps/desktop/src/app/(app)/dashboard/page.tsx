@@ -1,26 +1,17 @@
 'use client'
 
-import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
-import { TrendingUp, TrendingDown, ArrowRight, ArrowUpRight, ArrowDownRight, ChevronRight, ChevronLeft, Link2, Plus, Search, X as XIcon } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Link2, Plus, Search, X as XIcon } from 'lucide-react'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
-import { MoneyText } from '@/components/MoneyText'
-import { Donut } from '@/components/charts/Donut'
+import { MoneyText, PercentText } from '@/components/MoneyText'
+import { CategoryChart } from '@/components/charts/CategoryChart'
 import { TransactionModal } from '@/components/modals/TransactionModal'
 import { toBase } from '@finanzas/core/lib/currency'
-import {
-  formatAmount,
-  getCatFromSettings,
-  getTopGroup,
-  monthLabel,
-  shiftMonth,
-  CHART_PALETTE,
-} from '@finanzas/core/lib/constants'
+import { getCatFromSettings, monthLabel, shiftMonth } from '@finanzas/core/lib/constants'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { fetchLastNMonths } from '@finanzas/core/lib/analytics'
 import { Currency, Transaction, Settings } from '@finanzas/core/types'
@@ -40,17 +31,19 @@ function TrendChip({ delta, invert = false }: { delta: number | null; invert?: b
   return (
     <span className={`inline-flex items-center gap-0.5 text-xs font-semibold ${good ? 'text-income' : 'text-expense'}`}>
       <Icon className="h-3 w-3" />
-      {Math.abs(delta).toFixed(0)}%
+      <PercentText value={Math.abs(delta)} />
       <span className="font-normal text-muted ml-0.5">vs ant.</span>
     </span>
   )
 }
 
-function TLedgerRow({ t, settings, asignadoLabel, onClick }: { t: Transaction; settings: Settings; asignadoLabel?: string; onClick?: () => void }) {
+function TLedgerRow({ t, settings, base, asignadoLabel, onClick }: { t: Transaction; settings: Settings; base: Currency; asignadoLabel?: string; onClick?: () => void }) {
   const cat = getCatFromSettings(t.categoria, settings)
   const fechaStr = t.fecha.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })
   const done = t.ejecutado
   const showDesc = t.descripcion && t.descripcion.trim() !== (cat?.nombre ?? '').trim()
+  const montoBase = toBase(t.monto, t.moneda, base, settings)
+  const showOriginal = t.moneda !== base
   return (
     <div
       className="px-3 py-1.5 hover:bg-surface-2/60 transition-colors cursor-pointer"
@@ -82,9 +75,12 @@ function TLedgerRow({ t, settings, asignadoLabel, onClick }: { t: Transaction; s
         </div>
         <div className="text-right shrink-0">
           <div className={`text-xs font-semibold tnum ${done ? 'line-through opacity-70' : ''} ${t.tipo === 'ingreso' ? 'text-income' : 'text-expense'}`}>
-            <MoneyText amount={t.monto} currency={t.moneda} />
+            <MoneyText amount={montoBase} currency={base} />
           </div>
-          <div className="text-[10px] text-muted">{fechaStr}</div>
+          <div className="text-[10px] text-muted">
+            {showOriginal && <span className="tnum"><MoneyText amount={t.monto} currency={t.moneda} /> · </span>}
+            {fechaStr}
+          </div>
         </div>
       </div>
     </div>
@@ -101,83 +97,17 @@ function TopCategorias({
   base: Currency
 }) {
   const [tab, setTab] = useState<CatTab>('egresos')
-  const [drill, setDrill] = useState<string | null>(null)
-
-  const { grupos, total } = useMemo(() => {
-    const target = transactions.filter((t) => t.tipo === (tab === 'egresos' ? 'egreso' : 'ingreso'))
-    const totalAmt = target.reduce((s, t) => s + toBase(t.monto, t.moneda, base, settings), 0)
-
-    type SubMap = Map<string, { nombre: string; color: string; total: number }>
-    type GrpMap = Map<string, { nombre: string; total: number; subs: SubMap }>
-    const porGrupo: GrpMap = new Map()
-
-    for (const t of target) {
-      const topGroup = getTopGroup(t.categoria, settings)
-      const gid = topGroup?.id ?? t.categoria
-      const gnombre = topGroup?.nombre ?? t.categoria
-
-      if (!porGrupo.has(gid)) porGrupo.set(gid, { nombre: gnombre, total: 0, subs: new Map() })
-      const g = porGrupo.get(gid)!
-      const amt = toBase(t.monto, t.moneda, base, settings)
-      g.total += amt
-
-      const cat = getCatFromSettings(t.categoria, settings)
-      if (!g.subs.has(t.categoria)) {
-        g.subs.set(t.categoria, { nombre: cat?.nombre ?? t.categoria, color: cat?.color ?? '#94a3b8', total: 0 })
-      }
-      g.subs.get(t.categoria)!.total += amt
-    }
-
-    const gruposArr = [...porGrupo.entries()]
-      .map(([id, g]) => ({
-        id,
-        nombre: g.nombre,
-        total: g.total,
-        subs: [...g.subs.entries()]
-          .map(([sid, s]) => ({ id: sid, ...s }))
-          .sort((a, b) => b.total - a.total),
-      }))
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 8)
-      .map((g, i) => ({ ...g, chartColor: CHART_PALETTE[i % CHART_PALETTE.length] }))
-
-    return { grupos: gruposArr, total: totalAmt }
-  }, [transactions, tab, settings, base])
-
-  const activeGroup = drill ? grupos.find((g) => g.id === drill) ?? null : null
-
-  const items = activeGroup
-    ? activeGroup.subs.map((s, i) => ({
-        id: s.id, nombre: s.nombre, total: s.total,
-        color: CHART_PALETTE[i % CHART_PALETTE.length], hasChildren: false,
-      }))
-    : grupos.map((g) => ({
-        id: g.id, nombre: g.nombre, total: g.total,
-        color: g.chartColor, hasChildren: g.subs.length > 1,
-      }))
-
-  const denom = activeGroup ? activeGroup.total : total
+  const tipo = tab === 'egresos' ? 'egreso' : 'ingreso'
 
   return (
     <Card>
       <div className="px-4 pt-4 pb-3 border-b border-border flex items-center justify-between gap-2">
-        <div className="text-sm font-semibold flex items-center gap-1 min-w-0">
-          {activeGroup && (
-            <button
-              type="button"
-              onClick={() => setDrill(null)}
-              className="text-muted hover:text-foreground shrink-0 -ml-1"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-          )}
-          <span className="truncate">{activeGroup ? activeGroup.nombre : 'Top categorías'}</span>
-        </div>
+        <div className="text-sm font-semibold truncate">Top categorías</div>
         <div className="inline-flex p-0.5 rounded bg-surface-2 border border-border shrink-0">
           {(['egresos', 'ingresos'] as CatTab[]).map((c) => (
             <button
               key={c}
-              onClick={() => { setTab(c); setDrill(null) }}
+              onClick={() => setTab(c)}
               className={`px-2.5 h-6 text-[11px] font-medium rounded transition-colors ${
                 tab === c ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'
               }`}
@@ -188,48 +118,14 @@ function TopCategorias({
         </div>
       </div>
       <CardContent className="pt-4">
-        {grupos.length === 0 ? (
-          <p className="text-xs text-muted py-6 text-center">Sin datos.</p>
-        ) : (
-          <>
-            <div className="flex justify-center mb-4">
-              <Donut
-                size={160}
-                thickness={22}
-                data={items.map((it) => ({ label: it.nombre, value: it.total, color: it.color }))}
-                centerLabel={activeGroup ? activeGroup.nombre : tab}
-                centerValue={formatAmount(denom, base)}
-                onSliceClick={activeGroup ? undefined : (i) => {
-                  if (grupos[i]?.subs.length > 1) setDrill(grupos[i].id)
-                }}
-              />
-            </div>
-            <div className="space-y-0.5">
-              {items.map((it) => {
-                const Row = it.hasChildren ? 'button' : 'div'
-                return (
-                  <Row
-                    key={it.id}
-                    {...(it.hasChildren ? { type: 'button' as const, onClick: () => setDrill(it.id) } : {})}
-                    className={`w-full flex items-center justify-between text-xs py-1.5 px-1 rounded transition-colors ${
-                      it.hasChildren ? 'hover:bg-surface-2/60 cursor-pointer' : ''
-                    }`}
-                  >
-                    <span className="flex items-center gap-2 text-foreground font-medium truncate min-w-0">
-                      <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: it.color }} />
-                      <span className="truncate">{it.nombre}</span>
-                      {it.hasChildren && <ChevronRight className="h-3 w-3 text-muted-2 shrink-0" />}
-                    </span>
-                    <span className="text-right shrink-0 ml-2">
-                      <span className="text-[11px] text-muted tnum block">{formatAmount(it.total, base)}</span>
-                      <span className="text-[10px] text-muted-2 tnum">{denom > 0 ? ((it.total / denom) * 100).toFixed(0) : 0}%</span>
-                    </span>
-                  </Row>
-                )
-              })}
-            </div>
-          </>
-        )}
+        <CategoryChart
+          key={tipo}
+          transactions={transactions}
+          tipo={tipo}
+          base={base}
+          settings={settings}
+          centerLabel={tab}
+        />
       </CardContent>
     </Card>
   )
@@ -332,7 +228,7 @@ export default function DashboardPage() {
             <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted">
               <MoneyText amount={balanceUSD} currency="USD" />
               <span className="text-border">·</span>
-              <span>{tasaAhorro.toFixed(0)}% ahorro</span>
+              <span><PercentText value={tasaAhorro} /> ahorro</span>
               <TrendChip delta={dBal} />
             </div>
           </div>
@@ -415,7 +311,7 @@ export default function DashboardPage() {
                     {filter ? 'Sin resultados' : 'Sin ingresos'}
                   </div>
                 ) : ingresosSort.map((t) => (
-                  <TLedgerRow key={t.id} t={t} settings={s} onClick={() => openEdit(t)} />
+                  <TLedgerRow key={t.id} t={t} settings={s} base={base} onClick={() => openEdit(t)} />
                 ))}
               </div>
             </div>
@@ -436,6 +332,7 @@ export default function DashboardPage() {
                     key={t.id}
                     t={t}
                     settings={s}
+                    base={base}
                     asignadoLabel={t.asignadoA ? ingresoLabelById.get(t.asignadoA) : undefined}
                     onClick={() => openEdit(t)}
                   />
