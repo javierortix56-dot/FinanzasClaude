@@ -27,25 +27,28 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<tu-anon-key>
 
 ## Desarrollo local
 
+Este paquete es parte de un **monorepo npm**. Instalá las dependencias **una sola vez desde la raíz** y arrancá la app de escritorio con el script del monorepo:
+
 ```bash
-cd desktop
+# desde la raíz del repositorio
 npm install
-cp .env.example .env.local   # y completar las variables
-npm run dev                  # arranca en http://localhost:3001
+npm run dev:desktop          # arranca en http://localhost:3001
 ```
+
+Antes de arrancar, creá `apps/desktop/.env.local` con las variables de Supabase (ver más arriba).
 
 (El `3001` es para no chocar con la mobile que corre en `3000`.)
 
 ## Deploy a Vercel
 
-Esta carpeta `desktop/` se despliega como **un proyecto Vercel separado** del repo (apuntando al mismo repositorio):
+Esta carpeta `apps/desktop/` se despliega como **un proyecto Vercel separado** (apuntando al mismo repositorio):
 
 1. En Vercel: New Project → seleccioná el repo `FinanzasClaude`.
-2. En **Root Directory**, poné `desktop`.
+2. En **Root Directory**, poné `apps/desktop`.
 3. En **Environment Variables** copiá las dos `NEXT_PUBLIC_SUPABASE_*` desde el proyecto de la app móvil.
 4. Deploy.
 
-Cada push a la rama `main` (o la que elijas) actualiza la web. Tu app móvil sigue intacta en su propio dominio.
+Cada push a la rama configurada actualiza la web. Tu app móvil sigue intacta en su propio dominio.
 
 ## Funcionalidades
 
@@ -60,7 +63,7 @@ Cada push a la rama `main` (o la que elijas) actualiza la web. Tu app móvil sig
 ## Estructura
 
 ```
-desktop/
+apps/desktop/
 ├── src/
 │   ├── app/
 │   │   ├── (app)/              ← layout con sidebar + topbar
@@ -73,16 +76,13 @@ desktop/
 │   │   ├── globals.css
 │   │   ├── layout.tsx
 │   │   └── page.tsx (redirige a /dashboard)
-│   ├── components/
-│   │   ├── shell/              ← Sidebar, Topbar
-│   │   ├── ui/                 ← Button, Card, Input, Modal, Badge, Toast
-│   │   ├── modals/             ← TransactionModal, AssetModal
-│   │   ├── charts/             ← Donut, LineChart (SVG sin librerías)
-│   │   ├── DataProvider.tsx
-│   │   └── MoneyText.tsx
-│   ├── lib/                    ← copia del data layer (supabase, transactions, assets, settings, …)
-│   ├── store/                  ← stores Zustand
-│   └── types/
+│   └── components/
+│       ├── shell/              ← Sidebar, Topbar
+│       ├── ui/                 ← Button, Card, Input, Modal, Badge, Toast
+│       ├── modals/             ← TransactionModal, AssetModal
+│       ├── charts/             ← Donut, LineChart (SVG sin librerías)
+│       ├── DataProvider.tsx
+│       └── MoneyText.tsx
 ├── package.json
 ├── next.config.ts
 ├── tsconfig.json
@@ -91,4 +91,4 @@ desktop/
 └── vercel.json
 ```
 
-> **Nota sobre el data layer**: por ahora `desktop/src/lib`, `desktop/src/types` y `desktop/src/store` son **copias** de `src/lib`, `src/types` y `src/store` de la app móvil. Si en el futuro la lógica de datos cambia mucho en una de las dos, conviene migrar a un monorepo (`pnpm workspaces` o similar) con un paquete compartido. Para esta primera versión, copiar es lo más simple y robusto.
+> **Data layer compartido**: la lógica de datos (acceso a Supabase, tipos y stores Zustand) **no vive acá**: se importa del paquete `@finanzas/core` (`packages/core/`), el mismo que usa la app móvil. Así, un cambio en la capa de datos impacta ambas apps a la vez, sin duplicar código. Por eso vas a ver imports como `@finanzas/core/lib/transactions`, `@finanzas/core/store/useTransactionStore`, etc. El `next.config.ts` declara `transpilePackages: ["@finanzas/core"]` para compilarlo desde el código fuente.

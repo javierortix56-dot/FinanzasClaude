@@ -1,6 +1,8 @@
-# FinanzasClaude
+# Finanzas J&M (FinanzasClaude)
 
-Aplicación de finanzas personales compartida para dos usuarios (Javier y Mary), con soporte multi-moneda, sincronización en tiempo real y modo PWA instalable. Diseñada mobile-first con una variante desktop como app web independiente.
+Aplicación de **finanzas personales compartidas** para dos usuarios (Javier y Mary), con soporte multi-moneda (ARS / COP / USD), **sincronización en tiempo real** sobre Supabase y una app móvil instalable como **PWA**. Está organizada como un **monorepo** con dos frontends independientes —uno mobile-first y uno de escritorio— que comparten un único paquete de lógica de negocio y apuntan a la misma base de datos.
+
+> Todo lo que cargás en el celular aparece al instante en la web de escritorio, y viceversa.
 
 ---
 
@@ -9,27 +11,46 @@ Aplicación de finanzas personales compartida para dos usuarios (Javier y Mary),
 - [Descripción general](#descripción-general)
 - [Características principales](#características-principales)
 - [Stack tecnológico](#stack-tecnológico)
-- [Arquitectura del proyecto](#arquitectura-del-proyecto)
-- [Modelo de datos](#modelo-de-datos)
-- [Variables de entorno](#variables-de-entorno)
+- [Arquitectura del monorepo](#arquitectura-del-monorepo)
+- [Estructura del repositorio](#estructura-del-repositorio)
 - [Instalación y desarrollo](#instalación-y-desarrollo)
-- [Estructura de carpetas](#estructura-de-carpetas)
-- [Pantallas y flujos](#pantallas-y-flujos)
+- [Variables de entorno](#variables-de-entorno)
+- [Modelo de datos](#modelo-de-datos)
+- [Capa de datos y tiempo real](#capa-de-datos-y-tiempo-real)
 - [Gestión de estado](#gestión-de-estado)
 - [Multi-moneda](#multi-moneda)
 - [Sistema de categorías](#sistema-de-categorías)
-- [App desktop](#app-desktop)
+- [Patrimonio, snapshots y ahorro](#patrimonio-snapshots-y-ahorro)
+- [App mobile — pantallas y flujos](#app-mobile--pantallas-y-flujos)
+- [App desktop — pantallas y flujos](#app-desktop--pantallas-y-flujos)
 - [PWA](#pwa)
 - [Backup e importación](#backup-e-importación)
 - [Despliegue](#despliegue)
+- [Seguridad](#seguridad)
+- [Notas de implementación](#notas-de-implementación)
 
 ---
 
 ## Descripción general
 
-FinanzasClaude es un tracker financiero personal construido sobre Next.js 16 (App Router) + Supabase. Permite a dos usuarios registrar ingresos y gastos en distintas monedas (ARS, COP, USD), asignar gastos a ingresos, gestionar patrimonio (activos/pasivos) y visualizar análisis históricos.
+FinanzasClaude es un tracker financiero personal pensado para **dos personas que comparten sus finanzas**. Permite:
 
-La arquitectura es intencionalmente sencilla: un único registro en Supabase comparte todos los datos entre ambos usuarios. No hay sistema de autenticación por usuario — la pertenencia de cada transacción se registra en el campo `creadoPor`.
+- Registrar **ingresos y egresos** en distintas monedas (ARS, COP, USD).
+- **Asignar** cada egreso a un ingreso concreto para saber con qué plata se pagó cada cosa.
+- Gestionar el **patrimonio** (activos y pasivos), con metas de ahorro e historial mensual de saldos.
+- Visualizar **análisis** históricos: comparativas mes a mes, distribución por categoría y evolución a 6 meses.
+- Definir **presupuestos** por categoría y mes.
+
+La arquitectura es intencionalmente sencilla en cuanto a usuarios: **no hay login por persona**. Todos los datos comparten un mismo registro en Supabase y la autoría de cada movimiento se guarda en un campo (`creadoPor`). Esto hace que ambas personas vean siempre exactamente los mismos datos, sin fricción de cuentas ni permisos.
+
+Hay **dos frontends** que consumen la misma base de datos:
+
+| App | Pensada para | Puerto dev | Layout |
+|---|---|---|---|
+| **`apps/mobile`** | El día a día en el celular (PWA instalable) | `3000` | Mobile-first, ancho máx. 390px, navegación inferior + botón flotante |
+| **`apps/desktop`** | Vista amplia en navegador de escritorio | `3001` | Sidebar + topbar, layout responsive con tablas |
+
+Ambas comparten **`packages/core`** (`@finanzas/core`): tipos, capa de acceso a datos y stores de estado.
 
 ---
 
@@ -37,473 +58,592 @@ La arquitectura es intencionalmente sencilla: un único registro en Supabase com
 
 | Módulo | Funcionalidades |
 |---|---|
-| **Dashboard** | Balance mensual, ingresos/egresos, cambio de mes, toggle ejecutado, tasa de cambio en tiempo real |
-| **Movimientos** | CRUD completo, swipe para ejecutar/editar/eliminar, búsqueda, asignación a ingreso, vinculación a cuenta ahorro, etiquetas y notas |
-| **Asignación** | Agrupación egresos → ingreso, auto-asignación, reasignación masiva, desasignación |
-| **Patrimonio** | Activos y pasivos, metas de ahorro con barra de progreso, gráfico de evolución 6 meses |
-| **Análisis** | Comparativa mensual, donuts por categoría con drilldown, gráfico lineal 6 meses, presupuestos por categoría |
-| **Ajustes** | Tasas de cambio por mes, árbol de categorías editable, acciones de mes (clonar, cerrar, recurrentes), backup JSON |
-| **PWA** | Service worker, instalable en Android/iOS, funciona offline para lectura |
+| **Dashboard / Resumen** | Balance del mes, totales de ingresos y egresos en moneda base, conversión a USD, navegación entre meses, pills de tipos de cambio, modo privacidad (ocultar montos con blur) |
+| **Movimientos** | CRUD completo, sub-pestañas ingreso/egreso, búsqueda, swipe para ejecutar / editar / eliminar / clonar, etiquetas y nota extendida, marcar como ejecutado |
+| **Asignación** | Agrupación de egresos bajo el ingreso asignado, auto-asignación por fecha, selección múltiple, reasignación masiva y desasignación |
+| **Patrimonio** | Activos y pasivos en USD, neto, metas de ahorro con barra de progreso, **snapshots mensuales** de saldo + aporte, gráfico apilado de aportes vs. revalorización |
+| **Análisis** | Comparativa vs. mes anterior, donut por categoría con drill-down a subcategoría, gráfico de líneas a 6 meses (ingresos / egresos / balance), barras de presupuesto, pestaña Piloto (proyección) |
+| **Ajustes** | Tipos de cambio con historial mensual, árbol de categorías editable (gasto e ingreso), tipos de activo/pasivo, **vínculos de ahorro**, acciones de mes (cerrar, clonar, recurrentes, borrar) y backup JSON |
+| **Multi-moneda** | ARS, COP y USD con tasas manuales e historial por mes para cálculos históricos precisos |
+| **Tiempo real** | Suscripciones de Supabase: cualquier cambio se refleja al instante en ambos dispositivos |
+| **PWA** | Instalable en Android/iOS, service worker con cache de app-shell para lectura offline |
 
 ---
 
 ## Stack tecnológico
 
-### Frontend
-- **Next.js 16.2.1** — App Router, React Server Components + Client Components
+### Frontend (ambas apps)
+- **Next.js 16.2.1** — App Router, React Server Components + Client Components, Turbopack
 - **React 19.2.4**
-- **TypeScript 5** — modo estricto
-- **Tailwind CSS 4** — utility-first, mobile-first (max-width 390px)
-- **shadcn/ui** — componentes Radix UI primitivos
-- **Lucide React 0.577** — iconografía
+- **TypeScript 5** — modo estricto (`strict: true`)
+- **Tailwind CSS 4** — utility-first (vía `@tailwindcss/postcss`)
+- **Radix UI** — primitivos accesibles (`dialog`, `dropdown-menu`, `tabs`, `toast`, `progress`, `label`, `separator`, `slot`)
+- **class-variance-authority** + **clsx** + **tailwind-merge** — composición de clases (`cn()`)
+- **lucide-react 0.577** — iconografía
+- Gráficos hechos a mano en **SVG** (sin librerías de charting)
 
-### Estado global
-- **Zustand 5.0.12** — stores independientes por dominio
+### Estado
+- **Zustand 5.0.12** — un store por dominio, compartidos desde `@finanzas/core/store`
 
 ### Backend / Base de datos
-- **Supabase** — PostgreSQL + suscripciones en tiempo real
-- **Supabase JS Client** — `@supabase/supabase-js`
+- **Supabase** — PostgreSQL + suscripciones realtime (`@supabase/supabase-js 2.99`)
 
-### Despliegue
-- **Vercel** — mobile y desktop como proyectos separados
-
----
-
-## Arquitectura del proyecto
-
-```
-┌─────────────────────────────────────────────────────┐
-│                     Vercel (mobile)                 │
-│              Next.js 16 — App Router                │
-│         max-width: 390px  /  PWA enabled            │
-└───────────────────────┬─────────────────────────────┘
-                        │ Supabase JS (realtime)
-┌───────────────────────▼─────────────────────────────┐
-│                     Supabase                        │
-│   PostgreSQL  ─  Realtime  ─  Row Level Security    │
-│                                                     │
-│  Tablas: movimientos / cuentas / configuracion      │
-└───────────────────────┬─────────────────────────────┘
-                        │ misma DB
-┌───────────────────────▼─────────────────────────────┐
-│                    Vercel (desktop)                 │
-│            Next.js 16 — App Router                  │
-│              Interfaz web de escritorio             │
-└─────────────────────────────────────────────────────┘
-```
-
-Ambas apps (mobile y desktop) se conectan a la **misma base de datos Supabase** y reciben actualizaciones en tiempo real a través de suscripciones de canal. Cualquier cambio realizado en la app mobile se refleja instantáneamente en la desktop y viceversa.
+### Tooling
+- **npm workspaces** (monorepo)
+- **ESLint 9** + `eslint-config-next`
+- **Vercel** para despliegue (un proyecto por app)
 
 ---
 
-## Modelo de datos
+## Arquitectura del monorepo
 
-### Tabla `movimientos` (transacciones)
-
-| Campo | Tipo | Descripción |
-|---|---|---|
-| `id` | UUID | Identificador único |
-| `user_id` | UUID | UUID compartido (todos los usuarios) |
-| `type` | `'inc' \| 'exp'` | Tipo: ingreso o egreso |
-| `amount` | number | Monto en moneda original |
-| `orig_amt` | number | Monto original (compatibilidad legacy) |
-| `currency` | `'ARS' \| 'COP' \| 'USD'` | Moneda de la transacción |
-| `category` | string | Categoría (ej: `"Alimentación"`) |
-| `description` | string | Descripción libre |
-| `date` | date | Fecha de la transacción |
-| `executed` | boolean | Si fue ejecutado/confirmado |
-| `deleted_at` | timestamp | Soft delete (null = activo) |
-| `children` | jsonb | Metadatos extendidos (ver abajo) |
-
-**Campo `children` (jsonb):**
-```json
-{
-  "nota": "Nota adicional",
-  "tags": ["tag1", "tag2"],
-  "asignadoA": "uuid-de-ingreso-o-null",
-  "creadoPor": "javier",
-  "recurrente": false,
-  "ahorroAssetId": "uuid-cuenta-ahorro-o-null",
-  "ahorroDelta": 150000
-}
+```
+┌──────────────────────────┐        ┌──────────────────────────┐
+│   apps/mobile  (PWA)      │        │   apps/desktop  (web)     │
+│   Next.js 16 · :3000      │        │   Next.js 16 · :3001      │
+│   max-w 390px · bottom    │        │   sidebar + topbar        │
+│   nav + FAB               │        │   tablas + responsive     │
+└────────────┬─────────────┘        └─────────────┬────────────┘
+             │   import @finanzas/core             │
+             └──────────────┬──────────────────────┘
+                            ▼
+              ┌──────────────────────────────┐
+              │   packages/core               │
+              │   @finanzas/core              │
+              │   types · lib · store         │
+              │  (lógica de datos compartida) │
+              └──────────────┬───────────────┘
+                             │  @supabase/supabase-js (realtime)
+                             ▼
+              ┌──────────────────────────────┐
+              │           Supabase            │
+              │   PostgreSQL + Realtime       │
+              │                               │
+              │   movimientos · cuentas ·     │
+              │   configuracion               │
+              └──────────────────────────────┘
 ```
 
-### Tabla `cuentas` (activos y pasivos)
+**Claves de la arquitectura:**
 
-| Campo | Tipo | Descripción |
-|---|---|---|
-| `id` | UUID | Identificador único |
-| `user_id` | UUID | UUID compartido |
-| `name` | string | Nombre de la cuenta |
-| `kind` | string | Tipo: `banco`, `efectivo`, `cripto`, `inversiones`, `ahorro`, etc. |
-| `type` | `'activo' \| 'pasivo'` | Clase contable |
-| `currency` | `'ARS' \| 'COP' \| 'USD'` | Moneda |
-| `init_bal` | number | Saldo actual (mutable) |
-| `date_created` | date | Fecha de creación |
-| `meta_objetivo` | number | Meta de ahorro (opcional) |
-| `meta_moneda` | string | Moneda de la meta |
-
-### Tabla `configuracion` (settings)
-
-Una única fila por aplicación. Contiene:
-
-```typescript
-{
-  user_id: UUID,
-  app_settings: {
-    tipoCambio: { ARS_USD: number, COP_USD: number },
-    budgets: Budget[]
-  },
-  monthly_rates: ExchangeRateRecord[],   // historial de tasas por mes
-  transaction_cats: CategoryGroup[],      // árbol de categorías de movimientos
-  account_cats: {
-    tiposActivo: string[],
-    tiposPasivo: string[]
-  },
-  closed_months: string[]                // meses cerrados (formato "YYYY-MM")
-}
-```
+- El paquete **`@finanzas/core`** centraliza tipos TypeScript, la capa de acceso a Supabase (`lib/`) y los stores de Zustand (`store/`). **No se duplica** lógica entre apps: ambas importan del mismo paquete.
+- Cada app declara `transpilePackages: ["@finanzas/core"]` y fija `turbopack.root` en la raíz del monorepo (ver `next.config.ts`), para que Next compile el paquete compartido directamente desde el código fuente TS.
+- Ambas apps se conectan a la **misma base Supabase**, por lo que comparten datos en tiempo real. Un alta o edición en el celular dispara una actualización en la web de escritorio en el acto (y viceversa) gracias a las suscripciones `postgres_changes`.
 
 ---
 
-## Variables de entorno
+## Estructura del repositorio
 
-Crea un archivo `.env.local` en la raíz del proyecto (app mobile) con:
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://<tu-proyecto>.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<tu-anon-key>
 ```
-
-Para la app **desktop**, crea `.env.local` dentro de `desktop/` con los mismos valores (apuntan a la misma base de datos).
-
-> Las variables `NEXT_PUBLIC_FIREBASE_*` están definidas en el código pero **no se utilizan** en la implementación actual.
+FinanzasClaude/
+├── package.json                  # Raíz del monorepo (workspaces + scripts)
+├── apps/
+│   ├── mobile/                   # App móvil (PWA) — finanzas-jm
+│   │   ├── next.config.ts        # transpilePackages + headers de seguridad + sw
+│   │   ├── components.json       # Config shadcn/ui
+│   │   ├── vercel.json
+│   │   ├── public/
+│   │   │   ├── sw.js              # Service worker (cache app-shell)
+│   │   │   └── icon-*.png         # Iconos PWA (192, 512, maskable)
+│   │   ├── scripts/
+│   │   │   └── generate-icons.mjs # Generación de iconos
+│   │   └── src/
+│   │       ├── app/
+│   │       │   ├── (app)/         # Rutas con layout de navegación inferior
+│   │       │   │   ├── layout.tsx     # Bottom nav + FAB + suscripciones globales
+│   │       │   │   ├── dashboard/     # Resumen + Movimientos + Asignación
+│   │       │   │   ├── patrimonio/    # Activos, pasivos, snapshots, metas
+│   │       │   │   ├── analisis/      # Histórico + Piloto
+│   │       │   │   └── ajustes/       # Configuración
+│   │       │   ├── layout.tsx     # Root layout (AuthProvider + SW registrar)
+│   │       │   ├── page.tsx       # Redirige a /dashboard
+│   │       │   ├── manifest.ts    # Manifiesto PWA
+│   │       │   └── globals.css
+│   │       └── components/
+│   │           ├── transactions/ # TransactionModal, TAccountView, lista, swipe
+│   │           ├── assignment/   # AssignmentTab, AssignmentGroup, ReassignModal
+│   │           ├── patrimonio/   # AssetCard, AssetModal, SnapshotModal, chart
+│   │           ├── analisis/     # HistoricoTab, PilotoTab, donuts, líneas, budget
+│   │           ├── ajustes/      # CategoryModal
+│   │           ├── ui/           # Button, Input, Toast
+│   │           ├── AuthProvider.tsx
+│   │           └── ServiceWorkerRegistrar.tsx
+│   │
+│   └── desktop/                  # App de escritorio — finanzas-jm-desktop
+│       ├── next.config.ts        # transpilePackages + headers de seguridad
+│       ├── vercel.json
+│       └── src/
+│           ├── app/
+│           │   ├── (app)/         # Layout con sidebar + topbar
+│           │   │   ├── layout.tsx
+│           │   │   ├── dashboard/
+│           │   │   ├── movimientos/
+│           │   │   ├── asignaciones/
+│           │   │   ├── cuentas/
+│           │   │   ├── analisis/
+│           │   │   └── ajustes/
+│           │   ├── layout.tsx
+│           │   └── page.tsx       # Redirige a /dashboard
+│           └── components/
+│               ├── shell/         # Sidebar, Topbar
+│               ├── ui/            # Button, Card, Input, Modal, Badge, Toast
+│               ├── modals/        # TransactionModal, AssetModal
+│               ├── charts/        # Donut, LineChart (SVG)
+│               ├── DataProvider.tsx
+│               └── MoneyText.tsx
+│
+├── packages/
+│   └── core/                     # @finanzas/core (lógica compartida)
+│       ├── package.json          # exports: ./types, ./lib/*, ./store/*
+│       ├── types/index.ts        # Tipos TypeScript globales
+│       ├── lib/
+│       │   ├── supabase.ts        # Cliente Supabase + SHARED_UUID
+│       │   ├── transactions.ts    # CRUD + realtime + clonar/recurrentes
+│       │   ├── assets.ts          # CRUD + realtime + snapshots
+│       │   ├── settings.ts        # CRUD + realtime + migraciones
+│       │   ├── budgets.ts         # Presupuestos (en configuracion.app_settings)
+│       │   ├── analytics.ts       # Queries históricas multi-mes
+│       │   ├── currency.ts        # Conversión multi-moneda
+│       │   ├── constants.ts       # Categorías default, usuarios, formateadores
+│       │   ├── backup.ts          # Export/import JSON
+│       │   └── utils.ts           # cn()
+│       └── store/                # Stores Zustand (auth, tx, settings, assets, budgets, ui)
+│
+├── finanzas-jm-spec.md           # Especificación original v2.0 (histórica — ver notas)
+├── AGENTS.md / CLAUDE.md         # Notas para agentes de código
+└── README.md
+```
 
 ---
 
 ## Instalación y desarrollo
 
 ### Requisitos previos
-- Node.js 20+
-- npm / pnpm / yarn
-- Cuenta en Supabase con las tablas creadas
+- **Node.js 20+**
+- **npm** (el repo usa npm workspaces)
+- Un proyecto de **Supabase** con las tablas creadas (ver [Modelo de datos](#modelo-de-datos))
 
-### App mobile (principal)
+### Instalación
 
-```bash
-# Instalar dependencias
-npm install
-
-# Iniciar servidor de desarrollo
-npm run dev
-# → http://localhost:3000
-
-# Build de producción
-npm run build
-npm start
-
-# Lint
-npm run lint
-```
-
-### App desktop
+Desde la **raíz del monorepo**, una sola vez:
 
 ```bash
-cd desktop
-
 npm install
-npm run dev
-# → http://localhost:3001
 ```
+
+Esto instala las dependencias de las dos apps y del paquete `@finanzas/core` y enlaza los workspaces entre sí.
+
+### Scripts (raíz del monorepo)
+
+| Script | Qué hace |
+|---|---|
+| `npm run dev:mobile` | Levanta la app móvil en `http://localhost:3000` |
+| `npm run dev:desktop` | Levanta la app de escritorio en `http://localhost:3001` |
+| `npm run build:mobile` | Build de producción de la app móvil |
+| `npm run build:desktop` | Build de producción de la app de escritorio |
+| `npm run lint` | Corre ESLint en todos los workspaces que lo tengan |
+
+> También podés trabajar dentro de cada app: `npm run dev --workspace apps/mobile`, etc.
+
+### Desarrollo en paralelo
+
+Para ver la sincronización en tiempo real, abrí ambas en dos terminales:
+
+```bash
+npm run dev:mobile    # terminal 1 → :3000
+npm run dev:desktop   # terminal 2 → :3001
+```
+
+Cargá un movimiento en una y miralo aparecer en la otra.
 
 ---
 
-## Estructura de carpetas
+## Variables de entorno
 
+Cada app necesita las credenciales de Supabase. Creá un `.env.local` **dentro de cada app** (`apps/mobile/.env.local` y `apps/desktop/.env.local`) con:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://<tu-proyecto>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<tu-anon-key>
 ```
-FinanzasClaude/
-├── src/
-│   ├── app/
-│   │   ├── (app)/                    # Rutas con layout de navegación inferior
-│   │   │   ├── layout.tsx            # Bottom nav + FAB central
-│   │   │   ├── dashboard/page.tsx    # Pantalla principal
-│   │   │   ├── patrimonio/page.tsx   # Activos y pasivos
-│   │   │   ├── analisis/page.tsx     # Análisis histórico
-│   │   │   └── ajustes/page.tsx      # Configuración
-│   │   ├── layout.tsx                # Root layout (fuentes, AuthProvider)
-│   │   ├── page.tsx                  # Redirige a /dashboard
-│   │   ├── manifest.ts               # Manifiesto PWA
-│   │   └── test-currency/page.tsx    # Página de prueba de conversión
-│   ├── components/
-│   │   ├── transactions/
-│   │   │   ├── TransactionModal.tsx  # Modal CRUD de transacciones
-│   │   │   ├── TAccountView.tsx      # Vista con tabs ingreso/egreso
-│   │   │   ├── TransactionList.tsx   # Lista con búsqueda
-│   │   │   ├── TransactionItem.tsx   # Fila individual
-│   │   │   ├── SwipeableItem.tsx     # Gestos de swipe
-│   │   │   └── AhorrarBalanceModal.tsx
-│   │   ├── assignment/
-│   │   │   ├── AssignmentTab.tsx     # UI principal de asignación
-│   │   │   ├── AssignmentGroup.tsx   # Grupo colapsable ingreso → egresos
-│   │   │   └── ReassignModal.tsx     # Reasignación masiva
-│   │   ├── patrimonio/
-│   │   │   ├── AssetModal.tsx        # Modal CRUD de cuentas
-│   │   │   ├── AssetCard.tsx         # Tarjeta de cuenta
-│   │   │   ├── PatrimonioChart.tsx   # Gráfico evolución 6 meses
-│   │   │   └── AhorroTab.tsx         # Metas de ahorro
-│   │   ├── analisis/
-│   │   │   ├── HistoricoTab.tsx      # Análisis histórico
-│   │   │   ├── SummaryComparison.tsx # KPIs delta vs mes anterior
-│   │   │   ├── CategoryDonut.tsx     # Donut con drilldown
-│   │   │   ├── DonutChart.tsx        # Primitiva SVG donut
-│   │   │   ├── MultiLineChart.tsx    # Gráfico lineal SVG 6 meses
-│   │   │   ├── PilotoTab.tsx         # Proyección (en desarrollo)
-│   │   │   └── BudgetModal.tsx       # Crear/editar presupuesto
-│   │   ├── ajustes/
-│   │   │   └── CategoryModal.tsx     # Editor árbol de categorías
-│   │   ├── AuthProvider.tsx          # Inicialización de settings
-│   │   ├── ServiceWorkerRegistrar.tsx
-│   │   └── ui/
-│   │       ├── button.tsx
-│   │       ├── input.tsx
-│   │       └── toast.tsx
-│   ├── store/
-│   │   ├── useAuthStore.ts           # Moneda base seleccionada
-│   │   ├── useTransactionStore.ts    # Mes actual + lista de transacciones
-│   │   ├── useSettingsStore.ts       # Settings globales + hideAmounts
-│   │   ├── useAssetStore.ts          # Lista de cuentas
-│   │   ├── useBudgetStore.ts         # Presupuestos del mes
-│   │   └── useUIStore.ts             # Estados de modales + toasts
-│   ├── lib/
-│   │   ├── supabase.ts               # Cliente Supabase
-│   │   ├── transactions.ts           # CRUD + suscripción movimientos
-│   │   ├── assets.ts                 # CRUD + suscripción cuentas
-│   │   ├── settings.ts               # CRUD + suscripción configuracion
-│   │   ├── budgets.ts                # CRUD presupuestos
-│   │   ├── analytics.ts              # Queries históricas multi-mes
-│   │   ├── currency.ts               # Conversión multi-moneda
-│   │   ├── constants.ts              # Categorías default, usuarios, formateadores
-│   │   ├── backup.ts                 # Export/import JSON
-│   │   └── utils.ts                  # cn() (clsx + tailwind-merge)
-│   └── types/
-│       └── index.ts                  # Tipos TypeScript globales
-├── public/
-│   ├── sw.js                         # Service worker
-│   └── icon-*.png                    # Iconos PWA
-├── desktop/                          # App desktop (monorepo)
-│   └── src/ ...                      # Estructura espejo
-├── next.config.ts                    # Security headers, config Next.js
-├── components.json                   # Config shadcn/ui
-├── tsconfig.json
-└── finanzas-jm-spec.md               # Especificación completa v2.0
-```
+
+> ⚠️ Tienen que ser **exactamente las mismas** en ambas apps para que vean los mismos datos.
+
+Si no se definen, el cliente usa valores `placeholder` y la app levanta igual (pero sin datos reales), útil para inspeccionar la UI. Las variables están expuestas al navegador por el prefijo `NEXT_PUBLIC_`, así que usá siempre la **anon key** (nunca la `service_role`), protegida por Row Level Security en Supabase.
 
 ---
 
-## Pantallas y flujos
+## Modelo de datos
 
-### Dashboard (`/dashboard`)
+El código de dominio usa nombres en **español** (`tipo`, `monto`, `moneda`, …); la base de datos usa columnas en inglés. La capa de `lib/` traduce entre ambos mundos (funciones `rowToX` / `xToRow`).
 
-Pantalla principal con balance neto del mes. Muestra:
-- Tarjetas de ingreso total / egreso total con conversión a moneda base
-- Pills de tasas de cambio (ARS/USD, COP/USD) editables en línea
-- Toggle para ocultar montos (modo privacidad)
-- Navegación entre meses (← →)
+### Tipos TypeScript (`packages/core/types/index.ts`)
 
-**Tab Movimientos:** Lista de transacciones del mes con swipe izquierda para ejecutar/desejecutar y swipe derecha para menú de acciones (editar, clonar, eliminar). Incluye buscador.
+```ts
+type Currency = 'ARS' | 'COP' | 'USD'
+type TransactionType = 'ingreso' | 'egreso'
 
-**Tab Asignación:** Agrupa los egresos bajo el ingreso al que fueron asignados. Permite:
-- Auto-asignar: distribuye egresos por fecha al ingreso más cercano con capacidad
-- Selección múltiple + reasignación masiva a otro ingreso
-- Desasignar todos los egresos de un ingreso
+interface Transaction {
+  id?: string
+  userId: string
+  tipo: TransactionType
+  monto: number
+  moneda: Currency
+  categoria: string
+  descripcion: string
+  nota: string
+  tags: string[]
+  fecha: { toDate: () => Date }   // shim de compatibilidad (estilo Firestore)
+  ejecutado: boolean
+  asignadoA: string | null         // id del ingreso al que se asignó el egreso
+  creadoPor: string                // 'javier' | 'mary' | 'shared'
+  recurrente?: boolean
+  ahorroAssetId?: string | null    // activo de ahorro vinculado
+}
 
-### FAB (botón flotante central)
+interface AssetSnapshot {
+  month: string   // 'YYYY-MM'
+  aporte: number  // aporte/retiro neto del mes (+ aporte, − retiro)
+  saldo: number   // saldo al cierre del mes
+}
 
-El botón `+` en la barra de navegación inferior abre el `TransactionModal` para crear una nueva transacción. El modal permite:
-1. Seleccionar tipo (Ingreso / Egreso)
-2. Elegir categoría del árbol jerárquico
-3. Ingresar monto y seleccionar moneda (ARS, COP, USD)
-4. Seleccionar fecha
-5. Marcar como ejecutado
-6. Asignar a un ingreso (solo egresos)
-7. Vincular a cuenta de ahorro (solo ingresos)
-8. Agregar etiquetas y nota
+interface Asset {
+  id?: string
+  userId: string
+  nombre: string
+  tipo: string                       // 'Banco' | 'Efectivo' | 'Cripto' | 'Inversiones' | 'Ahorro' | …
+  clase: 'activo' | 'pasivo'
+  moneda: Currency
+  saldo: number                      // saldo actual
+  fechaAlta: { toDate: () => Date }
+  metaObjetivo: number | null        // meta de ahorro
+  metaMoneda: string | null
+  snapshots: AssetSnapshot[]         // historial mensual
+}
 
-### Patrimonio (`/patrimonio`)
+interface Settings {
+  tipoCambio: { ARS_USD: number; COP_USD: number }
+  historialTipoCambio: ExchangeRateRecord[]   // { mes, ARS_USD, COP_USD }
+  categoriasGasto: CategoryGroup[]
+  categoriasIngreso: CategoryGroup[]
+  tiposActivo: string[]
+  tiposPasivo: string[]
+  mesesCerrados?: string[]
+  ahorroLinks?: { categoriaId: string; assetId: string }[]
+}
 
-- **Tab Activos:** Lista de cuentas activas (banco, efectivo, cripto, inversiones, ahorro) con saldo en moneda original y conversión a USD
-- **Tab Pasivos:** Lista de deudas y obligaciones
-- **Tab Metas:** Cuentas de ahorro con barra de progreso hacia la meta definida
-- **Gráfico:** Evolución del patrimonio neto en los últimos 6 meses (SVG)
+interface Budget {
+  id?: string
+  userId: string
+  categoria: string
+  mes: string      // 'YYYY-MM'
+  limite: number
+  moneda: string
+}
+```
 
-### Análisis (`/analisis`)
+### Tablas de Supabase
 
-- **Tab Histórico:**
-  - Comparativa vs mes anterior: delta de balance, ingresos, egresos y cantidad de transacciones
-  - Donuts interactivos: distribución por categoría de egresos e ingresos con drilldown a subcategoría al hacer tap
-  - Gráfico lineal: ingresos, egresos y balance de los últimos 6 meses
-  - Barras de progreso de presupuesto por categoría
-- **Tab Piloto:** Proyección del mes en curso (en desarrollo)
+Toda la información vive en **tres tablas**. El `user_id` es siempre un UUID compartido fijo (`SHARED_UUID = 00000000-0000-0000-0000-000000000000`); la autoría individual se guarda dentro del JSON `children.creadoPor`.
 
-### Ajustes (`/ajustes`)
+#### `movimientos` (transacciones)
 
-- **Tasas de cambio:** Editor de ARS/USD y COP/USD con historial mensual
-- **Categorías:** Árbol expandible con grupos y subcategorías; agregar, renombrar, activar/desactivar
-- **Tipos de cuenta:** Listas editables de tipos de activo y pasivo
-- **Acciones de mes:**
-  - Clonar mes: copia transacciones recurrentes al mes siguiente
-  - Crear recurrentes: instancia transacciones marcadas como recurrentes
-  - Cerrar mes: congela tasas y bloquea el mes
-  - Eliminar mes: elimina todas las transacciones del mes actual
-- **Backup:** Exportar / importar JSON con todos los datos
+| Columna | Tipo | Mapea a / Notas |
+|---|---|---|
+| `id` | uuid | `id` |
+| `user_id` | uuid | UUID compartido |
+| `type` | text | `tipo` — acepta `'ingreso'/'egreso'` (nuevo) o `'inc'/'exp'` (legacy) |
+| `amount` | numeric | `monto` |
+| `orig_amt` | numeric | Monto original (compat. con datos pre-convertidos de la migración) |
+| `currency` | text | `moneda` |
+| `category` | text | `categoria` |
+| `description` | text | `descripcion` |
+| `executed` | bool | `ejecutado` |
+| `date` | date | `fecha` |
+| `deleted_at` | timestamptz | Soft delete (`null` = activo) |
+| `children` | jsonb | `{ nota, tags, asignadoA, creadoPor, recurrente, ahorroAssetId }` |
+
+#### `cuentas` (activos y pasivos)
+
+| Columna | Tipo | Mapea a |
+|---|---|---|
+| `id` | uuid | `id` |
+| `user_id` | uuid | UUID compartido |
+| `name` | text | `nombre` |
+| `kind` | text | `tipo` |
+| `type` | text | `clase` (`activo` / `pasivo`) |
+| `currency` | text | `moneda` |
+| `init_bal` | numeric | `saldo` (saldo actual; se actualiza con el snapshot más reciente) |
+| `date_created` | date | `fechaAlta` |
+| `meta_objetivo` | numeric | `metaObjetivo` |
+| `meta_moneda` | text | `metaMoneda` |
+| `snapshots` | jsonb | `snapshots[]` — array `{ month, aporte, saldo }` |
+
+#### `configuracion` (una única fila compartida)
+
+| Columna | Tipo | Contiene |
+|---|---|---|
+| `user_id` | uuid | UUID compartido (clave de upsert) |
+| `app_settings` | jsonb | `{ tipoCambio, ahorroLinks, budgets[] }` |
+| `monthly_rates` | jsonb | `historialTipoCambio` (tasas por mes) |
+| `transaction_cats` | jsonb | **`categoriasGasto`** (árbol de gasto) |
+| `categories` | jsonb | **`categoriasIngreso`** (árbol de ingreso) |
+| `account_cats` | jsonb | `{ tiposActivo, tiposPasivo }` |
+| `closed_months` | jsonb | `mesesCerrados` (formato `YYYY-MM`) |
+
+> ⚠️ **Dato importante:** los **presupuestos** (`Budget[]`) no tienen tabla propia: se guardan dentro de `configuracion.app_settings.budgets`. Y ojo con el mapeo de categorías: la columna `transaction_cats` guarda los **gastos** y la columna `categories` guarda los **ingresos**.
+
+---
+
+## Capa de datos y tiempo real
+
+Toda la comunicación con Supabase está aislada en `packages/core/lib/`. Cada dominio expone una función `subscribeToX(callback)` con el mismo patrón:
+
+1. Hace un **fetch inicial** y llama al `callback` con los datos.
+2. Abre un **canal realtime** (`postgres_changes`) sobre la tabla.
+3. Ante cualquier cambio, vuelve a hacer fetch y notifica.
+4. Devuelve una **función de cleanup** que cierra el canal (se llama en el `return` de un `useEffect`).
+
+| Módulo | Funciones destacadas |
+|---|---|
+| `transactions.ts` | `subscribeToTransactions(month)`, `addTransaction`, `updateTransaction`, `deleteTransaction` (soft delete), `markEjecutado`, `cloneMonthTransactions`, `createRecurringTransactions`, `cloneTransactionToMonth`, `moveTransactionToMonth`, `countMonthTransactions`, `deleteMonthTransactions` |
+| `assets.ts` | `subscribeToAssets`, `addAsset`, `updateAsset`, `deleteAsset`, `upsertSnapshot`, `adjustAssetSaldo` |
+| `settings.ts` | `getOrInitSettings`, `subscribeToSettings`, `updateSettings`, `DEFAULT_SETTINGS` (+ migración de formato viejo) |
+| `budgets.ts` | `subscribeToBudgets(mes)`, `upsertBudget`, `deleteBudget` |
+| `analytics.ts` | `fetchMonthTransactions(month)`, `fetchLastNMonths(n, upToMonth)` |
+| `backup.ts` | `exportBackup`, `downloadBackup`, `importBackup`, `parseBackupFile` |
+| `currency.ts` | `toUSD`, `toBase` |
+
+Las consultas filtran siempre por rango de fechas del mes y por `deleted_at IS NULL`, de modo que los movimientos borrados nunca aparecen pero quedan recuperables.
 
 ---
 
 ## Gestión de estado
 
-Zustand con un store por dominio:
+Zustand con un store por dominio (en `packages/core/store/`). Las suscripciones de Supabase se conectan a los stores desde los _providers_ de cada app (`AuthProvider` en mobile, `DataProvider` en desktop).
 
-| Store | Contenido | Suscripción Supabase |
+| Store | Contenido | Suscripción |
 |---|---|---|
-| `useAuthStore` | `monedaBase: Currency` | No |
-| `useTransactionStore` | `currentMonth`, `transactions[]`, navegación de mes | `subscribeToTransactions(month)` |
-| `useSettingsStore` | `settings`, `hideAmounts` | `subscribeToSettings()` |
-| `useAssetStore` | `assets[]` | `subscribeToAssets()` |
-| `useBudgetStore` | `budgets[]` | `subscribeToBudgets(month)` |
-| `useUIStore` | Estados de modales, `editingTransaction`, `toasts[]` | No |
+| `useAuthStore` | `monedaBase: Currency` | — |
+| `useTransactionStore` | `transactions[]`, `currentMonth`, `isLoading`, `prevMonth()`, `nextMonth()` | `subscribeToTransactions(month)` |
+| `useSettingsStore` | `settings`, `hideAmounts`, `toggleHideAmounts()` | `subscribeToSettings()` |
+| `useAssetStore` | `assets[]`, `isLoading` | `subscribeToAssets()` |
+| `useBudgetStore` | `budgets[]`, `getBudget(categoria)` | `subscribeToBudgets(month)` |
+| `useUIStore` | estado del modal de transacción, `editingTransaction`, `toast` | — |
 
-Todas las suscripciones de Supabase retornan una función de cleanup que se llama en `useEffect` al desmontar el componente, garantizando que no queden listeners activos.
+`currentMonth` es la pieza central: cambiar de mes re-dispara las suscripciones de transacciones y presupuestos, y recalcula todos los totales.
 
 ---
 
 ## Multi-moneda
 
-La app soporta tres monedas: **ARS** (Peso argentino), **COP** (Peso colombiano) y **USD** (Dólar estadounidense).
+La app maneja tres monedas: **ARS** (peso argentino), **COP** (peso colombiano) y **USD** (dólar).
 
-Las tasas se configuran manualmente en Ajustes y se almacenan con historial mensual para que los análisis históricos usen la tasa correcta de cada período.
+- Los tipos de cambio se cargan **manualmente** en Ajustes (1 USD = X ARS, 1 USD = Y COP).
+- Se guarda un **historial mensual** (`historialTipoCambio` / columna `monthly_rates`) para que los análisis históricos usen la tasa correcta de cada período.
+- Cada usuario elige su **moneda base** (`monedaBase`), en la que se muestran los totales.
 
-### Funciones de conversión (`src/lib/currency.ts`)
+Conversión (`packages/core/lib/currency.ts`):
 
-```typescript
-// Convierte cualquier moneda a USD
-toUSD(amount: number, currency: Currency, rates: ExchangeRateRecord[]): number
+```ts
+// Cualquier moneda → USD
+toUSD(monto: number, moneda: Currency, settings: Settings): number
 
-// Convierte USD a la moneda base del usuario
-toBase(amountUSD: number, base: Currency, rates: ExchangeRateRecord[]): number
+// USD → moneda base (o cualquier moneda destino)
+toBase(monto: number, moneda: Currency, base: Currency, settings: Settings): number
 ```
 
-Las conversiones son seguras: si la tasa es 0 o inválida, retornan 0 en lugar de lanzar un error.
+Las conversiones son **seguras**: si una tasa es `0`, negativa o `NaN`, devuelven `0` en lugar de `Infinity`/`NaN`, así la UI no se rompe cuando todavía no configuraste los tipos de cambio.
 
 ---
 
 ## Sistema de categorías
 
-Las categorías están organizadas en una jerarquía de dos niveles:
+Las categorías se organizan en una jerarquía de **dos niveles** (grupo → subcategorías), separadas entre **gasto** e **ingreso**. Cada categoría tiene `id`, `nombre`, `color` y un flag `activa`.
+
+Defaults (en `packages/core/lib/constants.ts`):
 
 ```
-Gasto
-├── Esenciales
-│   ├── Alquiler
-│   ├── Servicios
-│   └── Alimentación
-├── Variable
-│   ├── Salidas
-│   └── Ropa
-├── Financiero
-│   └── Inversiones
-└── Otros
+GASTO
+├── Esenciales   → Vivienda · Alimentación · Salud · Educación · Servicios
+├── Variable     → Transporte · Entretenimiento · Ropa
+├── Financiero   → Ahorro
+└── Otros        → Otros
 
-Ingreso
-├── Laboral
-│   ├── Sueldo
-│   └── Freelance
-├── Pasivo
-└── Otros
+INGRESO
+├── Laboral      → Sueldo · Freelance
+├── Pasivo       → Inversiones
+└── Otros        → Regalo · Otros
 ```
 
-Las categorías default están en `src/lib/constants.ts`. El usuario puede agregar, renombrar y activar/desactivar categorías desde Ajustes. Las personalizaciones se persisten en la tabla `configuracion` de Supabase.
+Desde **Ajustes** se pueden crear, editar y borrar grupos y subcategorías, cambiar su color y activarlas/desactivarlas. Todo se persiste en `configuracion` (`transaction_cats` para gasto, `categories` para ingreso).
+
+> **Compatibilidad:** la capa de settings migra automáticamente el formato viejo (lista plana `Category[]`) al nuevo formato de árbol (`CategoryGroup[]`), convirtiendo cada categoría antigua en un grupo sin subcategorías.
 
 ---
 
-## App desktop
+## Patrimonio, snapshots y ahorro
 
-Dentro del directorio `desktop/` existe una segunda aplicación Next.js que comparte la misma base de datos Supabase:
+El módulo de patrimonio va más allá de un saldo estático:
 
-```bash
-cd desktop
-npm install
-npm run dev   # → http://localhost:3001
+### Snapshots mensuales
+
+Cada activo guarda un array de **snapshots** (`{ month, aporte, saldo }`). Desde el `SnapshotModal` registrás, para un mes:
+
+- **Aporte / retiro**: cuánto pusiste (+) o sacaste (−) ese mes.
+- **Saldo al cierre**: cuánto vale el activo al final del mes.
+
+Con eso la app calcula la **revalorización** del mes:
+
+```
+revalorización = saldo_cierre − saldo_mes_anterior − aporte
 ```
 
-La app desktop tiene su propio `package.json`, `tsconfig.json` y `next.config.ts`. Los archivos de `lib/`, `store/` y `types/` son copias (no importaciones compartidas) para mantener la independencia de despliegue.
+Es decir, separa cuánto creció tu patrimonio por **poner plata nueva** vs. cuánto por **rendimiento** (revalorización de inversiones, cripto, etc.). El gráfico de patrimonio es un **gráfico de barras apiladas en USD** que muestra, mes a mes (últimos 6), aportes acumulados vs. revalorización acumulada. `upsertSnapshot` además sincroniza el `saldo` "actual" del activo con el del snapshot más reciente.
 
-Se despliega en un proyecto Vercel separado pero apunta al mismo Supabase, por lo que Javier y Mary pueden usar la interfaz mobile o desktop indistintamente con datos siempre sincronizados.
+### Metas de ahorro
+
+Cada cuenta puede tener una `metaObjetivo` (+ `metaMoneda`). Se muestra como barra de progreso hacia el objetivo.
+
+### Vínculos de ahorro (`ahorroLinks`)
+
+Desde Ajustes → **Vínculos de ahorro** podés conectar una **categoría de gasto** con un **activo**. La idea: cuando registrás un gasto de esa categoría (por ejemplo "Ahorro"), ese movimiento puede impactar el saldo del activo vinculado. `adjustAssetSaldo()` aplica el delta de forma atómica sobre el snapshot del mes, lo que permite **revertir con exactitud** el saldo si después editás o borrás la transacción vinculada.
+
+---
+
+## App mobile — pantallas y flujos
+
+Mobile-first, ancho máximo **390px**, color primario **`#534AB7`** (violeta). El layout `(app)` monta una **barra de navegación inferior** con 4 destinos y un **botón flotante (FAB)** central que abre el modal de nueva transacción. El `TransactionModal` y el `Toast` están montados una sola vez a nivel layout.
+
+Navegación inferior: **Resumen** · **Cuentas** · (FAB **+**) · **Análisis** · **Ajustes**.
+
+### Resumen (`/dashboard`)
+Header compacto con avatar J&M, navegación de mes (◀ ▶), pills con los tipos de cambio actuales y botón de **ojo** para ocultar/mostrar montos (blur, modo privacidad). Debajo, el balance del mes en moneda base + ingresos / egresos / conversión a USD.
+
+- **Pestaña Movimientos:** buscador + `TAccountView` con sub-pestañas Ingresos/Egresos. Cada ítem soporta **swipe**: izquierda para ejecutar/desejecutar, derecha para menú de acciones (editar, clonar a otro mes, eliminar).
+- **Pestaña Asignación:** agrupa los egresos bajo el ingreso al que fueron asignados. Permite **auto-asignar** (distribuye egresos al ingreso más cercano por fecha), **selección múltiple + reasignación masiva** y **desasignar**. Grupo "Sin asignar" destacado.
+
+### Nueva transacción (FAB)
+Modal para crear/editar: tipo (ingreso/egreso), categoría del árbol, monto + moneda, fecha, marcar ejecutado, asignar a un ingreso (egresos), vincular a activo de ahorro (ingresos), etiquetas y nota.
+
+### Cuentas / Patrimonio (`/patrimonio`)
+Tres tarjetas resumen (**Activos · Pasivos · Neto** en USD), gráfico apilado de aportes vs. revalorización, pestañas **Activos / Pasivos**, tarjetas de cuenta con acción "actualizar mes" (snapshot) y modal de alta/edición. Metas de ahorro con barra de progreso.
+
+### Análisis (`/analisis`)
+- **Histórico:** comparativa vs. mes anterior (balance, ingresos, egresos, nº de transacciones con su variación), donuts por categoría con **drill-down** a subcategoría, gráfico de líneas a 6 meses (ingresos/egresos/balance) y barras de progreso de presupuesto.
+- **Piloto:** proyección del mes en curso (en desarrollo).
+
+### Ajustes (`/ajustes`)
+Secciones colapsables:
+- **Tipos de cambio** (con historial de los últimos meses).
+- **Categorías de Gasto** y **de Ingreso** (árbol editable: grupos y subcategorías, color, activar/desactivar).
+- **Tipos de activo / pasivo** (listas editables).
+- **Vínculos de ahorro** (categoría → activo).
+- **Acciones del mes:** *Cerrar mes* (congela el tipo de cambio en el historial), *Clonar mes al siguiente*, *Crear recurrentes*, *Borrar mes*. Clonar y recurrentes **piden confirmación** si el mes destino ya tiene movimientos, para evitar duplicados.
+- **Importar / Exportar** backup JSON.
+
+---
+
+## App desktop — pantallas y flujos
+
+Pensada para pantalla grande: **sidebar** persistente (se oculta en pantallas chicas, `< lg`) + **topbar**. El `DataProvider` inicializa settings y abre las suscripciones de transacciones, activos y presupuestos. Comparte exactamente los mismos datos que la app móvil.
+
+Rutas (sidebar):
+
+| Ruta | Contenido |
+|---|---|
+| `/dashboard` | KPIs del mes (balance, ingresos, egresos, patrimonio), top categorías, movimientos recientes |
+| `/movimientos` | Tabla con búsqueda y filtros (tipo / categoría / persona / pendientes), CRUD, marcar ejecutado |
+| `/asignaciones` | Egresos agrupados por ingreso, selección múltiple, reasignar y auto-asignar |
+| `/cuentas` | Activos / pasivos en USD, metas de ahorro con barra de progreso |
+| `/analisis` | Comparación con mes anterior, donut por categoría, evolución a 6 meses |
+| `/ajustes` | Tipos de cambio, clonar mes, crear recurrentes, vista de categorías |
+
+Incluye atajos como ocultar/mostrar montos y navegación de mes. Los gráficos (`Donut`, `LineChart`) están hechos en **SVG puro**, sin dependencias externas.
 
 ---
 
 ## PWA
 
-La app mobile está configurada como Progressive Web App:
+La app **mobile** está configurada como Progressive Web App:
 
-- **Manifiesto**: `src/app/manifest.ts` — nombre, iconos, colores, orientación portrait
-- **Service Worker**: `public/sw.js` — cache de assets estáticos para lectura offline
-- **Iconos**: `public/icon-*.png` en múltiples resoluciones
+- **Manifiesto** (`apps/mobile/src/app/manifest.ts`): nombre "Finanzas J&M", `display: standalone`, orientación `portrait`, `theme_color: #10b981`, iconos 192/512 + maskable.
+- **Service worker** (`apps/mobile/public/sw.js`, cache `finanzas-jm-v3`):
+  - *install*: pre-cachea el app-shell (`/`, iconos).
+  - *activate*: limpia caches viejas.
+  - *fetch*: **network-first** para navegación (fallback al `/` cacheado) y **cache-first** para assets estáticos (`_next/static`, imágenes, fuentes, css/js). Sólo intercepta GET del mismo origen.
+- **Registro** vía `ServiceWorkerRegistrar`.
 
-Para instalar en Android: abrir en Chrome → menú → "Agregar a pantalla de inicio". En iOS: Safari → compartir → "Agregar a inicio".
+Instalar: en Android, Chrome → menú → "Agregar a pantalla de inicio". En iOS, Safari → compartir → "Agregar a inicio".
 
 ---
 
 ## Backup e importación
 
-Desde Ajustes → Backup se puede exportar e importar todos los datos en formato JSON:
+Desde **Ajustes → Importar / Exportar** (app móvil):
 
-**Exportar:** Genera un archivo `finanzas-backup-YYYY-MM-DD.json` con:
+**Exportar** genera `finanzas-backup-YYYY-MM-DD.json`:
+
 ```json
 {
-  "version": "1.0",
+  "version": 2,
   "exportedAt": "ISO datetime",
-  "transactions": [...],
-  "assets": [...],
-  "budgets": [...],
-  "settings": { ... }
+  "userId": "shared",
+  "transactions": [ /* ... */ ],
+  "assets": [ /* incluye snapshots */ ],
+  "budgets": [ /* ... */ ],
+  "settings": { "tipoCambio": {…}, "historialTipoCambio": […],
+                "categoriasGasto": […], "categoriasIngreso": […],
+                "account_cats": {…}, "mesesCerrados": […] }
 }
 ```
 
-**Importar:** Carga el JSON y sobreescribe los datos actuales. Las fechas se convierten de strings ISO a objetos Date correctamente.
+**Importar** lee el JSON y **agrega** los movimientos y cuentas a la base (convierte las fechas ISO a `date`). El archivo se valida antes de procesarse (debe tener `version` y un array `transactions`).
 
 ---
 
 ## Despliegue
 
-### Vercel (recomendado)
+Recomendado: **Vercel**, con **un proyecto por app** (ambos apuntando al mismo repo y a la misma base Supabase). Cada app trae su `vercel.json` (`framework: nextjs`, build/install estándar).
 
 **App mobile:**
-1. Conectar el repositorio a Vercel
-2. Root directory: `/` (raíz del repo)
-3. Framework preset: Next.js
-4. Agregar variables de entorno: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+1. New Project → seleccioná el repo.
+2. **Root Directory:** `apps/mobile`.
+3. Variables de entorno: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 
 **App desktop:**
-1. Crear un segundo proyecto Vercel
-2. Root directory: `desktop/`
-3. Mismas variables de entorno (misma DB Supabase)
+1. New Project (segundo proyecto) → mismo repo.
+2. **Root Directory:** `apps/desktop`.
+3. Las **mismas** variables de entorno (misma DB → datos sincronizados).
 
-### Security headers
+Cada push a la rama configurada redeploya la app correspondiente; la otra queda intacta en su propio dominio.
 
-`next.config.ts` aplica los siguientes headers de seguridad en producción:
-- `Content-Security-Policy`
-- `X-Frame-Options: DENY`
-- `X-Content-Type-Options: nosniff`
-- `Referrer-Policy: strict-origin-when-cross-origin`
-- `Permissions-Policy`
+---
+
+## Seguridad
+
+Headers aplicados desde `next.config.ts`:
+
+- **Ambas apps**, a todas las rutas:
+  - `X-Content-Type-Options: nosniff`
+  - `X-Frame-Options: DENY`
+  - `Referrer-Policy: strict-origin-when-cross-origin`
+- **Mobile**, sólo para `/sw.js`:
+  - `Content-Type: application/javascript; charset=utf-8`
+  - `Cache-Control: no-cache, no-store, must-revalidate`
+  - `Content-Security-Policy: default-src 'self'; script-src 'self'`
+
+A nivel de datos, las credenciales públicas son la **anon key** de Supabase; la protección real debe configurarse con **Row Level Security** en el proyecto Supabase.
 
 ---
 
 ## Notas de implementación
 
-- **Shared user model**: todos los datos usan un UUID compartido fijo como `user_id`. La autoría individual se registra en `children.creadoPor` (`'javier'` | `'mary'`).
-- **Soft deletes**: las transacciones nunca se eliminan físicamente; se marca `deleted_at` con timestamp.
-- **Historial de tasas**: las tasas de cambio se almacenan por mes en `monthly_rates` para garantizar precisión en análisis históricos aunque cambien las tasas actuales.
-- **Ajuste de saldo atómico**: `adjustAssetSaldo()` suma/resta un delta al saldo existente de forma segura, usado por la funcionalidad de ahorro para permitir reversión exacta al eliminar una transacción vinculada.
-- **Transacciones recurrentes**: una transacción marcada `recurrente: true` puede instanciarse en el mes siguiente preservando categoría, monto y descripción.
-- **Meses cerrados**: una vez cerrado un mes, sus tasas quedan congeladas y no se puede agregar ni editar transacciones en ese período.
+- **Modelo de usuario compartido:** todos los registros usan un mismo `user_id` (`SHARED_UUID`). No hay autenticación por persona; la autoría se guarda en `children.creadoPor` (`'javier'` | `'mary'`).
+- **Soft deletes:** los movimientos no se borran físicamente; se setea `deleted_at`. Las queries siempre filtran `deleted_at IS NULL`.
+- **Historial de tasas:** las tasas se guardan por mes (`monthly_rates`) para que los análisis históricos sean precisos aunque cambie la tasa actual. *Cerrar mes* congela la tasa vigente.
+- **Recurrentes y clonado:** un movimiento marcado `recurrente` puede instanciarse en el mes siguiente; *clonar mes* copia todos los movimientos. Ambas operaciones resetean `ejecutado`/`asignadoA` y ajustan el día al último día válido del mes destino. Si el destino ya tiene movimientos, la UI pide confirmación para evitar duplicados.
+- **Ajuste de saldo atómico:** `adjustAssetSaldo()` aplica un delta sobre el snapshot del mes, permitiendo revertir con exactitud el saldo de un activo al editar/eliminar una transacción de ahorro vinculada.
+- **Migración desde Firebase:** el proyecto nació sobre Firebase/Firestore (ver `finanzas-jm-spec.md`) y migró a Supabase. Por eso la capa de datos tolera datos legacy: `type` puede venir como `'inc'`/`'exp'`, los montos pre-convertidos a ARS se detectan comparando `orig_amt` vs. `amount`, y el campo `fecha` mantiene un shim `{ toDate() }` al estilo Firestore. El `finanzas-jm-spec.md` es **histórico**: describe el diseño original (incluido Firebase Auth), no la implementación actual.
+- **Sin librerías de charts:** donuts y gráficos de líneas/barras están dibujados a mano en SVG, lo que mantiene el bundle liviano.
+```
