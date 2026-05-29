@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { getOrInitSettings, subscribeToSettings } from '@finanzas/core/lib/settings'
@@ -10,7 +10,6 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const { setMonedaBase } = useAuthStore()
   const { setSettings } = useSettingsStore()
   const settingsUnsubRef = useRef<(() => void) | null>(null)
-  const [ready, setReady] = useState(false)
 
   useEffect(() => {
     async function init() {
@@ -22,7 +21,6 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       } catch (err) {
         console.error('[AuthProvider] settings load failed:', err)
       }
-      setReady(true)
     }
 
     init()
@@ -32,13 +30,8 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     }
   }, [setMonedaBase, setSettings])
 
-  if (!ready) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="w-8 h-8 border-2 border-[#534AB7] border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
-
+  // El shell se renderiza de inmediato, sin bloquear con un spinner a pantalla
+  // completa. El store de settings arranca con defaults válidos, así que las
+  // pantallas pintan al instante y se actualizan cuando llegan los datos reales.
   return <>{children}</>
 }

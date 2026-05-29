@@ -97,6 +97,8 @@ export function subscribeToSettings(
   _userId: string,
   callback: (s: Settings) => void
 ): () => void {
+  let active = true
+
   async function fetchAndNotify() {
     const { data, error } = await supabase
       .from('configuracion')
@@ -104,17 +106,19 @@ export function subscribeToSettings(
       .eq('user_id', SHARED_UUID)
       .maybeSingle()
 
+    if (!active) return
+
     if (!error && data) callback(rowToSettings(data))
   }
 
   fetchAndNotify()
 
   const channel = supabase
-    .channel('configuracion-shared')
+    .channel(`configuracion-${crypto.randomUUID()}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'configuracion' }, fetchAndNotify)
     .subscribe()
 
-  return () => { supabase.removeChannel(channel) }
+  return () => { active = false; supabase.removeChannel(channel) }
 }
 
 export async function updateSettings(_userId: string, partial: Partial<Settings>) {

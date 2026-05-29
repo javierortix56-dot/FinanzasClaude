@@ -1,10 +1,9 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { Plus } from 'lucide-react'
 import { useAssetStore } from '@finanzas/core/store/useAssetStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
-import { subscribeToAssets } from '@finanzas/core/lib/assets'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { toUSD } from '@finanzas/core/lib/currency'
 import { formatAmount, getCurrentMonth, shiftMonth } from '@finanzas/core/lib/constants'
@@ -17,7 +16,7 @@ import PatrimonioChart from '@/components/patrimonio/PatrimonioChart'
 type Tab = 'activo' | 'pasivo'
 
 export default function PatrimonioPage() {
-  const { assets, setAssets, isLoading } = useAssetStore()
+  const { assets, isLoading } = useAssetStore()
   const { settings } = useSettingsStore()
   const s = settings ?? DEFAULT_SETTINGS
 
@@ -25,11 +24,6 @@ export default function PatrimonioPage() {
   const [modalOpen,   setModalOpen]   = useState(false)
   const [editing,     setEditing]     = useState<Asset | null>(null)
   const [snapAsset,   setSnapAsset]   = useState<Asset | null>(null)
-
-  useEffect(() => {
-    const unsub = subscribeToAssets(setAssets)
-    return () => unsub()
-  }, [setAssets])
 
   const activos = assets.filter((a) => a.clase === 'activo')
   const pasivos = assets.filter((a) => a.clase === 'pasivo')

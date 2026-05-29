@@ -45,11 +45,15 @@ function assetToRow(asset: Omit<Asset, 'id'>) {
 }
 
 export function subscribeToAssets(callback: (assets: Asset[]) => void): () => void {
+  let active = true
+
   async function fetchAndNotify() {
     const { data, error } = await supabase
       .from('cuentas')
       .select('*')
       .order('date_created', { ascending: false })
+
+    if (!active) return
 
     if (error) {
       console.error('[assets] fetch error:', error)
@@ -62,11 +66,11 @@ export function subscribeToAssets(callback: (assets: Asset[]) => void): () => vo
   fetchAndNotify()
 
   const channel = supabase
-    .channel('cuentas-all')
+    .channel(`cuentas-${crypto.randomUUID()}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'cuentas' }, fetchAndNotify)
     .subscribe()
 
-  return () => { supabase.removeChannel(channel) }
+  return () => { active = false; supabase.removeChannel(channel) }
 }
 
 export async function addAsset(data: Omit<Asset, 'id'>): Promise<string> {

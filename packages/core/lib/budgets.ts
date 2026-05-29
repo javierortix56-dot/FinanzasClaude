@@ -42,18 +42,22 @@ export function subscribeToBudgets(
   mes: string,
   callback: (budgets: Budget[]) => void
 ): () => void {
+  let active = true
+
   async function fetchAndNotify() {
-    callback(await loadBudgets(mes))
+    const budgets = await loadBudgets(mes)
+    if (!active) return
+    callback(budgets)
   }
 
   fetchAndNotify()
 
   const channel = supabase
-    .channel(`budgets-${mes}`)
+    .channel(`budgets-${mes}-${crypto.randomUUID()}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'configuracion' }, fetchAndNotify)
     .subscribe()
 
-  return () => { supabase.removeChannel(channel) }
+  return () => { active = false; supabase.removeChannel(channel) }
 }
 
 export async function upsertBudget(

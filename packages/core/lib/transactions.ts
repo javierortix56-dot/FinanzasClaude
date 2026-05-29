@@ -63,6 +63,10 @@ export function subscribeToTransactions(
   const lastDay = new Date(year, mon, 0).getDate()
   const end = `${year}-${String(mon).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
 
+  // Si la suscripción ya se limpió (p. ej. al cambiar de mes rápido), descartamos
+  // un fetch en vuelo para no pisar el estado nuevo con datos viejos.
+  let active = true
+
   async function fetchAndNotify() {
     const { data, error } = await supabase
       .from('movimientos')
@@ -71,6 +75,8 @@ export function subscribeToTransactions(
       .filter('date', 'gte', start)
       .filter('date', 'lte', end)
       .order('date', { ascending: false })
+
+    if (!active) return
 
     if (error) {
       console.error('[transactions] fetch error:', error)
@@ -83,11 +89,11 @@ export function subscribeToTransactions(
   fetchAndNotify()
 
   const channel = supabase
-    .channel(`movimientos-${month}`)
+    .channel(`movimientos-${month}-${crypto.randomUUID()}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'movimientos' }, fetchAndNotify)
     .subscribe()
 
-  return () => { supabase.removeChannel(channel) }
+  return () => { active = false; supabase.removeChannel(channel) }
 }
 
 export async function addTransaction(data: Omit<Transaction, 'id'>): Promise<string> {
