@@ -1,4 +1,5 @@
 import { supabase, SHARED_UUID } from './supabase'
+import { useAssetStore } from '../store/useAssetStore'
 import { Asset, AssetSnapshot } from '../types'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -90,6 +91,9 @@ export async function addAsset(data: Omit<Asset, 'id'>): Promise<string> {
       .eq('id', id)
       // no throw — columna puede no existir todavía
   }
+  // Optimistic update: reflejar el alta en el store al instante, sin esperar
+  // al evento realtime (que reconciliará después).
+  useAssetStore.getState().upsertAsset({ ...data, id })
   return id
 }
 
@@ -113,11 +117,31 @@ export async function updateAsset(id: string, data: Partial<Omit<Asset, 'id'>>) 
       .update({ snapshots: data.snapshots })
       .eq('id', id)
   }
+
+  // Optimistic update: mergear los campos cambiados sobre el activo del store
+  // para que la UI se actualice al instante (el realtime reconciliará después).
+  const prev = useAssetStore.getState().assets.find((a) => a.id === id)
+  if (prev) {
+    useAssetStore.getState().upsertAsset({
+      ...prev,
+      ...(data.nombre !== undefined && { nombre: data.nombre }),
+      ...(data.tipo !== undefined && { tipo: data.tipo }),
+      ...(data.clase !== undefined && { clase: data.clase }),
+      ...(data.moneda !== undefined && { moneda: data.moneda }),
+      ...(data.saldo !== undefined && { saldo: data.saldo }),
+      ...(data.fechaAlta !== undefined && { fechaAlta: data.fechaAlta }),
+      ...(data.metaObjetivo !== undefined && { metaObjetivo: data.metaObjetivo }),
+      ...(data.metaMoneda !== undefined && { metaMoneda: data.metaMoneda }),
+      ...(data.snapshots !== undefined && { snapshots: data.snapshots }),
+    })
+  }
 }
 
 export async function deleteAsset(id: string) {
   const { error } = await supabase.from('cuentas').delete().eq('id', id)
   if (error) throw error
+  // Optimistic update: sacar el activo del store al instante.
+  useAssetStore.getState().removeAsset(id)
 }
 
 /**
