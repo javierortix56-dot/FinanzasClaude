@@ -94,7 +94,7 @@ function Form({
       categoria,
       descripcion,
       nota,
-      tags: [],
+      tags: editing?.tags ?? [],
       fecha: { toDate: () => new Date(fecha + 'T12:00:00') },
       ejecutado,
       asignadoA: editing?.asignadoA ?? null,

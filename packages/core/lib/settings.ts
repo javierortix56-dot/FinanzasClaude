@@ -58,10 +58,12 @@ function rowToSettings(row: Record<string, any>): Settings {
   }
 }
 
-function settingsToRow(settings: Settings) {
+function settingsToRow(settings: Settings, existingAppSettings: Record<string, unknown> = {}) {
   return {
     user_id:         SHARED_UUID,
-    app_settings:    { tipoCambio: settings.tipoCambio, ahorroLinks: settings.ahorroLinks ?? [] },
+    // app_settings comparte columna con claves que este módulo no maneja
+    // (p. ej. budgets, que lib/budgets.ts guarda acá) — preservarlas.
+    app_settings:    { ...existingAppSettings, tipoCambio: settings.tipoCambio, ahorroLinks: settings.ahorroLinks ?? [] },
     monthly_rates:   settings.historialTipoCambio,
     transaction_cats: settings.categoriasGasto,
     categories:      settings.categoriasIngreso,
@@ -122,10 +124,21 @@ export function subscribeToSettings(
 }
 
 export async function updateSettings(_userId: string, partial: Partial<Settings>) {
-  const current = await getOrInitSettings(_userId)
+  // Releer la fila cruda justo antes de escribir, para mergear sobre el estado
+  // más reciente y preservar las claves ajenas de app_settings (budgets).
+  // Riesgo residual: dos escrituras simultáneas siguen pudiendo pisarse entre
+  // el read y el write (no hay transacción) — aceptable para 2 usuarios.
+  const { data, error: fetchErr } = await supabase
+    .from('configuracion')
+    .select('*')
+    .eq('user_id', SHARED_UUID)
+    .maybeSingle()
+  if (fetchErr) throw fetchErr
+
+  const current = data ? rowToSettings(data) : DEFAULT_SETTINGS
   const merged  = { ...current, ...partial }
   const { error } = await supabase
     .from('configuracion')
-    .upsert(settingsToRow(merged), { onConflict: 'user_id' })
+    .upsert(settingsToRow(merged, data?.app_settings ?? {}), { onConflict: 'user_id' })
   if (error) throw error
 }

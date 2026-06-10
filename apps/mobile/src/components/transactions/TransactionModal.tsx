@@ -133,6 +133,13 @@ export default function TransactionModal() {
   const accentColor  = tipo === 'egreso' ? '#f87171' : '#22c55e'
   const accentBg     = tipo === 'egreso' ? 'bg-red-400' : 'bg-green-500'
 
+  // El aporte de un snapshot se guarda en la moneda del activo, no en la del
+  // movimiento — convertir siempre antes de llamar a adjustAssetSaldo.
+  function toAssetCurrency(amount: number, cur: Currency, assetId: string): number {
+    const asset = assets.find((a) => a.id === assetId)
+    return asset ? toBase(amount, cur, asset.moneda, s) : amount
+  }
+
   async function handleSave() {
     if (!montoValido) return
     setSaving(true)
@@ -148,8 +155,8 @@ export default function TransactionModal() {
         recurrente,
       }
 
-      // Use the explicitly selected cuenta de ahorro
-      data.ahorroAssetId = ahorroAssetId || null
+      // Use the explicitly selected cuenta de ahorro (solo aplica a egresos)
+      data.ahorroAssetId = tipo === 'egreso' ? (ahorroAssetId || null) : null
 
       if (editingTransaction?.id) {
         await updateTransaction(editingTransaction.id, data)
@@ -163,21 +170,27 @@ export default function TransactionModal() {
       try {
         const txMonth = fecha.slice(0, 7)
         const oldAssetId = editingTransaction?.ahorroAssetId ?? ''
-        const newAssetId = ahorroAssetId
+        const newAssetId = data.ahorroAssetId ?? ''
         if (editingTransaction?.id) {
-          if (oldAssetId && oldAssetId !== newAssetId) {
-            // Asset changed — reverse the old one
-            const oldMonth = editingTransaction.fecha.toDate().toISOString().slice(0, 7)
-            await adjustAssetSaldo(oldAssetId, -editingTransaction.monto, oldMonth)
+          const oldMonth = editingTransaction.fecha.toDate().toISOString().slice(0, 7)
+          const sameAssetAndMonth = oldAssetId === newAssetId && oldMonth === txMonth
+          if (oldAssetId && !sameAssetAndMonth) {
+            // Cambió el activo o el mes — revertir el aporte viejo donde estaba
+            await adjustAssetSaldo(
+              oldAssetId,
+              -toAssetCurrency(editingTransaction.monto, editingTransaction.moneda, oldAssetId),
+              oldMonth,
+            )
           }
           if (newAssetId) {
-            const delta = oldAssetId === newAssetId
-              ? parsedMonto - editingTransaction.monto   // same asset: only the diff
-              : parsedMonto                              // new asset: full amount
+            const delta = sameAssetAndMonth
+              ? toAssetCurrency(parsedMonto, moneda, newAssetId) -
+                toAssetCurrency(editingTransaction.monto, editingTransaction.moneda, newAssetId)
+              : toAssetCurrency(parsedMonto, moneda, newAssetId)
             if (delta !== 0) await adjustAssetSaldo(newAssetId, delta, txMonth)
           }
         } else if (newAssetId) {
-          await adjustAssetSaldo(newAssetId, parsedMonto, txMonth)
+          await adjustAssetSaldo(newAssetId, toAssetCurrency(parsedMonto, moneda, newAssetId), txMonth)
         }
       } catch (syncErr) {
         console.error('[handleSave] asset sync error:', syncErr)
@@ -212,7 +225,11 @@ export default function TransactionModal() {
       if (editingTransaction.ahorroAssetId) {
         try {
           const txMonth = editingTransaction.fecha.toDate().toISOString().slice(0, 7)
-          await adjustAssetSaldo(editingTransaction.ahorroAssetId, -editingTransaction.monto, txMonth)
+          await adjustAssetSaldo(
+            editingTransaction.ahorroAssetId,
+            -toAssetCurrency(editingTransaction.monto, editingTransaction.moneda, editingTransaction.ahorroAssetId),
+            txMonth,
+          )
         } catch (syncErr) {
           console.error('[handleDelete] asset sync error:', syncErr)
         }
@@ -230,10 +247,30 @@ export default function TransactionModal() {
     setSaveError(null)
     try {
       if (cloneAction === 'clone') {
-        await cloneTransactionToMonth(editingTransaction.id, cloneMonth)
+        const newId = await cloneTransactionToMonth(editingTransaction.id, cloneMonth)
+        // El clon no debe arrastrar el vínculo de ahorro: su aporte nunca se
+        // aplicó al activo y duplicaría el saldo al editarlo/borrarlo.
+        if (editingTransaction.ahorroAssetId) {
+          await updateTransaction(newId, { ahorroAssetId: null })
+        }
         showToast('Movimiento clonado')
       } else {
         await moveTransactionToMonth(editingTransaction.id, cloneMonth)
+        // Mover cambia el mes: trasladar el aporte del activo vinculado
+        if (editingTransaction.ahorroAssetId) {
+          const oldMonth = editingTransaction.fecha.toDate().toISOString().slice(0, 7)
+          if (oldMonth !== cloneMonth) {
+            try {
+              const amt = toAssetCurrency(
+                editingTransaction.monto, editingTransaction.moneda, editingTransaction.ahorroAssetId,
+              )
+              await adjustAssetSaldo(editingTransaction.ahorroAssetId, -amt, oldMonth)
+              await adjustAssetSaldo(editingTransaction.ahorroAssetId, amt, cloneMonth)
+            } catch (syncErr) {
+              console.error('[handleCloneMove] asset sync error:', syncErr)
+            }
+          }
+        }
         showToast('Movimiento movido')
       }
       closeTransactionModal()
@@ -284,7 +321,7 @@ export default function TransactionModal() {
                   {(['egreso', 'ingreso'] as TransactionType[]).map((t) => (
                     <button
                       key={t}
-                      onClick={() => { setTipo(t); setSelectedGroup(''); setSelectedSub(''); setAsignadoA(null) }}
+                      onClick={() => { setTipo(t); setSelectedGroup(''); setSelectedSub(''); setAsignadoA(null); setAhorroAssetId('') }}
                       className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${
                         tipo === t
                           ? t === 'egreso' ? 'bg-red-400 text-white shadow' : 'bg-green-500 text-white shadow'
