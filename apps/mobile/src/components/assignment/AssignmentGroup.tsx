@@ -17,7 +17,6 @@ interface Props {
   onDesassign: () => void
   isExpanded: boolean
   onToggleExpand: () => void
-  userNames: Record<string, string>
   settings: Settings
   monedaBase: Currency
 }
@@ -31,7 +30,6 @@ export default function AssignmentGroup({
   onDesassign,
   isExpanded,
   onToggleExpand,
-  userNames,
   settings,
   monedaBase,
 }: Props) {

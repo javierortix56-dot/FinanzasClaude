@@ -14,6 +14,7 @@ export const DEFAULT_SETTINGS: Settings = {
   tiposPasivo:  ['Tarjeta de crédito', 'Préstamo', 'Deuda'],
   mesesCerrados: [],
   ahorroLinks: [],
+  monedaBase: 'ARS',
 }
 
 // ── Migración de formato viejo (Category[]) → nuevo (CategoryGroup[]) ────────
@@ -55,6 +56,7 @@ function rowToSettings(row: Record<string, any>): Settings {
     tiposPasivo:  Array.isArray(accountCats.tiposPasivo) ? accountCats.tiposPasivo : DEFAULT_SETTINGS.tiposPasivo,
     mesesCerrados: Array.isArray(row.closed_months) ? row.closed_months : [],
     ahorroLinks: Array.isArray(appSettings.ahorroLinks) ? appSettings.ahorroLinks : [],
+    monedaBase: (['ARS', 'COP', 'USD'].includes(appSettings.monedaBase) ? appSettings.monedaBase : 'ARS') as Settings['monedaBase'],
   }
 }
 
@@ -63,7 +65,7 @@ function settingsToRow(settings: Settings, currentAppSettings: Record<string, un
     user_id:         SHARED_UUID,
     // Spread del app_settings actual para no pisar claves ajenas a Settings
     // (p. ej. budgets, que guarda saveBudgets en la misma columna).
-    app_settings:    { ...currentAppSettings, tipoCambio: settings.tipoCambio, ahorroLinks: settings.ahorroLinks ?? [] },
+    app_settings:    { ...currentAppSettings, tipoCambio: settings.tipoCambio, ahorroLinks: settings.ahorroLinks ?? [], monedaBase: settings.monedaBase ?? 'ARS' },
     monthly_rates:   settings.historialTipoCambio,
     transaction_cats: settings.categoriasGasto,
     categories:      settings.categoriasIngreso,

@@ -93,6 +93,8 @@ export interface Settings {
   tiposPasivo: string[]
   mesesCerrados?: string[]
   ahorroLinks?: AhorroLink[]
+  /** Moneda en la que se muestran los totales de la app (default ARS) */
+  monedaBase?: Currency
 }
 
 export interface Budget {

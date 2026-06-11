@@ -300,7 +300,6 @@ export default function AssignmentTab() {
                 onDesassign={() => desassignGroup(key)}
                 isExpanded={expandedGroups.has(key)}
                 onToggleExpand={() => toggleGroup(key)}
-                userNames={userNames}
                 settings={s}
                 monedaBase={base}
               />

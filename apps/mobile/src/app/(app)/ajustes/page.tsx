@@ -3,13 +3,13 @@
 import { useState, useRef } from 'react'
 import {
   ChevronRight, Plus, Pencil, ChevronDown, ChevronUp,
-  Copy, RotateCcw, Lock, Trash2, Check, Download, Upload, ChevronLeft,
+  Copy, RotateCcw, Lock, Trash2, Check, Download, Upload,
 } from 'lucide-react'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useAssetStore } from '@finanzas/core/store/useAssetStore'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
-import { updateSettings } from '@finanzas/core/lib/settings'
+import { updateSettings, DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import {
   deleteMonthTransactions,
   cloneMonthTransactions,
@@ -18,9 +18,10 @@ import {
   countTransactionsByCategories,
 } from '@finanzas/core/lib/transactions'
 import { exportBackup, downloadBackup, importBackup, parseBackupFile, BackupData } from '@finanzas/core/lib/backup'
-import { monthLabel, SHARED_USER_ID } from '@finanzas/core/lib/constants'
+import { monthLabel, shiftMonth, SHARED_USER_ID } from '@finanzas/core/lib/constants'
 import dynamic from 'next/dynamic'
-import { Category, CategoryGroup, AhorroLink } from '@finanzas/core/types'
+import { useAuthStore } from '@finanzas/core/store/useAuthStore'
+import { Category, CategoryGroup, AhorroLink, Currency } from '@finanzas/core/types'
 
 const CategoryModal = dynamic(() => import('@/components/ajustes/CategoryModal'), { ssr: false })
 
@@ -43,6 +44,7 @@ export default function AjustesPage() {
   const { settings, setSettings } = useSettingsStore()
   const { currentMonth } = useTransactionStore()
   const { assets } = useAssetStore()
+  const { setMonedaBase } = useAuthStore()
   const showToast = useUIStore((st) => st.showToast)
   const [openSection, setOpenSection] = useState<Section>(null)
 
@@ -96,21 +98,9 @@ export default function AjustesPage() {
   const [newLinkCatId, setNewLinkCatId] = useState('')
   const [newLinkAssetId, setNewLinkAssetId] = useState('')
 
-  if (!settings) {
-    return (
-      <div className="flex flex-col h-full bg-gray-50">
-        <div className="bg-white px-4 pt-10 pb-4 shadow-sm">
-          <h1 className="text-gray-800 font-bold text-xl">Ajustes</h1>
-          <p className="text-gray-400 text-xs mt-0.5">Javier &amp; Mary</p>
-        </div>
-        <div className="flex items-center justify-center flex-1">
-          <div className="w-6 h-6 border-2 border-[#534AB7] border-t-transparent rounded-full animate-spin" />
-        </div>
-      </div>
-    )
-  }
-
-  const s = settings  // narrowed to Settings (non-null) after guard above
+  // El store de settings arranca con DEFAULT_SETTINGS (nunca null), así que el
+  // spinner de carga era inalcanzable; usamos el fallback directamente.
+  const s = settings ?? DEFAULT_SETTINGS
 
   function toggle(section: Section) {
     setOpenSection((prev) => (prev === section ? null : section))
@@ -120,7 +110,8 @@ export default function AjustesPage() {
   function toggleGroup(id: string) {
     setExpandedGroups((prev) => {
       const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return next
     })
   }
@@ -145,6 +136,18 @@ export default function AjustesPage() {
       setRateError('Error al guardar: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
       setSavingRate(false)
+    }
+  }
+
+  // ── Moneda base ──────────────────────────────────────────────────────────
+  async function changeMonedaBase(m: Currency) {
+    if ((s.monedaBase ?? 'ARS') === m) return
+    try {
+      await updateSettings(SHARED_USER_ID, { monedaBase: m })
+      setSettings({ ...s, monedaBase: m })
+      setMonedaBase(m)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Error al cambiar la moneda base', 'error')
     }
   }
 
@@ -281,7 +284,6 @@ export default function AjustesPage() {
 
   async function handleClonarMes() {
     resetMesFeedback()
-    const { shiftMonth } = await import('@finanzas/core/lib/constants')
     const nextMonth = shiftMonth(currentMonth, 1)
     // Si aún no confirmó y el mes destino ya tiene movimientos, pedimos confirmación primero
     if (!clonarConfirm) {
@@ -309,7 +311,6 @@ export default function AjustesPage() {
 
   async function handleCrearRecurrentes() {
     resetMesFeedback()
-    const { shiftMonth } = await import('@finanzas/core/lib/constants')
     const nextMonth = shiftMonth(currentMonth, 1)
     if (!recurrentesConfirm) {
       setMesAction('creando')
@@ -434,7 +435,7 @@ export default function AjustesPage() {
                   <span className="text-[10px] text-gray-400 ml-1">({group.subcategorias.length})</span>
                   {isOpen
                     ? <ChevronDown size={13} className="text-gray-400 flex-shrink-0 ml-auto" />
-                    : <ChevronLeft size={13} className="text-gray-400 flex-shrink-0 ml-auto rotate-180" />
+                    : <ChevronRight size={13} className="text-gray-400 flex-shrink-0 ml-auto" />
                   }
                 </button>
 
@@ -527,6 +528,24 @@ export default function AjustesPage() {
             onToggle={() => { toggle('cambio'); setArsRate(String(s?.tipoCambio.ARS_USD ?? 1200)); setCopRate(String(s?.tipoCambio.COP_USD ?? 4100)) }}
           >
             <div className="space-y-3 pt-2">
+              {/* Moneda base: en qué moneda se muestran los totales */}
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Moneda base (totales)</p>
+                <div className="flex gap-1.5">
+                  {(['ARS', 'COP', 'USD'] as Currency[]).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => changeMonedaBase(m)}
+                      aria-pressed={(s.monedaBase ?? 'ARS') === m}
+                      className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${
+                        (s.monedaBase ?? 'ARS') === m ? 'bg-[#534AB7] text-white' : 'bg-gray-100 text-gray-500'
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <RateInput label="1 USD = ? ARS" value={arsRate} onChange={setArsRate} />
               <RateInput label="1 USD = ? COP" value={copRate} onChange={setCopRate} />
               <button

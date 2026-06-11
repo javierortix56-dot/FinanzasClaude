@@ -12,7 +12,7 @@ function assertMonthOpen(month: string) {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function rowToTx(row: Record<string, any>): Transaction {
+export function rowToTx(row: Record<string, any>): Transaction {
   const dateStr = row.date as string
   const extra = row.children ?? {}
   // DB may store 'inc'/'exp' (old app) or 'ingreso'/'egreso' (new)

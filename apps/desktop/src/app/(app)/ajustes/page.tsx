@@ -4,16 +4,20 @@ import { useEffect, useState } from 'react'
 import { Save } from 'lucide-react'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
+import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input, Label } from '@/components/ui/input'
+import { Input, Label, Select } from '@/components/ui/input'
 import { updateSettings, DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { cloneMonthTransactions, createRecurringTransactions, countMonthTransactions } from '@finanzas/core/lib/transactions'
 import { shiftMonth, monthLabel } from '@finanzas/core/lib/constants'
+import { Currency } from '@finanzas/core/types'
 
 export default function AjustesPage() {
   const settings = useSettingsStore((s) => s.settings) ?? DEFAULT_SETTINGS
+  const setSettings = useSettingsStore((s) => s.setSettings)
+  const setMonedaBase = useAuthStore((s) => s.setMonedaBase)
   const { currentMonth } = useTransactionStore()
   const showToast = useUIStore((s) => s.showToast)
 
@@ -48,6 +52,18 @@ export default function AjustesPage() {
       showToast('Error al guardar', 'error')
     } finally {
       setSavingRates(false)
+    }
+  }
+
+  async function changeMonedaBase(m: Currency) {
+    if ((settings.monedaBase ?? 'ARS') === m) return
+    try {
+      await updateSettings('shared', { monedaBase: m })
+      setSettings({ ...settings, monedaBase: m })
+      setMonedaBase(m)
+      showToast('Moneda base actualizada')
+    } catch {
+      showToast('Error al cambiar la moneda base', 'error')
     }
   }
 
@@ -94,7 +110,13 @@ export default function AjustesPage() {
           <div className="text-xs text-muted mt-0.5">Se aplican a todas las conversiones a USD y a la moneda base.</div>
         </div>
         <CardContent className="pt-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <Label>Moneda base (totales)</Label>
+              <Select value={settings.monedaBase ?? 'ARS'} onChange={(e) => changeMonedaBase(e.target.value as Currency)}>
+                {(['ARS', 'COP', 'USD'] as Currency[]).map((m) => <option key={m} value={m}>{m}</option>)}
+              </Select>
+            </div>
             <div>
               <Label>USD / ARS</Label>
               <Input type="number" value={arsUsd} onChange={(e) => setArsUsd(e.target.value)} />

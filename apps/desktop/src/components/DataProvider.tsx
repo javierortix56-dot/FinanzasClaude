@@ -10,7 +10,7 @@ import { subscribeToTransactions } from '@finanzas/core/lib/transactions'
 import { subscribeToSettings, getOrInitSettings } from '@finanzas/core/lib/settings'
 import { subscribeToAssets } from '@finanzas/core/lib/assets'
 import { subscribeToBudgets } from '@finanzas/core/lib/budgets'
-import { Currency } from '@finanzas/core/types'
+import { Settings } from '@finanzas/core/types'
 
 export default function DataProvider({ children }: { children: React.ReactNode }) {
   const { setMonedaBase } = useAuthStore()
@@ -29,13 +29,17 @@ export default function DataProvider({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     let cancelled = false
+    // Aplica settings al store y mantiene la moneda base sincronizada en cada update
+    function applySettings(s: Settings) {
+      setSettings(s)
+      setMonedaBase(s.monedaBase ?? 'ARS')
+    }
     async function init() {
       try {
         const settings = await getOrInitSettings('shared')
         if (cancelled) return
-        setMonedaBase(((settings as unknown as Record<string, unknown>).monedaBase ?? 'ARS') as Currency)
-        setSettings(settings)
-        settingsUnsub.current = subscribeToSettings('shared', setSettings)
+        applySettings(settings)
+        settingsUnsub.current = subscribeToSettings('shared', applySettings)
         assetsUnsub.current   = subscribeToAssets(setAssets)
       } catch (err) {
         console.error('[DataProvider] init failed:', err)

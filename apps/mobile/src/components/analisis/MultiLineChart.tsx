@@ -20,7 +20,6 @@ export interface LineSeries {
 interface Props {
   months: string[]
   series: LineSeries[]
-  currency?: string
 }
 
 function px(i: number, n: number) {
@@ -58,7 +57,7 @@ function areaFill(pts: [number, number][], bottom: number): string {
 
 const GRID_ROWS = 3
 
-export default function MultiLineChart({ months, series, currency = '' }: Props) {
+export default function MultiLineChart({ months, series }: Props) {
   const hideAmounts = useSettingsStore((s) => s.hideAmounts)
   if (!months.length || !series.length) return null
 

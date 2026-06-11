@@ -1,31 +1,9 @@
 import { supabase } from './supabase'
 import { Transaction } from '../types'
 import { shiftMonth } from './constants'
-
-function rowToTx(row: Record<string, unknown>): Transaction {
-  const dateStr = row.date as string
-  const extra = (row.children as Record<string, unknown>) ?? {}
-  // Migrated Firebase rows: amount = pre-converted ARS value, orig_amt = original currency value.
-  const origAmt = row.orig_amt as number | null
-  const amount = row.amount as number
-  const isPreConverted = origAmt != null && Math.abs(origAmt - amount) > 0.01
-  return {
-    id: row.id as string,
-    userId: 'shared',
-    tipo: (row.type === 'inc' ? 'ingreso' : row.type === 'exp' ? 'egreso' : row.type) as 'ingreso' | 'egreso',
-    monto: amount,
-    moneda: (isPreConverted ? 'ARS' : row.currency) as 'ARS' | 'COP' | 'USD',
-    categoria: (row.category as string) ?? '',
-    descripcion: (row.description as string) ?? '',
-    nota: (extra.nota as string) ?? '',
-    tags: (extra.tags as string[]) ?? [],
-    fecha: { toDate: () => new Date(dateStr + 'T12:00:00') },
-    ejecutado: (row.executed as boolean) ?? false,
-    asignadoA: (extra.asignadoA as string | null) ?? null,
-    creadoPor: (extra.creadoPor as string) ?? 'shared',
-    recurrente: (extra.recurrente as boolean) ?? false,
-  }
-}
+// Reutilizamos el único rowToTx (incluye ahorroAssetId); la copia local previa
+// lo había perdido y causaba drift en la sync de ahorro al leer históricos.
+import { rowToTx } from './transactions'
 
 export async function fetchMonthTransactions(month: string): Promise<Transaction[]> {
   const [year, mon] = month.split('-').map(Number)

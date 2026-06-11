@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { getOrInitSettings, subscribeToSettings } from '@finanzas/core/lib/settings'
-import { Currency } from '@finanzas/core/types'
+import { Settings } from '@finanzas/core/types'
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const { setMonedaBase } = useAuthStore()
@@ -12,12 +12,16 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const settingsUnsubRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
+    // Aplica settings y mantiene la moneda base sincronizada en cada update
+    function applySettings(s: Settings) {
+      setSettings(s)
+      setMonedaBase(s.monedaBase ?? 'ARS')
+    }
     async function init() {
       try {
         const settings = await getOrInitSettings('shared')
-        setMonedaBase(((settings as unknown as Record<string, unknown>).monedaBase ?? 'ARS') as Currency)
-        settingsUnsubRef.current = subscribeToSettings('shared', setSettings)
-        setSettings(settings)
+        applySettings(settings)
+        settingsUnsubRef.current = subscribeToSettings('shared', applySettings)
       } catch (err) {
         console.error('[AuthProvider] settings load failed:', err)
       }
