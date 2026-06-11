@@ -44,3 +44,11 @@ input, select, textarea {
   filter: blur(8px);
   user-select: none;
 }
+
+/* Entrada del toast (las clases animate-in de tailwindcss-animate no estaban
+   instaladas y no hacían nada) */
+@keyframes toast-in {
+  from { opacity: 0; transform: translate(-50%, 12px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+.toast-in { animation: toast-in 0.2s ease-out; }

@@ -492,6 +492,7 @@ export default function AjustesPage() {
                         </span>
                         <button
                           onClick={() => setSubModal({ open: true, tipo, groupId: group.id, category: sub })}
+                          aria-label={`Editar subcategoría ${sub.nombre}`}
                           className="p-1 rounded hover:bg-gray-200 text-gray-400"
                         >
                           <Pencil size={11} />
@@ -609,14 +610,14 @@ export default function AjustesPage() {
                       <div key={i} className="flex gap-2">
                         <input value={t} onChange={(e) => { const c = [...tiposActivo]; c[i] = e.target.value; setTiposActivo(c) }}
                           className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm" />
-                        <button onClick={() => setTiposActivo(tiposActivo.filter((_, j) => j !== i))} className="text-red-400 p-1.5"><Trash2 size={13} /></button>
+                        <button onClick={() => setTiposActivo(tiposActivo.filter((_, j) => j !== i))} aria-label={`Eliminar tipo ${t}`} className="text-red-400 p-1.5"><Trash2 size={13} /></button>
                       </div>
                     ))}
                     <div className="flex gap-2">
                       <input value={newTipoActivo} onChange={(e) => setNewTipoActivo(e.target.value)} placeholder="Nuevo tipo..."
                         className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-1.5 text-sm"
                         onKeyDown={(e) => { if (e.key === 'Enter' && newTipoActivo.trim()) { setTiposActivo((p) => [...p, newTipoActivo.trim()]); setNewTipoActivo('') } }} />
-                      <button onClick={() => { if (newTipoActivo.trim()) { setTiposActivo((p) => [...p, newTipoActivo.trim()]); setNewTipoActivo('') } }} className="px-3 text-[#534AB7] font-semibold text-sm"><Plus size={14} /></button>
+                      <button onClick={() => { if (newTipoActivo.trim()) { setTiposActivo((p) => [...p, newTipoActivo.trim()]); setNewTipoActivo('') } }} aria-label="Agregar tipo de activo" className="px-3 text-[#534AB7] font-semibold text-sm"><Plus size={14} /></button>
                     </div>
                   </div>
                 ) : (
@@ -640,14 +641,14 @@ export default function AjustesPage() {
                       <div key={i} className="flex gap-2">
                         <input value={t} onChange={(e) => { const c = [...tiposPasivo]; c[i] = e.target.value; setTiposPasivo(c) }}
                           className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm" />
-                        <button onClick={() => setTiposPasivo(tiposPasivo.filter((_, j) => j !== i))} className="text-red-400 p-1.5"><Trash2 size={13} /></button>
+                        <button onClick={() => setTiposPasivo(tiposPasivo.filter((_, j) => j !== i))} aria-label={`Eliminar tipo ${t}`} className="text-red-400 p-1.5"><Trash2 size={13} /></button>
                       </div>
                     ))}
                     <div className="flex gap-2">
                       <input value={newTipoPasivo} onChange={(e) => setNewTipoPasivo(e.target.value)} placeholder="Nuevo tipo..."
                         className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-1.5 text-sm"
                         onKeyDown={(e) => { if (e.key === 'Enter' && newTipoPasivo.trim()) { setTiposPasivo((p) => [...p, newTipoPasivo.trim()]); setNewTipoPasivo('') } }} />
-                      <button onClick={() => { if (newTipoPasivo.trim()) { setTiposPasivo((p) => [...p, newTipoPasivo.trim()]); setNewTipoPasivo('') } }} className="px-3 text-[#534AB7] font-semibold text-sm"><Plus size={14} /></button>
+                      <button onClick={() => { if (newTipoPasivo.trim()) { setTiposPasivo((p) => [...p, newTipoPasivo.trim()]); setNewTipoPasivo('') } }} aria-label="Agregar tipo de pasivo" className="px-3 text-[#534AB7] font-semibold text-sm"><Plus size={14} /></button>
                     </div>
                   </div>
                 ) : (
@@ -713,7 +714,7 @@ export default function AjustesPage() {
                             <span className="flex-1 text-xs text-gray-700 truncate">
                               {cat?.label ?? link.categoriaId} <span className="text-gray-400">→</span> {asset?.nombre ?? link.assetId}
                             </span>
-                            <button onClick={() => removeLink(link.categoriaId)} className="p-1 rounded hover:bg-red-50 text-red-400 flex-shrink-0">
+                            <button onClick={() => removeLink(link.categoriaId)} aria-label="Eliminar vínculo" className="p-1 rounded hover:bg-red-50 text-red-400 flex-shrink-0">
                               <Trash2 size={12} />
                             </button>
                           </div>

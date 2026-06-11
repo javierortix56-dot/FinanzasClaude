@@ -148,6 +148,7 @@ export default function CuentasPage() {
                     <td className="px-5 py-3 text-right">
                       <button
                         onClick={() => openEdit(a)}
+                        aria-label={`Editar cuenta ${a.nombre}`}
                         className="h-7 w-7 inline-flex items-center justify-center rounded text-muted hover:text-foreground hover:bg-surface-2"
                       >
                         <Pencil className="h-3.5 w-3.5" />

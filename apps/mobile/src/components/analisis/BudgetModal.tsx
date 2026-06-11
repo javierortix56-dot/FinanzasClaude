@@ -89,7 +89,7 @@ export default function BudgetModal({ open, onClose, categoria, mes }: Props) {
                 </p>
               )}
             </div>
-            <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100">
+            <button onClick={onClose} aria-label="Cerrar" className="p-1.5 rounded-full hover:bg-gray-100">
               <X size={16} className="text-gray-500" />
             </button>
           </div>
@@ -129,6 +129,7 @@ export default function BudgetModal({ open, onClose, categoria, mes }: Props) {
                 <button
                   onClick={handleDelete}
                   disabled={saving}
+                  aria-label="Eliminar presupuesto"
                   className="w-11 h-11 flex-shrink-0 flex items-center justify-center rounded-xl border-2 border-red-100 text-red-400 hover:bg-red-50"
                 >
                   <Trash2 size={17} />

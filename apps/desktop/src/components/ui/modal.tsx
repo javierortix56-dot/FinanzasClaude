@@ -1,6 +1,6 @@
 'use client'
 
-import { ReactNode, useEffect } from 'react'
+import { ReactNode, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import { cn } from '@finanzas/core/lib/utils'
 
@@ -19,17 +19,44 @@ const sizes = {
   lg: 'max-w-2xl',
 }
 
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
 export function Modal({ open, onClose, title, children, size = 'md', footer }: Props) {
+  const panelRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     if (!open) return
+    // Foco inicial dentro del diálogo + restaurarlo al cerrar
+    const previouslyFocused = document.activeElement as HTMLElement | null
+    panelRef.current?.focus()
+
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        onClose()
+        return
+      }
+      // Focus trap: Tab cicla dentro del panel
+      if (e.key === 'Tab' && panelRef.current) {
+        const focusables = Array.from(panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE))
+        if (focusables.length === 0) return
+        const first = focusables[0]
+        const last = focusables[focusables.length - 1]
+        const active = document.activeElement
+        if (e.shiftKey && (active === first || active === panelRef.current)) {
+          e.preventDefault()
+          last.focus()
+        } else if (!e.shiftKey && active === last) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
     }
     window.addEventListener('keydown', onKey)
     document.body.style.overflow = 'hidden'
     return () => {
       window.removeEventListener('keydown', onKey)
       document.body.style.overflow = ''
+      previouslyFocused?.focus()
     }
   }, [open, onClose])
 
@@ -41,7 +68,12 @@ export function Modal({ open, onClose, title, children, size = 'md', footer }: P
       onClick={onClose}
     >
       <div
-        className={cn('w-full rounded-xl bg-surface shadow-xl border border-border', sizes[size])}
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        tabIndex={-1}
+        className={cn('w-full rounded-xl bg-surface shadow-xl border border-border outline-none', sizes[size])}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">

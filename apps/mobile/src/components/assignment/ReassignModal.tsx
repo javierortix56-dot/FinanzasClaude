@@ -50,6 +50,7 @@ export default function ReassignModal({
             </Dialog.Title>
             <button
               onClick={onClose}
+              aria-label="Cerrar"
               className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
             >
               <X size={16} className="text-gray-500" />

@@ -78,8 +78,9 @@ export default function AssetCard({ asset, settings, onClick, onUpdateSnapshot }
           <span className="text-xs text-gray-400">≈ <Amount amount={usdValue} currency="USD" /></span>
         </div>
 
-        {/* Meta progress */}
-        {asset.metaObjetivo != null && (
+        {/* Meta progress — requiere también metaMoneda: sin moneda no se puede
+            calcular el progreso y se renderizaba "Meta:" vacío con barra en 0% */}
+        {asset.metaObjetivo != null && asset.metaMoneda && (
           <div className="mt-2">
             <div className="flex justify-between text-[10px] text-gray-400 mb-1">
               <span>Meta: {metaLabel}</span>
@@ -97,7 +98,7 @@ export default function AssetCard({ asset, settings, onClick, onUpdateSnapshot }
         {/* Snapshot status + button */}
         {onUpdateSnapshot && isActivo && (
           <div className="mt-2 flex items-center justify-between">
-            <span className="text-[10px] text-gray-400">
+            <span className="text-[11px] text-gray-500">
               {currentSnap
                 ? <>Actualizado este mes</>
                 : lastSnap

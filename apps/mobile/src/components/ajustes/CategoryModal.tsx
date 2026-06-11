@@ -99,6 +99,8 @@ function CategoryForm({
                   <button
                     key={c}
                     onClick={() => setColor(c)}
+                    aria-label={`Color ${c}`}
+                    aria-pressed={color === c}
                     className={`w-9 h-9 rounded-full transition-all ${
                       color === c ? 'scale-110 ring-2 ring-offset-2 ring-gray-400' : 'hover:scale-105'
                     }`}
@@ -143,6 +145,7 @@ function CategoryForm({
                     if (!deleteConfirm) { setDeleteConfirm(true); return }
                     onDelete(category.id)
                   }}
+                  aria-label={deleteConfirm ? 'Confirmar eliminación' : 'Eliminar categoría'}
                   className={`w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-2xl border-2 transition-all ${
                     deleteConfirm ? 'bg-red-400 border-red-400 text-white' : 'border-red-100 text-red-400 hover:bg-red-50'
                   }`}

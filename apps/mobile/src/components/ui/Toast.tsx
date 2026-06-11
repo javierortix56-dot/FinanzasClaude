@@ -23,7 +23,7 @@ export default function Toast() {
 
   return (
     <div
-      className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-lg text-white text-sm font-semibold max-w-[340px] w-[90vw] animate-in fade-in slide-in-from-bottom-4 duration-200 ${
+      className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-lg text-white text-sm font-semibold max-w-[340px] w-[90vw] toast-in ${
         isSuccess ? 'bg-[#1a7a4a]' : 'bg-red-400'
       }`}
     >

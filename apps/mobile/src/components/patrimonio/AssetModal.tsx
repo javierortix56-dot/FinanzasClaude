@@ -138,7 +138,7 @@ export default function AssetModal({ open, onClose, editing }: Props) {
             <Dialog.Title className="text-base font-semibold text-gray-900">
               {editing ? 'Editar cuenta' : 'Nueva cuenta'}
             </Dialog.Title>
-            <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100 transition-colors">
+            <button onClick={onClose} aria-label="Cerrar" className="p-1.5 rounded-full hover:bg-gray-100 transition-colors">
               <X size={16} className="text-gray-500" />
             </button>
           </div>
@@ -284,6 +284,7 @@ export default function AssetModal({ open, onClose, editing }: Props) {
                     deleteConfirm ? 'bg-red-400 border-red-400 text-white' : 'border-red-100 text-red-400 hover:bg-red-50'
                   }`}
                   title={deleteConfirm ? 'Confirmar eliminación' : 'Eliminar cuenta'}
+                  aria-label={deleteConfirm ? 'Confirmar eliminación' : 'Eliminar cuenta'}
                 >
                   <Trash2 size={17} />
                 </button>

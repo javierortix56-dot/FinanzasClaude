@@ -7,7 +7,7 @@ import { monthLabel, getCurrentMonth } from '@finanzas/core/lib/constants'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 const titles: Record<string, string> = {
   '/dashboard':    'Dashboard',
@@ -23,6 +23,16 @@ export function Topbar() {
   const { hideAmounts, toggleHideAmounts } = useSettingsStore()
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
+
+  // Cerrar el menú móvil con Escape (el clic afuera lo maneja el backdrop)
+  useEffect(() => {
+    if (!open) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open])
 
   const title = Object.entries(titles).find(([k]) => pathname.startsWith(k))?.[1] ?? ''
   const isCurrent = currentMonth === getCurrentMonth()
@@ -75,7 +85,10 @@ export function Topbar() {
       </div>
 
       {open && (
-        <div className="absolute top-16 left-0 right-0 lg:hidden border-b border-border bg-surface shadow-lg p-3 space-y-1">
+        <>
+          {/* Backdrop: cierra el menú al hacer clic afuera */}
+          <div className="fixed inset-0 top-16 z-10 lg:hidden" onClick={() => setOpen(false)} />
+          <div className="absolute top-16 left-0 right-0 z-20 lg:hidden border-b border-border bg-surface shadow-lg p-3 space-y-1">
           {[
             ['/dashboard', 'Dashboard'],
             ['/movimientos', 'Movimientos'],
@@ -93,7 +106,8 @@ export function Topbar() {
               {label}
             </Link>
           ))}
-        </div>
+          </div>
+        </>
       )}
     </header>
   )

@@ -322,6 +322,7 @@ export default function TransactionModal() {
             </Dialog.Title>
             <button
               onClick={closeTransactionModal}
+              aria-label="Cerrar"
               className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
             >
               <X size={15} className="text-gray-600" />
@@ -654,6 +655,7 @@ export default function TransactionModal() {
                       : 'border-red-100 text-red-400 hover:bg-red-50'
                   }`}
                   title={deleteConfirm ? 'Confirmar eliminación' : 'Eliminar'}
+                  aria-label={deleteConfirm ? 'Confirmar eliminación' : 'Eliminar movimiento'}
                 >
                   <Trash2 size={17} />
                 </button>

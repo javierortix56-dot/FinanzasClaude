@@ -141,7 +141,7 @@ export default function SnapshotModal({ open, onClose, asset }: Props) {
               </Dialog.Title>
               <p className="text-xs text-gray-400">{asset.nombre}</p>
             </div>
-            <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100">
+            <button onClick={onClose} aria-label="Cerrar" className="p-1.5 rounded-full hover:bg-gray-100">
               <X size={16} className="text-gray-500" />
             </button>
           </div>

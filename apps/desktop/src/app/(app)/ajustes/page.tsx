@@ -23,14 +23,28 @@ export default function AjustesPage() {
   const [cloning, setCloning] = useState(false)
   const [creatingRecurring, setCreatingRecurring] = useState(false)
 
+  // Si las tasas cambian en tiempo real (p. ej. desde la app móvil), refrescar
+  // los inputs — patrón de estado derivado durante el render, sin effect.
+  const [prevTipoCambio, setPrevTipoCambio] = useState(settings.tipoCambio)
+  if (
+    settings.tipoCambio.ARS_USD !== prevTipoCambio.ARS_USD ||
+    settings.tipoCambio.COP_USD !== prevTipoCambio.COP_USD
+  ) {
+    setPrevTipoCambio(settings.tipoCambio)
+    setArsUsd(String(settings.tipoCambio.ARS_USD))
+    setCopUsd(String(settings.tipoCambio.COP_USD))
+  }
+
   async function saveRates() {
+    const ars = parseFloat(arsUsd)
+    const cop = parseFloat(copUsd)
+    if (!Number.isFinite(ars) || ars <= 0 || !Number.isFinite(cop) || cop <= 0) {
+      return showToast('Los tipos de cambio deben ser números mayores a 0', 'error')
+    }
     setSavingRates(true)
     try {
       await updateSettings('shared', {
-        tipoCambio: {
-          ARS_USD: parseFloat(arsUsd) || 0,
-          COP_USD: parseFloat(copUsd) || 0,
-        },
+        tipoCambio: { ARS_USD: ars, COP_USD: cop },
       })
       showToast('Tipos de cambio guardados')
     } catch {
