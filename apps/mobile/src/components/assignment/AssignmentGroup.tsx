@@ -2,9 +2,10 @@
 
 import { ChevronDown, ChevronRight, Unlink, CheckCircle2 } from 'lucide-react'
 import { Transaction, Settings, Currency } from '@finanzas/core/types'
-import { getCatFromSettings, formatAmount } from '@finanzas/core/lib/constants'
+import { getCatFromSettings, formatAmount, isMonthClosed, CLOSED_MONTH_MSG } from '@finanzas/core/lib/constants'
 import { toBase } from '@finanzas/core/lib/currency'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
+import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { markEjecutado } from '@finanzas/core/lib/transactions'
 
 interface Props {
@@ -35,6 +36,7 @@ export default function AssignmentGroup({
   monedaBase,
 }: Props) {
   const { hideAmounts } = useSettingsStore()
+  const showToast = useUIStore((s) => s.showToast)
   const isUnassigned = income === null
 
   const totalGastado = expenses.reduce(
@@ -201,7 +203,15 @@ export default function AssignmentGroup({
                     </p>
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); markEjecutado(exp.id!, !exp.ejecutado) }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (isMonthClosed(exp.fecha.toDate().toISOString().slice(0, 7), settings)) {
+                          showToast(CLOSED_MONTH_MSG, 'error')
+                          return
+                        }
+                        markEjecutado(exp.id!, !exp.ejecutado)
+                          .catch(() => showToast('Error al actualizar', 'error'))
+                      }}
                       className="p-1 -m-1 flex-shrink-0 inline-flex"
                       title={exp.ejecutado ? 'Marcar pendiente' : 'Marcar ejecutado'}
                     >

@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { X, Trash2 } from 'lucide-react'
 import { useBudgetStore } from '@finanzas/core/store/useBudgetStore'
+import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { upsertBudget, deleteBudget } from '@finanzas/core/lib/budgets'
-import { getCategoryById } from '@finanzas/core/lib/constants'
+import { getCategoryById, parseAmount } from '@finanzas/core/lib/constants'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -20,6 +21,7 @@ const CURRENCIES = ['ARS', 'COP', 'USD']
 
 export default function BudgetModal({ open, onClose, categoria, mes }: Props) {
   const { getBudget } = useBudgetStore()
+  const { showToast } = useUIStore()
   const existing = getBudget(categoria)
   const cat = getCategoryById(categoria)
 
@@ -38,20 +40,31 @@ export default function BudgetModal({ open, onClose, categoria, mes }: Props) {
     }
   }, [open, existing])
 
+  const limiteNum = parseAmount(limite)
+  const limiteValido = Number.isFinite(limiteNum) && limiteNum > 0
+
   async function handleSave() {
-    if (!limite) return
+    if (!limiteValido) return
     setSaving(true)
     try {
-      await upsertBudget(mes, categoria, parseFloat(limite), moneda, existing?.id)
+      await upsertBudget(mes, categoria, limiteNum, moneda, existing?.id)
       onClose()
+    } catch (err) {
+      console.error('[BudgetModal] save error:', err)
+      showToast('Error al guardar el presupuesto', 'error')
     } finally { setSaving(false) }
   }
 
   async function handleDelete() {
     if (!existing?.id) return
     setSaving(true)
-    try { await deleteBudget(existing.id); onClose() }
-    finally { setSaving(false) }
+    try {
+      await deleteBudget(existing.id)
+      onClose()
+    } catch (err) {
+      console.error('[BudgetModal] delete error:', err)
+      showToast('Error al eliminar el presupuesto', 'error')
+    } finally { setSaving(false) }
   }
 
   return (
@@ -123,7 +136,7 @@ export default function BudgetModal({ open, onClose, categoria, mes }: Props) {
               )}
               <Button
                 onClick={handleSave}
-                disabled={saving || !limite}
+                disabled={saving || !limiteValido}
                 className="flex-1 h-11 font-semibold"
               >
                 {saving ? 'Guardando...' : existing ? 'Actualizar' : 'Guardar presupuesto'}

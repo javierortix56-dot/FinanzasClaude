@@ -7,7 +7,7 @@ import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { Transaction, Currency, Settings } from '@finanzas/core/types'
-import { getCatFromSettings, formatAmount } from '@finanzas/core/lib/constants'
+import { getCatFromSettings, formatAmount, isMonthClosed, CLOSED_MONTH_MSG } from '@finanzas/core/lib/constants'
 import { toBase } from '@finanzas/core/lib/currency'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { markEjecutado } from '@finanzas/core/lib/transactions'
@@ -22,6 +22,7 @@ interface TxRowProps {
 
 function TxRow({ tx, hideAmounts, settings, monedaBase, onEdit }: TxRowProps) {
   const { transactions } = useTransactionStore()
+  const showToast = useUIStore((s) => s.showToast)
   const cat = getCatFromSettings(tx.categoria, settings)
   const isIngreso = tx.tipo === 'ingreso'
   const dateStr = tx.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
@@ -71,7 +72,15 @@ function TxRow({ tx, hideAmounts, settings, monedaBase, onEdit }: TxRowProps) {
           </div>
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); markEjecutado(tx.id!, !tx.ejecutado) }}
+            onClick={(e) => {
+              e.stopPropagation()
+              if (isMonthClosed(tx.fecha.toDate().toISOString().slice(0, 7), settings)) {
+                showToast(CLOSED_MONTH_MSG, 'error')
+                return
+              }
+              markEjecutado(tx.id!, !tx.ejecutado)
+                .catch(() => showToast('Error al actualizar', 'error'))
+            }}
             className="p-1 -m-1 flex-shrink-0 inline-flex"
             title={tx.ejecutado ? 'Marcar pendiente' : 'Marcar ejecutado'}
           >

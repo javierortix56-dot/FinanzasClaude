@@ -3,8 +3,9 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { X, CheckCircle2 } from 'lucide-react'
 import { Transaction, Settings, Currency } from '@finanzas/core/types'
-import { getCatFromSettings, formatAmount } from '@finanzas/core/lib/constants'
+import { getCatFromSettings } from '@finanzas/core/lib/constants'
 import { toBase } from '@finanzas/core/lib/currency'
+import Amount from '@/components/ui/Amount'
 
 interface Props {
   open: boolean
@@ -96,7 +97,7 @@ export default function ReassignModal({
                           const isOver = disponible < 0
                           return (
                             <p className={`text-sm font-semibold ${isOver ? 'text-red-400' : 'text-green-600'}`}>
-                              {isOver ? 'Excedido' : 'Disponible'}: {formatAmount(Math.abs(disponible), monedaBase)}
+                              {isOver ? 'Excedido' : 'Disponible'}: <Amount amount={Math.abs(disponible)} currency={monedaBase} />
                             </p>
                           )
                         })()}

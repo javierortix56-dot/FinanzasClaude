@@ -14,9 +14,10 @@ import {
   cloneMonthTransactions,
   createRecurringTransactions,
   countMonthTransactions,
+  countTransactionsByCategories,
 } from '@finanzas/core/lib/transactions'
-import { exportBackup, downloadBackup, importBackup, parseBackupFile } from '@finanzas/core/lib/backup'
-import { monthLabel, SHARED_USER_ID } from '@finanzas/core/lib/constants'
+import { exportBackup, downloadBackup, importBackup, parseBackupFile, NonEmptyDatabaseError } from '@finanzas/core/lib/backup'
+import { monthLabel, SHARED_USER_ID, isMonthClosed, CLOSED_MONTH_MSG } from '@finanzas/core/lib/constants'
 import dynamic from 'next/dynamic'
 import { Category, CategoryGroup, AhorroLink } from '@finanzas/core/types'
 
@@ -52,6 +53,9 @@ export default function AjustesPage() {
 
   // Category tree: expanded groups
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  // Borrado de categorías: confirmación de dos toques + feedback de error
+  const [confirmDeleteCat, setConfirmDeleteCat] = useState<string | null>(null)
+  const [catDeleteError, setCatDeleteError] = useState<string | null>(null)
 
   // Modal for top-level groups
   const [groupModal, setGroupModal] = useState<GroupModalState>({
@@ -84,6 +88,8 @@ export default function AjustesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [backupAction, setBackupAction] = useState<string | null>(null)
   const [backupResult, setBackupResult] = useState<string | null>(null)
+  // Backup pendiente de confirmar porque la DB ya tiene datos (evita duplicar)
+  const [pendingImport, setPendingImport] = useState<{ data: Parameters<typeof importBackup>[1]; warning: string } | null>(null)
 
   // Ahorro links
   const [newLinkCatId, setNewLinkCatId] = useState('')
@@ -158,10 +164,24 @@ export default function AjustesPage() {
 
   async function handleDeleteGroup(id: string, tipo: 'gasto' | 'ingreso') {
     const key  = tipo === 'gasto' ? 'categoriasGasto' : 'categoriasIngreso'
-    const list = (tipo === 'gasto' ? s.categoriasGasto : s.categoriasIngreso).filter((g) => g.id !== id)
-    const partial = { [key]: list }
-    await updateSettings(SHARED_USER_ID, partial)
-    setSettings({ ...s, ...partial })
+    const all  = tipo === 'gasto' ? s.categoriasGasto : s.categoriasIngreso
+    const group = all.find((g) => g.id === id)
+    setCatDeleteError(null)
+    try {
+      // Bloquear el borrado si hay movimientos (de cualquier mes) que la usan
+      const used = await countTransactionsByCategories([id, ...(group?.subcategorias.map((c) => c.id) ?? [])])
+      if (used > 0) {
+        setCatDeleteError(`No se puede eliminar "${group?.nombre ?? id}": ${used} movimiento(s) la usan. Desactivala en su lugar.`)
+        setGroupModal((prev) => ({ ...prev, open: false, group: null }))
+        return
+      }
+      const list = all.filter((g) => g.id !== id)
+      const partial = { [key]: list }
+      await updateSettings(SHARED_USER_ID, partial)
+      setSettings({ ...s, ...partial })
+    } catch (err) {
+      setCatDeleteError('Error al eliminar: ' + (err instanceof Error ? err.message : String(err)))
+    }
     setGroupModal((prev) => ({ ...prev, open: false, group: null }))
   }
 
@@ -187,10 +207,22 @@ export default function AjustesPage() {
     const list = (tipo === 'gasto' ? [...s.categoriasGasto] : [...s.categoriasIngreso])
     const gIdx = list.findIndex((g) => g.id === groupId)
     if (gIdx < 0) return
-    list[gIdx] = { ...list[gIdx], subcategorias: list[gIdx].subcategorias.filter((c) => c.id !== id) }
-    const partial = { [key]: list }
-    await updateSettings(SHARED_USER_ID, partial)
-    setSettings({ ...s, ...partial })
+    setCatDeleteError(null)
+    try {
+      const sub = list[gIdx].subcategorias.find((c) => c.id === id)
+      const used = await countTransactionsByCategories([id])
+      if (used > 0) {
+        setCatDeleteError(`No se puede eliminar "${sub?.nombre ?? id}": ${used} movimiento(s) la usan. Desactivala en su lugar.`)
+        setSubModal((prev) => ({ ...prev, open: false, category: null }))
+        return
+      }
+      list[gIdx] = { ...list[gIdx], subcategorias: list[gIdx].subcategorias.filter((c) => c.id !== id) }
+      const partial = { [key]: list }
+      await updateSettings(SHARED_USER_ID, partial)
+      setSettings({ ...s, ...partial })
+    } catch (err) {
+      setCatDeleteError('Error al eliminar: ' + (err instanceof Error ? err.message : String(err)))
+    }
     setSubModal((prev) => ({ ...prev, open: false, category: null }))
   }
 
@@ -234,6 +266,10 @@ export default function AjustesPage() {
     resetMesFeedback()
     const { shiftMonth } = await import('@finanzas/core/lib/constants')
     const nextMonth = shiftMonth(currentMonth, 1)
+    if (isMonthClosed(nextMonth, s)) {
+      setMesError(`${monthLabel(nextMonth)} está cerrado — ${CLOSED_MONTH_MSG.toLowerCase()}`)
+      return
+    }
     // Si aún no confirmó y el mes destino ya tiene movimientos, pedimos confirmación primero
     if (!clonarConfirm) {
       setMesAction('clonando')
@@ -262,6 +298,10 @@ export default function AjustesPage() {
     resetMesFeedback()
     const { shiftMonth } = await import('@finanzas/core/lib/constants')
     const nextMonth = shiftMonth(currentMonth, 1)
+    if (isMonthClosed(nextMonth, s)) {
+      setMesError(`${monthLabel(nextMonth)} está cerrado — ${CLOSED_MONTH_MSG.toLowerCase()}`)
+      return
+    }
     if (!recurrentesConfirm) {
       setMesAction('creando')
       try {
@@ -286,6 +326,11 @@ export default function AjustesPage() {
   }
 
   async function handleBorrarMes() {
+    if (isMonthClosed(currentMonth, s)) {
+      resetMesFeedback()
+      setMesError(CLOSED_MONTH_MSG)
+      return
+    }
     if (!deleteMonthConfirm) { setDeleteMonthConfirm(true); return }
     resetMesFeedback()
     setMesAction('borrando')
@@ -316,16 +361,53 @@ export default function AjustesPage() {
     const file = e.target.files?.[0]
     if (!file) return
     setBackupAction('importando')
+    setPendingImport(null)
     try {
       const data   = await parseBackupFile(file)
       const result = await importBackup(SHARED_USER_ID, data)
-      setBackupResult(`Importados: ${result.transactions} movimientos, ${result.assets} activos.`)
+      setBackupResult(`Importados: ${result.transactions} movimientos, ${result.assets} activos, ${result.budgets} presupuestos${result.settings ? ', ajustes' : ''}.`)
     } catch (err) {
-      setBackupResult('Error: ' + String(err))
+      if (err instanceof NonEmptyDatabaseError) {
+        const data = await parseBackupFile(file).catch(() => null)
+        if (data) {
+          setPendingImport({ data, warning: err.message })
+          setBackupResult(null)
+        } else {
+          setBackupResult('Error: ' + err.message)
+        }
+      } else {
+        setBackupResult('Error: ' + String(err))
+      }
     } finally {
       setBackupAction(null)
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
+  }
+
+  async function confirmPendingImport() {
+    if (!pendingImport) return
+    setBackupAction('importando')
+    try {
+      const result = await importBackup(SHARED_USER_ID, pendingImport.data, { allowNonEmpty: true })
+      setBackupResult(`Importados: ${result.transactions} movimientos, ${result.assets} activos, ${result.budgets} presupuestos${result.settings ? ', ajustes' : ''}.`)
+    } catch (err) {
+      setBackupResult('Error: ' + String(err))
+    } finally {
+      setPendingImport(null)
+      setBackupAction(null)
+    }
+  }
+
+  // Dos toques para confirmar el borrado desde el árbol (igual que el resto
+  // de las acciones destructivas de la app)
+  function requestDeleteCat(key: string, doDelete: () => void) {
+    if (confirmDeleteCat !== key) {
+      setConfirmDeleteCat(key)
+      setTimeout(() => setConfirmDeleteCat((c) => (c === key ? null : c)), 4000)
+      return
+    }
+    setConfirmDeleteCat(null)
+    doDelete()
   }
 
   // ── Category tree helper ─────────────────────────────────────────────────────
@@ -333,6 +415,11 @@ export default function AjustesPage() {
     const groups = tipo === 'gasto' ? s.categoriasGasto : s.categoriasIngreso
     return (
       <div className="space-y-1 pt-2">
+        {catDeleteError && (
+          <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-xs text-red-400 font-medium">
+            {catDeleteError}
+          </div>
+        )}
         {/* Botón nuevo grupo */}
         <button
           onClick={() => setGroupModal({ open: true, tipo, group: null })}
@@ -378,9 +465,14 @@ export default function AjustesPage() {
                   <Pencil size={13} />
                 </button>
                 <button
-                  onClick={() => handleDeleteGroup(group.id, tipo)}
-                  className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 flex-shrink-0"
-                  title="Eliminar grupo"
+                  onClick={() => requestDeleteCat(`group:${group.id}`, () => handleDeleteGroup(group.id, tipo))}
+                  className={`p-1.5 rounded-lg flex-shrink-0 transition-colors ${
+                    confirmDeleteCat === `group:${group.id}`
+                      ? 'bg-red-400 text-white'
+                      : 'hover:bg-red-50 text-red-400'
+                  }`}
+                  title={confirmDeleteCat === `group:${group.id}` ? 'Tocá de nuevo para confirmar' : 'Eliminar grupo'}
+                  aria-label={confirmDeleteCat === `group:${group.id}` ? 'Confirmar eliminación' : `Eliminar grupo ${group.nombre}`}
                 >
                   <Trash2 size={13} />
                 </button>
@@ -405,8 +497,14 @@ export default function AjustesPage() {
                           <Pencil size={11} />
                         </button>
                         <button
-                          onClick={() => handleDeleteSubcat(sub.id, tipo, group.id)}
-                          className="p-1 rounded hover:bg-red-50 text-red-400"
+                          onClick={() => requestDeleteCat(`sub:${sub.id}`, () => handleDeleteSubcat(sub.id, tipo, group.id))}
+                          className={`p-1 rounded transition-colors ${
+                            confirmDeleteCat === `sub:${sub.id}`
+                              ? 'bg-red-400 text-white'
+                              : 'hover:bg-red-50 text-red-400'
+                          }`}
+                          title={confirmDeleteCat === `sub:${sub.id}` ? 'Tocá de nuevo para confirmar' : 'Eliminar subcategoría'}
+                          aria-label={confirmDeleteCat === `sub:${sub.id}` ? 'Confirmar eliminación' : `Eliminar subcategoría ${sub.nombre}`}
                         >
                           <Trash2 size={11} />
                         </button>
@@ -732,6 +830,26 @@ export default function AjustesPage() {
                 <ChevronRight size={13} className="opacity-40 flex-shrink-0" />
               </button>
               <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleImportFile} />
+              {pendingImport && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 space-y-2">
+                  <p className="text-xs text-amber-700 font-medium">⚠ {pendingImport.warning}</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={confirmPendingImport}
+                      disabled={!!backupAction}
+                      className="flex-1 py-2 rounded-lg bg-amber-400 text-white text-xs font-semibold disabled:opacity-50"
+                    >
+                      Importar igual
+                    </button>
+                    <button
+                      onClick={() => setPendingImport(null)}
+                      className="flex-1 py-2 rounded-lg bg-gray-100 text-gray-500 text-xs font-semibold"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
               {backupResult && (
                 <div className="bg-blue-50 border border-blue-200 rounded-xl px-3 py-2.5 text-xs text-blue-700 font-medium">
                   {backupResult}

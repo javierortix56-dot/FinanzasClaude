@@ -9,7 +9,7 @@ import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { addTransaction, updateTransaction, deleteTransaction } from '@finanzas/core/lib/transactions'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { Currency, Transaction, TransactionType, CategoryGroup } from '@finanzas/core/types'
-import { SHARED_USERS } from '@finanzas/core/lib/constants'
+import { SHARED_USERS, getCurrentDate, isMonthClosed, CLOSED_MONTH_MSG } from '@finanzas/core/lib/constants'
 import { Trash2 } from 'lucide-react'
 
 interface Props {
@@ -70,7 +70,7 @@ function Form({
   const [descripcion, setDescripcion] = useState(editing?.descripcion ?? '')
   const [nota, setNota]             = useState(editing?.nota ?? '')
   const [fecha, setFecha]           = useState(
-    editing ? editing.fecha.toDate().toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+    editing ? editing.fecha.toDate().toISOString().slice(0, 10) : getCurrentDate(),
   )
   const [creadoPor, setCreadoPor]   = useState(editing?.creadoPor || SHARED_USERS[0].id)
   const [ejecutado, setEjecutado]   = useState(editing?.ejecutado ?? false)
@@ -85,6 +85,10 @@ function Form({
     const m = parseFloat(monto)
     if (!m || m <= 0) return showToast('Ingresá un monto válido', 'error')
     if (!categoria) return showToast('Seleccioná una categoría', 'error')
+    const origMonth = editing ? editing.fecha.toDate().toISOString().slice(0, 7) : null
+    if (isMonthClosed(fecha.slice(0, 7), settings) || (origMonth && isMonthClosed(origMonth, settings))) {
+      return showToast(CLOSED_MONTH_MSG, 'error')
+    }
 
     const payload = {
       userId: 'shared',
@@ -122,6 +126,9 @@ function Form({
 
   async function handleDelete() {
     if (!editing?.id) return
+    if (isMonthClosed(editing.fecha.toDate().toISOString().slice(0, 7), settings)) {
+      return showToast(CLOSED_MONTH_MSG, 'error')
+    }
     if (!confirm('¿Eliminar este movimiento?')) return
     setSaving(true)
     try {

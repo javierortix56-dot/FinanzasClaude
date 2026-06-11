@@ -36,25 +36,31 @@ export default function DonutChart({ slices, total, centerLabel, centerSub, size
     )
   }
 
-  let accumulated = 0
-  const circles = slices.map((slice) => {
-    const portion = Math.max(0, (slice.amount / total) * CIRC - GAP)
-    const el = (
-      <circle
-        key={slice.id}
-        cx={CX} cy={CY} r={R}
-        fill="none"
-        stroke={slice.color}
-        strokeWidth={13}
-        strokeDasharray={`${portion} ${CIRC - portion}`}
-        strokeDashoffset={-accumulated}
-        opacity={slice.dimmed ? 0.15 : 1}
-        style={{ transition: 'opacity 0.2s' }}
-      />
-    )
-    accumulated += portion + GAP
-    return el
-  })
+  // Pre-calcular porción y offset de cada slice sin mutar variables del
+  // closure durante el render (react-hooks/immutability).
+  const segments = slices.reduce<{ slice: DonutSlice; portion: number; offset: number }[]>(
+    (acc, slice) => {
+      const prev = acc[acc.length - 1]
+      const offset = prev ? prev.offset + prev.portion + GAP : 0
+      const portion = Math.max(0, (slice.amount / total) * CIRC - GAP)
+      acc.push({ slice, portion, offset })
+      return acc
+    },
+    [],
+  )
+  const circles = segments.map(({ slice, portion, offset }) => (
+    <circle
+      key={slice.id}
+      cx={CX} cy={CY} r={R}
+      fill="none"
+      stroke={slice.color}
+      strokeWidth={13}
+      strokeDasharray={`${portion} ${CIRC - portion}`}
+      strokeDashoffset={-offset}
+      opacity={slice.dimmed ? 0.15 : 1}
+      style={{ transition: 'opacity 0.2s' }}
+    />
+  ))
 
   return (
     <svg

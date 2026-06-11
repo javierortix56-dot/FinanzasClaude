@@ -9,6 +9,8 @@ import {
 } from '@finanzas/core/lib/constants'
 import { toBase, toUSD } from '@finanzas/core/lib/currency'
 import { useBudgetStore } from '@finanzas/core/store/useBudgetStore'
+import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
+import Amount from '@/components/ui/Amount'
 import DonutChart, { DonutSlice } from './DonutChart'
 import BudgetModal from './BudgetModal'
 
@@ -44,6 +46,7 @@ type Slice = DonutSlice & { nombre: string; amount: number; percent: number }
 
 export default function CategoryDonut({ transactions, settings, monedaBase, mes }: Props) {
   const { getBudget } = useBudgetStore()
+  const hideAmounts = useSettingsStore((st) => st.hideAmounts)
   const [tipoTab,        setTipoTab]        = useState<TipoTab>('egreso')
   const [selectedGroup,  setSelectedGroup]  = useState<string | null>(null)
   const [selectedSub,    setSelectedSub]    = useState<string | null>(null)
@@ -140,11 +143,9 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
   const groupSlice = selectedGroup && !selectedSub
     ? { amount: total, nombre: groups.find((g) => g.id === selectedGroup)?.nombre ?? '' }
     : null
-  const centerLabel = centerSlice
-    ? formatAmount(centerSlice.amount, monedaBase)
-    : groupSlice
-      ? formatAmount(groupSlice.amount, monedaBase)
-      : formatAmount(total, monedaBase)
+  // El centro del donut es <text> SVG: con modo incógnito se enmascara
+  const centerAmount = centerSlice?.amount ?? groupSlice?.amount ?? total
+  const centerLabel = hideAmounts ? '$ ••••' : formatAmount(centerAmount, monedaBase)
   const centerSub = centerSlice
     ? centerSlice.nombre
     : groupSlice
@@ -232,7 +233,7 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
                     </span>
                     <span className="text-xs text-gray-400">{pct.toFixed(0)}%</span>
                     <span className="text-sm font-semibold text-gray-800 text-right">
-                      {formatAmount(amt, monedaBase)}
+                      <Amount amount={amt} currency={monedaBase} />
                     </span>
                   </div>
                 )
@@ -260,42 +261,47 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
 
                 return (
                   <div key={slice.id}>
-                    <button
-                      className="w-full flex items-center gap-2 hover:bg-gray-50 rounded-lg px-1 py-1.5 transition-colors"
-                      onClick={() => {
-                        if (selectedGroup === null) setSelectedGroup(slice.id)
-                        else setSelectedSub(slice.id)
-                      }}
-                    >
-                      <div
-                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: slice.color }}
-                      />
-                      <span className="flex-1 text-xs font-medium text-gray-700 text-left truncate">
-                        {slice.nombre}
-                      </span>
-                      <span className="text-[10px] text-gray-400 tabular-nums w-7 text-right">
-                        {slice.percent.toFixed(0)}%
-                      </span>
-                      <span className="text-xs font-semibold text-gray-800 tabular-nums w-12 text-right">
-                        {fmtShort(slice.amount)}
-                      </span>
+                    {/* "Agregar presupuesto" es HERMANO del botón de la fila:
+                        un <button> dentro de otro es HTML inválido */}
+                    <div className="w-full flex items-center gap-2 hover:bg-gray-50 rounded-lg px-1 py-1.5 transition-colors">
+                      <button
+                        className="flex-1 min-w-0 flex items-center gap-2"
+                        onClick={() => {
+                          if (selectedGroup === null) setSelectedGroup(slice.id)
+                          else setSelectedSub(slice.id)
+                        }}
+                      >
+                        <div
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: slice.color }}
+                        />
+                        <span className="flex-1 text-xs font-medium text-gray-700 text-left truncate">
+                          {slice.nombre}
+                        </span>
+                        <span className="text-[10px] text-gray-400 tabular-nums w-7 text-right">
+                          {slice.percent.toFixed(0)}%
+                        </span>
+                        <span className={`text-xs font-semibold text-gray-800 tabular-nums w-12 text-right ${hideAmounts ? 'blur-sm select-none' : ''}`}>
+                          {fmtShort(slice.amount)}
+                        </span>
+                      </button>
                       {tipoTab === 'egreso' && !budget && (
                         <button
                           className="text-gray-300 hover:text-[#534AB7] transition-colors ml-0.5"
-                          onClick={(e) => { e.stopPropagation(); setBudgetCat(slice.id) }}
+                          onClick={() => setBudgetCat(slice.id)}
                           title="Agregar presupuesto"
+                          aria-label="Agregar presupuesto"
                         >
                           <SlidersHorizontal size={11} />
                         </button>
                       )}
-                    </button>
+                    </div>
 
                     {/* Budget bar (only when budget exists) */}
                     {budget && (
                       <div className="ml-4 mb-0.5">
                         <div className="flex justify-between text-[9px] text-gray-400 mb-0.5">
-                          <span>{budget.moneda} {fmtShort(spentInBudgetMoneda)} / {fmtShort(budget.limite)}</span>
+                          <span className={hideAmounts ? 'blur-sm select-none' : ''}>{budget.moneda} {fmtShort(spentInBudgetMoneda)} / {fmtShort(budget.limite)}</span>
                           <span className={`font-semibold ${
                             budgetPct >= 100 ? 'text-red-400' : budgetPct >= 80 ? 'text-orange-400' : 'text-green-600'
                           }`}>{Math.round(budgetPct)}%</span>

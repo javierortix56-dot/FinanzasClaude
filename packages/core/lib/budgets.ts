@@ -16,6 +16,10 @@ async function loadBudgets(mes: string): Promise<Budget[]> {
 }
 
 async function saveBudgets(all: Budget[]) {
+  // Releer app_settings justo antes de escribir para preservar las claves
+  // ajenas (tipoCambio, ahorroLinks). Riesgo residual: sin transaccion, dos
+  // escrituras simultaneas pueden pisarse entre el read y el write --
+  // aceptable para el uso real de 2 usuarios.
   const { data: current } = await supabase
     .from('configuracion')
     .select('app_settings')

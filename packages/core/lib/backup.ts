@@ -114,12 +114,35 @@ export function downloadBackup(data: BackupData) {
   URL.revokeObjectURL(url)
 }
 
+/** Lanzado cuando la DB ya tiene datos y el caller no confirmó la importación. */
+export class NonEmptyDatabaseError extends Error {
+  constructor(public existingTransactions: number, public existingAssets: number) {
+    super(
+      `La base ya contiene datos (${existingTransactions} movimientos, ${existingAssets} cuentas). ` +
+      'Importar puede duplicar registros.'
+    )
+    this.name = 'NonEmptyDatabaseError'
+  }
+}
+
 export async function importBackup(
   _userId: string,
-  data: BackupData
-): Promise<{ transactions: number; assets: number }> {
+  data: BackupData,
+  opts: { allowNonEmpty?: boolean } = {}
+): Promise<{ transactions: number; assets: number; budgets: number; settings: boolean }> {
   let txCount = 0
   let assetCount = 0
+
+  // Protección contra duplicación: si la DB ya tiene datos, exigir confirmación.
+  if (!opts.allowNonEmpty) {
+    const { count: txExisting } = await supabase
+      .from('movimientos').select('id', { count: 'exact', head: true }).is('deleted_at', null)
+    const { count: assetExisting } = await supabase
+      .from('cuentas').select('id', { count: 'exact', head: true })
+    if ((txExisting ?? 0) > 0 || (assetExisting ?? 0) > 0) {
+      throw new NonEmptyDatabaseError(txExisting ?? 0, assetExisting ?? 0)
+    }
+  }
 
   if (Array.isArray(data.transactions) && data.transactions.length > 0) {
     const rows = data.transactions.map((raw) => {
@@ -127,6 +150,10 @@ export async function importBackup(
       const isoDate = r.fecha as string
       const date = isoDate ? isoDate.slice(0, 10) : new Date().toISOString().slice(0, 10)
       return {
+        // Conservar el id original para que asignadoA/ahorroAssetId sigan
+        // apuntando bien; si el registro ya existe, el insert falla por PK
+        // en lugar de duplicar silenciosamente.
+        ...(r.id ? { id: r.id } : {}),
         user_id: '00000000-0000-0000-0000-000000000000',
         type: r.tipo as string,
         amount: r.monto as number,
@@ -141,6 +168,7 @@ export async function importBackup(
           asignadoA: r.asignadoA,
           creadoPor: r.creadoPor,
           recurrente: r.recurrente,
+          ahorroAssetId: r.ahorroAssetId ?? null,
         },
       }
     })
@@ -154,6 +182,7 @@ export async function importBackup(
       const r = raw as Record<string, unknown>
       const isoDate = r.fechaAlta as string
       return {
+        ...(r.id ? { id: r.id } : {}),
         user_id: '00000000-0000-0000-0000-000000000000',
         name: r.nombre as string,
         kind: r.tipo as string,
@@ -163,6 +192,7 @@ export async function importBackup(
         date_created: isoDate ? isoDate.slice(0, 10) : new Date().toISOString().slice(0, 10),
         meta_objetivo: r.metaObjetivo ?? null,
         meta_moneda: r.metaMoneda ?? null,
+        snapshots: Array.isArray(r.snapshots) ? r.snapshots : [],
       }
     })
     const { error } = await supabase.from('cuentas').insert(rows)
@@ -170,7 +200,47 @@ export async function importBackup(
     assetCount = rows.length
   }
 
-  return { transactions: txCount, assets: assetCount }
+  // Budgets y settings: restaurar sobre la fila de configuracion preservando
+  // las claves de app_settings que el backup no trae.
+  let budgetCount = 0
+  let settingsRestored = false
+  const { data: configRow } = await supabase
+    .from('configuracion')
+    .select('app_settings')
+    .eq('user_id', '00000000-0000-0000-0000-000000000000')
+    .maybeSingle()
+  const appSettings: Record<string, unknown> = { ...(configRow?.app_settings ?? {}) }
+
+  if (Array.isArray(data.budgets) && data.budgets.length > 0) {
+    const existing: Budget[] = Array.isArray(appSettings.budgets) ? (appSettings.budgets as Budget[]) : []
+    const imported = data.budgets as Budget[]
+    appSettings.budgets = [
+      ...existing.filter((b) => !imported.some((i) => i.id === b.id)),
+      ...imported,
+    ]
+    budgetCount = imported.length
+  }
+
+  const s = (data.settings ?? {}) as Record<string, unknown>
+  const configUpdate: Record<string, unknown> = {
+    user_id: '00000000-0000-0000-0000-000000000000',
+    app_settings: appSettings,
+  }
+  if (s.tipoCambio)                         { appSettings.tipoCambio = s.tipoCambio;              settingsRestored = true }
+  if (Array.isArray(s.historialTipoCambio)) { configUpdate.monthly_rates = s.historialTipoCambio; settingsRestored = true }
+  if (Array.isArray(s.categoriasGasto))     { configUpdate.transaction_cats = s.categoriasGasto;  settingsRestored = true }
+  if (Array.isArray(s.categoriasIngreso))   { configUpdate.categories = s.categoriasIngreso;      settingsRestored = true }
+  if (s.account_cats)                       { configUpdate.account_cats = s.account_cats;         settingsRestored = true }
+  if (Array.isArray(s.mesesCerrados))       { configUpdate.closed_months = s.mesesCerrados;       settingsRestored = true }
+
+  if (settingsRestored || budgetCount > 0) {
+    const { error } = await supabase
+      .from('configuracion')
+      .upsert(configUpdate, { onConflict: 'user_id' })
+    if (error) throw error
+  }
+
+  return { transactions: txCount, assets: assetCount, budgets: budgetCount, settings: settingsRestored }
 }
 
 export function parseBackupFile(file: File): Promise<BackupData> {

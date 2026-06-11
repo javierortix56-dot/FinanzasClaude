@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { MoneyText } from '@/components/MoneyText'
 import { TransactionModal } from '@/components/modals/TransactionModal'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
-import { getCatFromSettings, SHARED_USERS } from '@finanzas/core/lib/constants'
+import { getCatFromSettings, SHARED_USERS, isMonthClosed, CLOSED_MONTH_MSG } from '@finanzas/core/lib/constants'
 import { markEjecutado, deleteTransaction } from '@finanzas/core/lib/transactions'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { Transaction, TransactionType } from '@finanzas/core/types'
@@ -19,7 +19,7 @@ import { Transaction, TransactionType } from '@finanzas/core/types'
 type Filter = 'todos' | 'ingreso' | 'egreso' | 'pendientes'
 
 export default function MovimientosPage() {
-  const { transactions } = useTransactionStore()
+  const { transactions, isLoading } = useTransactionStore()
   const settings = useSettingsStore((s) => s.settings) ?? DEFAULT_SETTINGS
   const showToast = useUIStore((s) => s.showToast)
 
@@ -74,6 +74,9 @@ export default function MovimientosPage() {
 
   async function toggleEjecutado(t: Transaction) {
     if (!t.id) return
+    if (isMonthClosed(t.fecha.toDate().toISOString().slice(0, 7), settings)) {
+      return showToast(CLOSED_MONTH_MSG, 'error')
+    }
     try {
       await markEjecutado(t.id, !t.ejecutado)
       showToast(t.ejecutado ? 'Marcado como pendiente' : 'Marcado como ejecutado')
@@ -84,6 +87,9 @@ export default function MovimientosPage() {
 
   async function handleDelete(t: Transaction) {
     if (!t.id) return
+    if (isMonthClosed(t.fecha.toDate().toISOString().slice(0, 7), settings)) {
+      return showToast(CLOSED_MONTH_MSG, 'error')
+    }
     if (!confirm('¿Eliminar este movimiento?')) return
     try {
       await deleteTransaction(t.id)
@@ -176,7 +182,13 @@ export default function MovimientosPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-14 text-center">
+                    <div className="inline-block h-5 w-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-6 py-14 text-center text-muted text-sm">
                     No hay movimientos que coincidan con los filtros.

@@ -10,17 +10,17 @@ import { useAssetStore } from '@finanzas/core/store/useAssetStore'
 import { updateTransaction, deleteTransaction } from '@finanzas/core/lib/transactions'
 import { adjustAssetSaldo } from '@finanzas/core/lib/assets'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
-import { SHARED_USERS } from '@finanzas/core/lib/constants'
+import { SHARED_USERS, isMonthClosed, CLOSED_MONTH_MSG } from '@finanzas/core/lib/constants'
 import { toBase } from '@finanzas/core/lib/currency'
 import { Transaction, Currency } from '@finanzas/core/types'
 import AssignmentGroup from './AssignmentGroup'
 import ReassignModal from './ReassignModal'
 
 export default function AssignmentTab() {
-  const { transactions } = useTransactionStore()
+  const { transactions, currentMonth } = useTransactionStore()
   const { settings } = useSettingsStore()
   const { monedaBase } = useAuthStore()
-  const { openEditModal } = useUIStore()
+  const { openEditModal, showToast } = useUIStore()
   const { assets } = useAssetStore()
   const s = settings ?? DEFAULT_SETTINGS
   const base = monedaBase as Currency
@@ -72,6 +72,7 @@ export default function AssignmentTab() {
   async function autoAssign() {
     // Incluye los egresos sin asignar Y los huérfanos (asignadoA apunta a
     // un ingreso que ya no existe — caen en el grupo "Sin asignar").
+    if (isMonthClosed(currentMonth, s)) { showToast(CLOSED_MONTH_MSG, 'error'); return }
     const ingresoIds = new Set(ingresos.map((i) => i.id!))
     const unassigned = egresos.filter((e) => e.asignadoA === null || !ingresoIds.has(e.asignadoA))
     if (ingresos.length === 0 || unassigned.length === 0) return
@@ -120,13 +121,23 @@ export default function AssignmentTab() {
         capacity.set(target.id!, (capacity.get(target.id!) ?? 0) - expBase)
         await updateTransaction(exp.id!, { asignadoA: target.id! })
       }
+    } catch (err) {
+      console.error('[autoAssign] error:', err)
+      showToast('Error al auto-asignar', 'error')
     } finally {
       setAutoLoading(false)
     }
   }
 
+  /** Lanza si alguna promesa de un batch falló (Promise.allSettled las traga). */
+  function throwIfAnyRejected(results: PromiseSettledResult<unknown>[]) {
+    const failed = results.filter((r) => r.status === 'rejected')
+    if (failed.length > 0) throw new Error(`${failed.length} operación(es) fallaron`)
+  }
+
   // Desasignar todos
   async function desassignAll() {
+    if (isMonthClosed(currentMonth, s)) { showToast(CLOSED_MONTH_MSG, 'error'); return }
     if (!unassignConfirm) {
       setUnassignConfirm(true)
       setTimeout(() => setUnassignConfirm(false), 4000)
@@ -136,25 +147,41 @@ export default function AssignmentTab() {
     setUnassignConfirm(false)
     try {
       const assigned = egresos.filter((e) => e.asignadoA !== null)
-      await Promise.allSettled(assigned.map((e) => updateTransaction(e.id!, { asignadoA: null })))
+      throwIfAnyRejected(await Promise.allSettled(assigned.map((e) => updateTransaction(e.id!, { asignadoA: null }))))
+    } catch (err) {
+      console.error('[desassignAll] error:', err)
+      showToast('Error al desasignar', 'error')
     } finally {
       setUnassignLoading(false)
     }
   }
 
   async function desassignGroup(incomeId: string) {
+    if (isMonthClosed(currentMonth, s)) { showToast(CLOSED_MONTH_MSG, 'error'); return }
     const group = groups.get(incomeId)
     if (!group) return
-    await Promise.allSettled(group.expenses.map((e) => updateTransaction(e.id!, { asignadoA: null })))
+    try {
+      throwIfAnyRejected(await Promise.allSettled(group.expenses.map((e) => updateTransaction(e.id!, { asignadoA: null }))))
+    } catch (err) {
+      console.error('[desassignGroup] error:', err)
+      showToast('Error al desasignar', 'error')
+    }
   }
 
   async function reassignSelected(newIncomeId: string) {
-    await Promise.allSettled([...selectedIds].map((id) => updateTransaction(id, { asignadoA: newIncomeId })))
+    if (isMonthClosed(currentMonth, s)) { showToast(CLOSED_MONTH_MSG, 'error'); return }
+    try {
+      throwIfAnyRejected(await Promise.allSettled([...selectedIds].map((id) => updateTransaction(id, { asignadoA: newIncomeId }))))
+    } catch (err) {
+      console.error('[reassignSelected] error:', err)
+      showToast('Error al reasignar', 'error')
+    }
     setSelectedIds(new Set())
     setReassignOpen(false)
   }
 
   async function deleteSelected() {
+    if (isMonthClosed(currentMonth, s)) { showToast(CLOSED_MONTH_MSG, 'error'); return }
     if (!deleteConfirm) { setDeleteConfirm(true); setTimeout(() => setDeleteConfirm(false), 4000); return }
     setDeleteLoading(true)
     setDeleteConfirm(false)
@@ -164,12 +191,18 @@ export default function AssignmentTab() {
         if (tx.ahorroAssetId) {
           try {
             const txMonth = tx.fecha.toDate().toISOString().slice(0, 7)
-            await adjustAssetSaldo(tx.ahorroAssetId, -tx.monto, txMonth)
+            // El aporte del snapshot está en la moneda del activo — convertir
+            const asset = assets.find((a) => a.id === tx.ahorroAssetId)
+            const delta = asset ? toBase(tx.monto, tx.moneda, asset.moneda, s) : tx.monto
+            await adjustAssetSaldo(tx.ahorroAssetId, -delta, txMonth)
           } catch { /* non-blocking */ }
         }
         await deleteTransaction(tx.id!)
       }
       setSelectedIds(new Set())
+    } catch (err) {
+      console.error('[deleteSelected] error:', err)
+      showToast('Error al eliminar', 'error')
     } finally {
       setDeleteLoading(false)
     }
@@ -178,7 +211,8 @@ export default function AssignmentTab() {
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
       const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return next
     })
   }
@@ -186,7 +220,8 @@ export default function AssignmentTab() {
   function toggleGroup(key: string) {
     setExpandedGroups((prev) => {
       const next = new Set(prev)
-      next.has(key) ? next.delete(key) : next.add(key)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
       return next
     })
   }

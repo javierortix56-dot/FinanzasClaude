@@ -5,7 +5,8 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { X, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { Asset } from '@finanzas/core/types'
 import { upsertSnapshot } from '@finanzas/core/lib/assets'
-import { formatAmount, getCurrentMonth, monthLabel } from '@finanzas/core/lib/constants'
+import { formatAmount, getCurrentMonth, monthLabel, parseAmount } from '@finanzas/core/lib/constants'
+import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { Button } from '@/components/ui/button'
 
 interface Props {
@@ -22,6 +23,7 @@ interface Props {
  * Con eso se calcula la revalorización: saldo - saldo_anterior - aporte.
  */
 export default function SnapshotModal({ open, onClose, asset }: Props) {
+  const { showToast } = useUIStore()
   const [month, setMonth]   = useState(getCurrentMonth())
   const [aporte, setAporte] = useState('')
   const [saldo, setSaldo]   = useState('')
@@ -34,18 +36,22 @@ export default function SnapshotModal({ open, onClose, asset }: Props) {
       .filter((s) => s.month < month)
       .sort((a, b) => b.month.localeCompare(a.month))[0]
     if (prev) return prev.saldo
-    // Si no hay snapshot anterior, el saldo previo es el saldo inicial sólo
-    // si fechaAlta es ANTERIOR al mes editado. Si es el mismo mes o posterior,
-    // no había nada → saldoPrev = 0.
+    // Sin snapshot anterior: si el activo tiene snapshots (todos posteriores),
+    // no hay registro previo a este mes → 0. asset.saldo refleja el snapshot
+    // MÁS RECIENTE, usarlo acá distorsionaba la reval. de meses pasados.
+    if ((asset.snapshots ?? []).length > 0) return 0
+    // Sin ningún snapshot: el saldo actual sirve de aproximación solo si el
+    // activo ya existía antes del mes editado.
     const fechaAltaMonth = `${asset.fechaAlta.toDate().getFullYear()}-${String(
       asset.fechaAlta.toDate().getMonth() + 1
     ).padStart(2, '0')}`
     return fechaAltaMonth < month ? asset.saldo : 0
   }, [asset, month])
 
-  const aporteNum = parseFloat((aporte || '0').replace(',', '.')) || 0
-  const saldoNum  = parseFloat((saldo || '0').replace(',', '.')) || 0
-  const reval     = saldoNum - saldoPrev - aporteNum
+  const aporteNum = parseAmount(aporte || '0', { allowNegative: true })
+  const saldoNum  = parseAmount(saldo || '0')
+  const inputsValid = Number.isFinite(aporteNum) && Number.isFinite(saldoNum)
+  const reval     = inputsValid ? saldoNum - saldoPrev - aporteNum : 0
 
   // Lista de meses disponibles: desde fechaAlta hasta mes actual
   // Debe estar antes del early-return para no violar las Rules of Hooks
@@ -79,18 +85,22 @@ export default function SnapshotModal({ open, onClose, asset }: Props) {
     }
   }, [open, asset])
 
-  // Cuando cambia el mes, precarga snapshot existente si lo hay
-  useEffect(() => {
-    if (!asset) return
-    const existing = asset.snapshots?.find((s) => s.month === month)
+  // Al cambiar el mes: precargar el snapshot existente, o limpiar los inputs
+  // si ese mes no tiene snapshot (antes quedaban los valores del mes anterior).
+  function handleMonthChange(m: string) {
+    setMonth(m)
+    const existing = asset?.snapshots?.find((s) => s.month === m)
     if (existing) {
       setAporte(String(existing.aporte))
       setSaldo(String(existing.saldo))
+    } else {
+      setAporte('')
+      setSaldo('')
     }
-  }, [month, asset])
+  }
 
   async function handleSave() {
-    if (!asset || saldo === '') return
+    if (!asset || saldo === '' || !inputsValid) return
     setSaving(true)
     try {
       await upsertSnapshot(asset, {
@@ -99,6 +109,9 @@ export default function SnapshotModal({ open, onClose, asset }: Props) {
         saldo: saldoNum,
       })
       onClose()
+    } catch (err) {
+      console.error('[SnapshotModal] save error:', err)
+      showToast('Error al guardar el snapshot', 'error')
     } finally {
       setSaving(false)
     }
@@ -141,7 +154,7 @@ export default function SnapshotModal({ open, onClose, asset }: Props) {
               </label>
               <select
                 value={month}
-                onChange={(e) => setMonth(e.target.value)}
+                onChange={(e) => handleMonthChange(e.target.value)}
                 className="w-full h-11 px-3 bg-gray-50 rounded-xl border border-gray-200 text-gray-700 outline-none focus:ring-2 focus:ring-[#534AB7]/30 capitalize"
               >
                 {monthOptions.map((m) => (
@@ -205,7 +218,7 @@ export default function SnapshotModal({ open, onClose, asset }: Props) {
               </div>
             </div>
 
-            <Button onClick={handleSave} disabled={saving || saldo === ''} className="w-full h-11">
+            <Button onClick={handleSave} disabled={saving || saldo === '' || !inputsValid} className="w-full h-11">
               {saving ? 'Guardando...' : 'Guardar snapshot'}
             </Button>
           </div>

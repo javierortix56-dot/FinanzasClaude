@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { MoneyText } from '@/components/MoneyText'
 import { Donut } from '@/components/charts/Donut'
 import { toBase } from '@finanzas/core/lib/currency'
-import { formatAmount, getCatFromSettings, monthLabel, shiftMonth } from '@finanzas/core/lib/constants'
+import { getCatFromSettings, monthLabel, shiftMonth } from '@finanzas/core/lib/constants'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { fetchLastNMonths } from '@finanzas/core/lib/analytics'
 import { Currency, Transaction, Settings } from '@finanzas/core/types'
@@ -114,7 +114,7 @@ function StatCard({
 export default function DashboardPage() {
   const { monedaBase } = useAuthStore()
   const { settings } = useSettingsStore()
-  const { transactions, currentMonth } = useTransactionStore()
+  const { transactions, currentMonth, isLoading } = useTransactionStore()
   const { assets } = useAssetStore()
 
   const s = (settings ?? DEFAULT_SETTINGS) as Settings
@@ -215,7 +215,7 @@ export default function DashboardPage() {
         <StatCard
           label="Tasa de ahorro" tone="primary" icon={PiggyBank}
           value={<span>{tasaAhorro.toFixed(0)}<span className="text-lg text-muted">%</span></span>}
-          sub={`${formatAmount(balance, base)} ahorrado de ${formatAmount(totalIngresos, base)}`}
+          sub={<><MoneyText amount={balance} currency={base} /> ahorrado de <MoneyText amount={totalIngresos} currency={base} /></>}
         />
       </div>
 
@@ -227,7 +227,7 @@ export default function DashboardPage() {
           value={<MoneyText amount={totalEgresos} currency={base} />} delta={dEgr} invert />
         <StatCard label="Patrimonio neto" icon={Wallet} tone="neutral"
           value={<MoneyText amount={patrimonioUSD} currency="USD" />}
-          sub={`Activos ${formatAmount(activos, 'USD')} · Pasivos ${formatAmount(pasivos, 'USD')}`} />
+          sub={<>Activos <MoneyText amount={activos} currency="USD" /> · Pasivos <MoneyText amount={pasivos} currency="USD" /></>} />
       </div>
 
       {/* Movements + categories */}
@@ -253,7 +253,11 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {recientes.length === 0 ? (
+                {isLoading ? (
+                  <tr><td colSpan={4} className="px-6 py-10 text-center">
+                    <div className="inline-block h-5 w-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                  </td></tr>
+                ) : recientes.length === 0 ? (
                   <tr><td colSpan={4} className="px-6 py-10 text-center text-muted text-sm">No hay movimientos en este mes.</td></tr>
                 ) : recientes.map((t) => <RecentRow key={t.id} t={t} settings={s} />)}
               </tbody>
@@ -276,7 +280,7 @@ export default function DashboardPage() {
                     size={180} thickness={26}
                     data={categorias.map((c) => ({ label: c.nombre, value: c.total, color: c.color }))}
                     centerLabel="Egresos"
-                    centerValue={formatAmount(totalEgresos, base)}
+                    centerValue={<MoneyText amount={totalEgresos} currency={base} />}
                   />
                 </div>
                 <div className="space-y-2">

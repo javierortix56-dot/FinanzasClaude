@@ -13,11 +13,11 @@ import { MoneyText } from '@/components/MoneyText'
 import { updateTransaction } from '@finanzas/core/lib/transactions'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { toBase } from '@finanzas/core/lib/currency'
-import { getCatFromSettings } from '@finanzas/core/lib/constants'
+import { getCatFromSettings, isMonthClosed, CLOSED_MONTH_MSG } from '@finanzas/core/lib/constants'
 import { Transaction } from '@finanzas/core/types'
 
 export default function AsignacionesPage() {
-  const { transactions } = useTransactionStore()
+  const { transactions, currentMonth } = useTransactionStore()
   const settings = useSettingsStore((s) => s.settings) ?? DEFAULT_SETTINGS
   const showToast = useUIStore((s) => s.showToast)
 
@@ -62,35 +62,47 @@ export default function AsignacionesPage() {
   }
 
   async function autoAsignar() {
+    if (isMonthClosed(currentMonth, settings)) return showToast(CLOSED_MONTH_MSG, 'error')
     if (sinAsignar.length === 0) return showToast('No hay egresos sin asignar', 'error')
     if (ingresos.length === 0) return showToast('No hay ingresos para asignar', 'error')
     let count = 0
-    for (const e of sinAsignar) {
-      // ingreso más cercano en fecha
-      const eDate = e.fecha.toDate().getTime()
-      let best = ingresos[0]
-      let bestDiff = Math.abs(eDate - best.fecha.toDate().getTime())
-      for (const ing of ingresos) {
-        const d = Math.abs(eDate - ing.fecha.toDate().getTime())
-        if (d < bestDiff) { best = ing; bestDiff = d }
+    try {
+      for (const e of sinAsignar) {
+        // ingreso más cercano en fecha
+        const eDate = e.fecha.toDate().getTime()
+        let best = ingresos[0]
+        let bestDiff = Math.abs(eDate - best.fecha.toDate().getTime())
+        for (const ing of ingresos) {
+          const d = Math.abs(eDate - ing.fecha.toDate().getTime())
+          if (d < bestDiff) { best = ing; bestDiff = d }
+        }
+        if (e.id && best.id) {
+          await updateTransaction(e.id, { asignadoA: best.id })
+          count++
+        }
       }
-      if (e.id && best.id) {
-        await updateTransaction(e.id, { asignadoA: best.id })
-        count++
-      }
+      showToast(`Asignados ${count} egresos`)
+    } catch (err) {
+      console.error('[autoAsignar] error:', err)
+      showToast(`Error al asignar (${count} de ${sinAsignar.length} completados)`, 'error')
     }
-    showToast(`Asignados ${count} egresos`)
   }
 
   async function reasignar(toIngresoId: string | null) {
+    if (isMonthClosed(currentMonth, settings)) return showToast(CLOSED_MONTH_MSG, 'error')
     let count = 0
-    for (const id of selected) {
-      await updateTransaction(id, { asignadoA: toIngresoId })
-      count++
+    try {
+      for (const id of selected) {
+        await updateTransaction(id, { asignadoA: toIngresoId })
+        count++
+      }
+      setSelected(new Set())
+      setReassignOpen(false)
+      showToast(toIngresoId ? `Reasignados ${count}` : `Desasignados ${count}`)
+    } catch (err) {
+      console.error('[reasignar] error:', err)
+      showToast(`Error al reasignar (${count} de ${selected.size} completados)`, 'error')
     }
-    setSelected(new Set())
-    setReassignOpen(false)
-    showToast(toIngresoId ? `Reasignados ${count}` : `Desasignados ${count}`)
   }
 
   return (

@@ -1,5 +1,7 @@
 'use client'
 
+import { ReactNode } from 'react'
+
 interface Slice {
   label: string
   value: number
@@ -11,7 +13,7 @@ interface Props {
   size?: number
   thickness?: number
   centerLabel?: string
-  centerValue?: string
+  centerValue?: ReactNode
 }
 
 export function Donut({ data, size = 200, thickness = 28, centerLabel, centerValue }: Props) {
@@ -35,9 +37,12 @@ export function Donut({ data, size = 200, thickness = 28, centerLabel, centerVal
   }, [])
   const segments = data.map((d, i) => {
     const startV = offsets[i] - d.value
-    const endV = offsets[i]
+    // Un arco SVG con inicio y fin idénticos no dibuja nada: si la porción es
+    // el círculo completo (una sola categoría), recortamos el barrido apenas
+    // por debajo de 360° para que se renderice como anillo completo.
+    const fraction = Math.min(d.value / total, 0.99995)
     const startA = (startV / total) * 2 * Math.PI - Math.PI / 2
-    const endA = (endV / total) * 2 * Math.PI - Math.PI / 2
+    const endA = startA + fraction * 2 * Math.PI
     const large = endA - startA > Math.PI ? 1 : 0
     const x1 = cx + radius * Math.cos(startA)
     const y1 = cy + radius * Math.sin(startA)

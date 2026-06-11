@@ -195,6 +195,21 @@ export async function countMonthTransactions(month: string): Promise<number> {
   return count ?? 0
 }
 
+/**
+ * Cuenta movimientos activos (de cualquier mes) cuya categoría esté en `catIds`.
+ * Útil para bloquear el borrado de categorías en uso.
+ */
+export async function countTransactionsByCategories(catIds: string[]): Promise<number> {
+  if (catIds.length === 0) return 0
+  const { count, error } = await supabase
+    .from('movimientos')
+    .select('id', { count: 'exact', head: true })
+    .is('deleted_at', null)
+    .in('category', catIds)
+  if (error) throw error
+  return count ?? 0
+}
+
 export async function cloneMonthTransactions(fromMonth: string, toMonth: string): Promise<number> {
   const [fy, fm] = fromMonth.split('-').map(Number)
   const [ty, tm] = toMonth.split('-').map(Number)

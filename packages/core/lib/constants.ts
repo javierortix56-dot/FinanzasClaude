@@ -110,10 +110,69 @@ export function formatAmount(monto: number, moneda: string): string {
   return `${moneda} ${num}`
 }
 
+/**
+ * Parsea un monto escrito por el usuario aceptando formato es-AR:
+ *   "1.234,56" → 1234.56 · "1500,50" → 1500.5 · "1.500" → 1500 · "1.5" → 1.5
+ * Devuelve NaN si no es un número válido. Los negativos se rechazan salvo
+ * que se pase allowNegative (p. ej. retiros en snapshots).
+ */
+export function parseAmount(input: string, opts: { allowNegative?: boolean } = {}): number {
+  let raw = input.trim().replace(/\s+/g, '')
+  let negative = false
+  if (raw.startsWith('-')) {
+    if (!opts.allowNegative) return NaN
+    negative = true
+    raw = raw.slice(1)
+  }
+  if (!raw) return NaN
+
+  const lastDot   = raw.lastIndexOf('.')
+  const lastComma = raw.lastIndexOf(',')
+  let normalized: string
+  if (lastDot !== -1 && lastComma !== -1) {
+    // Ambos separadores: el que está más a la derecha es el decimal
+    const thousands = lastDot > lastComma ? ',' : '.'
+    normalized = raw.split(thousands).join('').replace(',', '.')
+  } else if (lastComma !== -1) {
+    // Solo coma: decimal si aparece una vez, separador de miles si se repite
+    const commas = raw.split(',').length - 1
+    normalized = commas > 1 ? raw.split(',').join('') : raw.replace(',', '.')
+  } else if (lastDot !== -1) {
+    // Solo punto: "1.234.567" o "1.500" (es-AR) son miles; "1.5"/"0.500" decimal
+    const dots = raw.split('.').length - 1
+    const digitsAfter = raw.length - lastDot - 1
+    const intPart = raw.slice(0, raw.indexOf('.'))
+    normalized = dots > 1 || (digitsAfter === 3 && intPart !== '' && intPart !== '0')
+      ? raw.split('.').join('')
+      : raw
+  } else {
+    normalized = raw
+  }
+
+  if (!/^(\d+(\.\d+)?|\.\d+)$/.test(normalized)) return NaN
+  const n = parseFloat(normalized)
+  if (!Number.isFinite(n)) return NaN
+  return negative ? -n : n
+}
+
 export function getCurrentMonth(): string {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
+
+/** Fecha de hoy en formato YYYY-MM-DD usando la zona horaria LOCAL (no UTC). */
+export function getCurrentDate(): string {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
+/** Indica si un mes (YYYY-MM) está cerrado en settings → solo lectura. */
+export function isMonthClosed(month: string, settings: Settings | null): boolean {
+  return !!settings?.mesesCerrados?.includes(month)
+}
+
+/** Mensaje estándar al bloquear ediciones en un mes cerrado. */
+export const CLOSED_MONTH_MSG = 'Mes cerrado: solo lectura'
 
 export function monthLabel(month: string): string {
   const [year, mon] = month.split('-').map(Number)

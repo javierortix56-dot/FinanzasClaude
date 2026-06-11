@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { X, Trash2 } from 'lucide-react'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
+import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { addAsset, updateAsset, deleteAsset } from '@finanzas/core/lib/assets'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
-import { SHARED_USER_ID } from '@finanzas/core/lib/constants'
+import { SHARED_USER_ID, parseAmount, getCurrentDate } from '@finanzas/core/lib/constants'
 import { Asset, Currency } from '@finanzas/core/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,6 +23,7 @@ interface Props {
 
 export default function AssetModal({ open, onClose, editing }: Props) {
   const { settings } = useSettingsStore()
+  const { showToast } = useUIStore()
   const s = settings ?? DEFAULT_SETTINGS
 
   const pasivoTipos = s.tiposPasivo.length ? s.tiposPasivo : ['Tarjeta de crédito', 'Préstamo', 'Deuda']
@@ -31,7 +33,7 @@ export default function AssetModal({ open, onClose, editing }: Props) {
   const [tipo,         setTipo]         = useState(ACTIVO_TIPOS[0] as string)
   const [moneda,       setMoneda]       = useState<Currency>('ARS')
   const [saldo,        setSaldo]        = useState('')
-  const [fechaAlta,    setFechaAlta]    = useState(new Date().toISOString().split('T')[0])
+  const [fechaAlta,    setFechaAlta]    = useState(getCurrentDate())
   const [metaObjVal,   setMetaObjVal]   = useState('')
   const [metaMoneda,   setMetaMoneda]   = useState<Currency>('USD')
   const [saving,       setSaving]       = useState(false)
@@ -56,7 +58,7 @@ export default function AssetModal({ open, onClose, editing }: Props) {
       setTipo(ACTIVO_TIPOS[0])
       setMoneda('ARS')
       setSaldo('')
-      setFechaAlta(new Date().toISOString().split('T')[0])
+      setFechaAlta(getCurrentDate())
       setMetaObjVal('')
       setMetaMoneda('USD')
     }
@@ -66,7 +68,11 @@ export default function AssetModal({ open, onClose, editing }: Props) {
     if (!nombre) return
     setSaving(true)
     try {
-      const saldoNum = saldo.trim() === '' ? 0 : parseFloat(saldo.replace(',', '.'))
+      const saldoNum = saldo.trim() === '' ? 0 : parseAmount(saldo)
+      if (!Number.isFinite(saldoNum)) {
+        showToast('Saldo inválido', 'error')
+        return
+      }
       const altaDate = new Date(fechaAlta + 'T12:00:00')
       const altaMonth = `${altaDate.getFullYear()}-${String(altaDate.getMonth() + 1).padStart(2, '0')}`
       // Mantener snapshots existentes; si no hay ninguno para el mes de alta,
@@ -86,13 +92,16 @@ export default function AssetModal({ open, onClose, editing }: Props) {
         moneda,
         saldo: saldoNum,
         fechaAlta: { toDate: () => altaDate },
-        metaObjetivo: metaObjVal ? parseFloat(metaObjVal.replace(',', '.')) : null,
+        metaObjetivo: metaObjVal && Number.isFinite(parseAmount(metaObjVal)) ? parseAmount(metaObjVal) : null,
         metaMoneda: metaObjVal ? metaMoneda : null,
         snapshots,
       }
       if (editing?.id) await updateAsset(editing.id, data)
       else              await addAsset(data)
       onClose()
+    } catch (err) {
+      console.error('[AssetModal] save error:', err)
+      showToast('Error al guardar la cuenta', 'error')
     } finally {
       setSaving(false)
     }
@@ -102,11 +111,16 @@ export default function AssetModal({ open, onClose, editing }: Props) {
     if (!editing?.id) return
     if (!deleteConfirm) { setDeleteConfirm(true); return }
     setSaving(true)
-    try { await deleteAsset(editing.id); onClose() }
-    finally { setSaving(false) }
+    try {
+      await deleteAsset(editing.id)
+      onClose()
+    } catch (err) {
+      console.error('[AssetModal] delete error:', err)
+      showToast('Error al eliminar la cuenta', 'error')
+    } finally { setSaving(false) }
   }
 
-  const canSave = nombre.trim() && (saldo.trim() === '' || parseFloat(saldo.replace(',', '.')) >= 0)
+  const canSave = nombre.trim() && (saldo.trim() === '' || parseAmount(saldo) >= 0)
 
   return (
     <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>

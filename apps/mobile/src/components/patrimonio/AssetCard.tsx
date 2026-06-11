@@ -6,7 +6,8 @@ import {
 } from 'lucide-react'
 import { Asset, Settings, Currency } from '@finanzas/core/types'
 import { toUSD } from '@finanzas/core/lib/currency'
-import { formatAmount, getCurrentMonth, monthLabel } from '@finanzas/core/lib/constants'
+import { getCurrentMonth, monthLabel } from '@finanzas/core/lib/constants'
+import Amount from '@/components/ui/Amount'
 
 const TIPO_ICONS: Record<string, React.ReactNode> = {
   banco:        <Landmark     size={18} />,
@@ -69,12 +70,12 @@ export default function AssetCard({ asset, settings, onClick, onUpdateSnapshot }
         <div className="flex items-center justify-between mb-0.5">
           <p className="text-sm font-semibold text-gray-900 truncate pr-2">{asset.nombre}</p>
           <p className={`text-sm font-bold flex-shrink-0 ${isActivo ? 'text-gray-900' : 'text-red-400'}`}>
-            {isActivo ? '' : '-'}{formatAmount(asset.saldo, asset.moneda)}
+            <Amount amount={asset.saldo} currency={asset.moneda} prefix={isActivo ? '' : '-'} />
           </p>
         </div>
         <div className="flex items-center justify-between">
           <span className="text-xs text-gray-400 capitalize">{asset.tipo}</span>
-          <span className="text-xs text-gray-400">≈ {formatAmount(usdValue, 'USD')}</span>
+          <span className="text-xs text-gray-400">≈ <Amount amount={usdValue} currency="USD" /></span>
         </div>
 
         {/* Meta progress */}

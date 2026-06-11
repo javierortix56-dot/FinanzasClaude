@@ -12,7 +12,7 @@ import { LineChart } from '@/components/charts/LineChart'
 import { fetchLastNMonths, fetchMonthTransactions } from '@finanzas/core/lib/analytics'
 import { toBase } from '@finanzas/core/lib/currency'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
-import { getCatFromSettings, monthLabel, shiftMonth, formatAmount } from '@finanzas/core/lib/constants'
+import { getCatFromSettings, monthLabel, shiftMonth, getCurrentMonth } from '@finanzas/core/lib/constants'
 import { Currency, Transaction } from '@finanzas/core/types'
 
 type TabBig = 'historico' | 'piloto'
@@ -30,8 +30,12 @@ export default function AnalisisPage() {
   const [historico, setHistorico] = useState<Record<string, Transaction[]>>({})
 
   useEffect(() => {
-    fetchMonthTransactions(shiftMonth(currentMonth, -1)).then(setPrevTxs)
-    fetchLastNMonths(6, currentMonth).then(setHistorico)
+    // Flag de cancelación: al cambiar rápido de mes, un fetch viejo que
+    // resuelve tarde no debe pisar los datos del mes nuevo.
+    let active = true
+    fetchMonthTransactions(shiftMonth(currentMonth, -1)).then((txs) => { if (active) setPrevTxs(txs) })
+    fetchLastNMonths(6, currentMonth).then((h) => { if (active) setHistorico(h) })
+    return () => { active = false }
   }, [currentMonth])
 
   const sumByType = (txs: Transaction[], tipo: 'ingreso' | 'egreso') =>
@@ -123,7 +127,7 @@ export default function AnalisisPage() {
                   <Donut
                     data={slices}
                     centerLabel="Total"
-                    centerValue={formatAmount(totalCat, base)}
+                    centerValue={<MoneyText amount={totalCat} currency={base} />}
                   />
                   <div className="flex-1 w-full space-y-2">
                     {slices.length === 0 ? (
@@ -136,7 +140,7 @@ export default function AnalisisPage() {
                         </span>
                         <div className="text-right tabular-nums">
                           <div className="text-foreground"><MoneyText amount={s.value} currency={base} /></div>
-                          <div className="text-xs text-muted">{((s.value / totalCat) * 100).toFixed(0)}%</div>
+                          <div className="text-xs text-muted">{totalCat > 0 ? ((s.value / totalCat) * 100).toFixed(0) : '0'}%</div>
                         </div>
                       </div>
                     ))}
@@ -164,6 +168,7 @@ export default function AnalisisPage() {
           ingresos={ingresosCur}
           egresos={egresosCur}
           base={base}
+          currentMonth={currentMonth}
         />
       )}
     </div>
@@ -207,41 +212,52 @@ function ComparisonCard({
   )
 }
 
-function PilotoView({ ingresos, egresos, base }: { ingresos: number; egresos: number; base: Currency }) {
+function PilotoView({ ingresos, egresos, base, currentMonth }: { ingresos: number; egresos: number; base: Currency; currentMonth: string }) {
   const balance = ingresos - egresos
+  // La proyección por ritmo de gasto solo tiene sentido para el mes en curso;
+  // para meses pasados/futuros se muestran los valores reales.
+  const isCurrent = currentMonth === getCurrentMonth()
   const today = new Date()
   const dom = today.getDate()
   const totalDays = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
   const elapsed = dom / totalDays
-  const proyIngresos = elapsed > 0 ? ingresos / elapsed : 0
-  const proyEgresos  = elapsed > 0 ? egresos / elapsed : 0
+  const proyIngresos = isCurrent && elapsed > 0 ? ingresos / elapsed : ingresos
+  const proyEgresos  = isCurrent && elapsed > 0 ? egresos / elapsed : egresos
   const proyBalance  = proyIngresos - proyEgresos
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      <Card>
-        <CardContent className="pt-5">
-          <div className="text-xs font-medium text-muted">Proyección Ingresos</div>
-          <div className="mt-2 text-xl font-semibold text-income"><MoneyText amount={proyIngresos} currency={base} /></div>
-          <div className="text-xs text-muted mt-1">Actual: <MoneyText amount={ingresos} currency={base} /> · {(elapsed * 100).toFixed(0)}% del mes</div>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardContent className="pt-5">
-          <div className="text-xs font-medium text-muted">Proyección Egresos</div>
-          <div className="mt-2 text-xl font-semibold text-expense"><MoneyText amount={proyEgresos} currency={base} /></div>
-          <div className="text-xs text-muted mt-1">Actual: <MoneyText amount={egresos} currency={base} /></div>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardContent className="pt-5">
-          <div className="text-xs font-medium text-muted">Balance proyectado</div>
-          <div className={`mt-2 text-xl font-semibold ${proyBalance >= 0 ? 'text-foreground' : 'text-expense'}`}>
-            <MoneyText amount={proyBalance} currency={base} />
-          </div>
-          <div className="text-xs text-muted mt-1">Actual: <MoneyText amount={balance} currency={base} /></div>
-        </CardContent>
-      </Card>
+    <div className="space-y-4">
+      {!isCurrent && (
+        <p className="text-xs text-muted">Las proyecciones solo están disponibles para el mes en curso; se muestran los valores reales.</p>
+      )}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="pt-5">
+            <div className="text-xs font-medium text-muted">{isCurrent ? 'Proyección Ingresos' : 'Ingresos del mes'}</div>
+            <div className="mt-2 text-xl font-semibold text-income"><MoneyText amount={proyIngresos} currency={base} /></div>
+            <div className="text-xs text-muted mt-1">
+              Actual: <MoneyText amount={ingresos} currency={base} />
+              {isCurrent && <> · {(elapsed * 100).toFixed(0)}% del mes</>}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5">
+            <div className="text-xs font-medium text-muted">{isCurrent ? 'Proyección Egresos' : 'Egresos del mes'}</div>
+            <div className="mt-2 text-xl font-semibold text-expense"><MoneyText amount={proyEgresos} currency={base} /></div>
+            <div className="text-xs text-muted mt-1">Actual: <MoneyText amount={egresos} currency={base} /></div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5">
+            <div className="text-xs font-medium text-muted">{isCurrent ? 'Balance proyectado' : 'Balance del mes'}</div>
+            <div className={`mt-2 text-xl font-semibold ${proyBalance >= 0 ? 'text-foreground' : 'text-expense'}`}>
+              <MoneyText amount={proyBalance} currency={base} />
+            </div>
+            <div className="text-xs text-muted mt-1">Actual: <MoneyText amount={balance} currency={base} /></div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

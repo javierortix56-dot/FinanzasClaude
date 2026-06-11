@@ -9,7 +9,7 @@ import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useAssetStore } from '@finanzas/core/store/useAssetStore'
 import { addTransaction, updateTransaction, deleteTransaction, cloneTransactionToMonth, moveTransactionToMonth } from '@finanzas/core/lib/transactions'
-import { SHARED_USER_ID, SHARED_USERS, formatAmount, getParentGroup, getCatFromSettings, DEFAULT_GASTO_CATEGORY_GROUPS, DEFAULT_INGRESO_CATEGORY_GROUPS } from '@finanzas/core/lib/constants'
+import { SHARED_USER_ID, SHARED_USERS, formatAmount, getParentGroup, getCatFromSettings, DEFAULT_GASTO_CATEGORY_GROUPS, DEFAULT_INGRESO_CATEGORY_GROUPS, parseAmount, getCurrentDate, isMonthClosed, CLOSED_MONTH_MSG } from '@finanzas/core/lib/constants'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { adjustAssetSaldo } from '@finanzas/core/lib/assets'
 import { toBase } from '@finanzas/core/lib/currency'
@@ -32,7 +32,7 @@ export default function TransactionModal() {
   const [selectedGroup, setSelectedGroup] = useState('')
   const [selectedSub, setSelectedSub] = useState('')
   const [descripcion, setDescripcion] = useState('')
-  const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
+  const [fecha, setFecha] = useState(getCurrentDate())
   const [creadoPor, setCreadoPor] = useState(SHARED_USERS[0].id)
   const [ejecutado, setEjecutado] = useState(false)
   const [asignadoA, setAsignadoA] = useState<string | null>(null)
@@ -74,7 +74,7 @@ export default function TransactionModal() {
     } else {
       setTipo('egreso'); setMonto(''); setMoneda('ARS')
       setSelectedGroup(''); setSelectedSub(''); setDescripcion('')
-      setFecha(new Date().toISOString().split('T')[0])
+      setFecha(getCurrentDate())
       setCreadoPor(SHARED_USERS[0].id); setEjecutado(false); setAsignadoA(null); setRecurrente(false); setAhorroAssetId('')
     }
   }, [isTransactionModalOpen, editingTransaction, settings])
@@ -109,7 +109,7 @@ export default function TransactionModal() {
   }, [transactions, selectedSub, selectedGroup, descripcion])
 
   const ingresoOptions = useMemo(() => {
-    const montoExp = parseFloat(monto.replace(',', '.')) || 0
+    const montoExp = parseAmount(monto) || 0
     const expBase = toBase(montoExp, moneda, base, s)
     return transactions
       .filter((t) => t.tipo === 'ingreso')
@@ -125,7 +125,7 @@ export default function TransactionModal() {
       })
   }, [transactions, monto, moneda, base, s, editingTransaction])
 
-  const parsedMonto  = parseFloat(monto.replace(',', '.'))
+  const parsedMonto  = parseAmount(monto)
   const montoValido  = Number.isFinite(parsedMonto) && parsedMonto > 0
   const montoInvalid = !!monto.trim() && !montoValido
   const canSave      = montoValido
@@ -142,6 +142,11 @@ export default function TransactionModal() {
 
   async function handleSave() {
     if (!montoValido) return
+    const origMonthChk = editingTransaction ? editingTransaction.fecha.toDate().toISOString().slice(0, 7) : null
+    if (isMonthClosed(fecha.slice(0, 7), s) || (origMonthChk && isMonthClosed(origMonthChk, s))) {
+      setSaveError(CLOSED_MONTH_MSG)
+      return
+    }
     setSaving(true)
     setSaveError(null)
     try {
@@ -219,8 +224,13 @@ export default function TransactionModal() {
 
   async function handleDelete() {
     if (!editingTransaction?.id) return
+    if (isMonthClosed(editingTransaction.fecha.toDate().toISOString().slice(0, 7), s)) {
+      setSaveError(CLOSED_MONTH_MSG)
+      return
+    }
     if (!deleteConfirm) { setDeleteConfirm(true); return }
     setSaving(true)
+    setSaveError(null)
     try {
       if (editingTransaction.ahorroAssetId) {
         try {
@@ -236,6 +246,9 @@ export default function TransactionModal() {
       }
       await deleteTransaction(editingTransaction.id)
       closeTransactionModal()
+    } catch (err) {
+      console.error('[handleDelete] error:', err)
+      setSaveError(err instanceof Error ? err.message : 'Error al eliminar')
     } finally {
       setSaving(false)
     }
@@ -243,6 +256,11 @@ export default function TransactionModal() {
 
   async function handleCloneMove() {
     if (!editingTransaction?.id || !cloneMonth) return
+    const srcMonth = editingTransaction.fecha.toDate().toISOString().slice(0, 7)
+    if (isMonthClosed(cloneMonth, s) || (cloneAction === 'move' && isMonthClosed(srcMonth, s))) {
+      setSaveError(CLOSED_MONTH_MSG)
+      return
+    }
     setSaving(true)
     setSaveError(null)
     try {

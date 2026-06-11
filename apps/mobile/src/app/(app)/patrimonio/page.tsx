@@ -6,8 +6,9 @@ import { useAssetStore } from '@finanzas/core/store/useAssetStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { toUSD } from '@finanzas/core/lib/currency'
-import { formatAmount, getCurrentMonth, shiftMonth } from '@finanzas/core/lib/constants'
+import { getCurrentMonth, shiftMonth } from '@finanzas/core/lib/constants'
 import { Asset } from '@finanzas/core/types'
+import Amount from '@/components/ui/Amount'
 import AssetCard from '@/components/patrimonio/AssetCard'
 import AssetModal from '@/components/patrimonio/AssetModal'
 import SnapshotModal from '@/components/patrimonio/SnapshotModal'
@@ -54,7 +55,6 @@ export default function PatrimonioPage() {
       months.push(m)
       m = shiftMonth(m, 1)
     }
-    const shown = months.length > 6 ? months.slice(months.length - 6) : months
 
     // Estado por activo: saldo "vigente" en su moneda
     const running: Record<string, number> = {}
@@ -63,7 +63,10 @@ export default function PatrimonioPage() {
     let prevAportes = 0
     let prevReval   = 0
 
-    return shown.map((mon) => {
+    // Acumular sobre TODOS los meses desde el inicio; recién al final se
+    // recortan los últimos 6 para mostrar. Si se recorta antes, el saldo
+    // inicial de los activos con más historia aparece como "revalorización".
+    const rows = months.map((mon) => {
       let saldoTotalUSD  = 0
       let aporteMesUSD   = 0
 
@@ -114,6 +117,8 @@ export default function PatrimonioPage() {
         current: mon === current,
       }
     })
+
+    return rows.length > 6 ? rows.slice(rows.length - 6) : rows
   }, [assets, s])
 
   function openAdd() { setEditing(null); setModalOpen(true) }
@@ -142,16 +147,16 @@ export default function PatrimonioPage() {
         <div className="grid grid-cols-3 gap-1.5">
           <div className="bg-green-50 rounded-lg px-2 py-1.5 text-center">
             <p className="text-gray-400 text-[9px] mb-0.5">Activos</p>
-            <p className="text-green-700 text-xs font-bold">{formatAmount(totalActivosUSD, 'USD')}</p>
+            <p className="text-green-700 text-xs font-bold"><Amount amount={totalActivosUSD} currency="USD" /></p>
           </div>
           <div className="bg-red-50 rounded-lg px-2 py-1.5 text-center">
             <p className="text-gray-400 text-[9px] mb-0.5">Pasivos</p>
-            <p className="text-red-400 text-xs font-bold">{formatAmount(totalPasivosUSD, 'USD')}</p>
+            <p className="text-red-400 text-xs font-bold"><Amount amount={totalPasivosUSD} currency="USD" /></p>
           </div>
           <div className="bg-[#534AB7]/10 rounded-lg px-2 py-1.5 text-center border border-[#534AB7]/20">
             <p className="text-gray-400 text-[9px] mb-0.5">Neto</p>
             <p className={`text-xs font-bold ${netoUSD >= 0 ? 'text-[#534AB7]' : 'text-red-400'}`}>
-              {formatAmount(netoUSD, 'USD')}
+              <Amount amount={netoUSD} currency="USD" />
             </p>
           </div>
         </div>
