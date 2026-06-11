@@ -50,13 +50,13 @@ export default function DashboardPage() {
             <span className="text-white font-bold text-[9px]">J&M</span>
           </div>
           <div className="flex items-center gap-1 min-w-0">
-            <button onClick={prevMonth} className="p-1 rounded-full hover:bg-gray-100 transition-colors">
+            <button onClick={prevMonth} className="p-1 rounded-full hover:bg-gray-100 transition-colors" aria-label="Mes anterior">
               <ChevronLeft size={12} className="text-gray-400" />
             </button>
             <p className="text-gray-700 font-semibold text-xs capitalize leading-none whitespace-nowrap">
               {monthLabel(currentMonth)}
             </p>
-            <button onClick={nextMonth} className="p-1 rounded-full hover:bg-gray-100 transition-colors">
+            <button onClick={nextMonth} className="p-1 rounded-full hover:bg-gray-100 transition-colors" aria-label="Mes siguiente">
               <ChevronRight size={12} className="text-gray-400" />
             </button>
           </div>
@@ -71,6 +71,7 @@ export default function DashboardPage() {
             onClick={toggleHideAmounts}
             className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
             title={hideAmounts ? 'Mostrar' : 'Ocultar'}
+            aria-label={hideAmounts ? 'Mostrar montos' : 'Ocultar montos'}
           >
             {hideAmounts ? <EyeOff size={14} className="text-gray-400" /> : <Eye size={14} className="text-gray-400" />}
           </button>
@@ -133,7 +134,7 @@ export default function DashboardPage() {
                     onChange={(e) => setSearch(e.target.value)}
                     className="flex-1 bg-transparent text-xs outline-none text-gray-900 placeholder:text-gray-400"
                   />
-                  <button onClick={() => { setSearch(''); setSearching(false) }}>
+                  <button onClick={() => { setSearch(''); setSearching(false) }} aria-label="Cerrar búsqueda">
                     <X size={13} className="text-gray-400" />
                   </button>
                 </div>

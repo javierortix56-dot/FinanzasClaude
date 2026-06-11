@@ -40,6 +40,7 @@ export default function CategoryModal({ open, category, onClose, onSave, onDelet
             <button
               onClick={onClose}
               className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
+              aria-label="Cerrar"
             >
               <X size={15} className="text-gray-600" />
             </button>
@@ -103,6 +104,8 @@ function Form({ category, onSave, onDelete }: Pick<Props, 'category' | 'onSave' 
                       color === c ? 'scale-110 ring-2 ring-offset-2 ring-gray-400' : 'hover:scale-105'
                     }`}
                     style={{ backgroundColor: c }}
+                    aria-label={`Color ${c}`}
+                    aria-pressed={color === c}
                   />
                 ))}
               </div>

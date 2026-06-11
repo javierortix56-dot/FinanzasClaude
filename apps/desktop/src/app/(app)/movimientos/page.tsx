@@ -135,6 +135,7 @@ export default function MovimientosPage() {
               <button
                 onClick={() => setSearch('')}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+                aria-label="Limpiar búsqueda"
               >
                 <X className="h-4 w-4" />
               </button>

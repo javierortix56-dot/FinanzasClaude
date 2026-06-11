@@ -88,7 +88,7 @@ export default function BudgetModal({ open, onClose, categoria, mes }: Props) {
                 </p>
               )}
             </div>
-            <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100">
+            <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100" aria-label="Cerrar">
               <X size={16} className="text-gray-500" />
             </button>
           </div>

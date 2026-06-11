@@ -51,6 +51,7 @@ export default function ReassignModal({
             <button
               onClick={onClose}
               className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
+              aria-label="Cerrar"
             >
               <X size={16} className="text-gray-500" />
             </button>

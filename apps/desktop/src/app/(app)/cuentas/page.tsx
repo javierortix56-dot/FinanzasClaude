@@ -149,6 +149,7 @@ export default function CuentasPage() {
                       <button
                         onClick={() => openEdit(a)}
                         className="h-7 w-7 inline-flex items-center justify-center rounded text-muted hover:text-foreground hover:bg-surface-2"
+                        aria-label={`Editar ${a.nombre}`}
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>

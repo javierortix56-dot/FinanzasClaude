@@ -108,10 +108,10 @@ function EmptyState({ tipo }: { tipo: 'ingreso' | 'egreso' }) {
           : <TrendingDown size={20} className="text-red-300" />
         }
       </div>
-      <p className="text-xs font-medium text-gray-400">
+      <p className="text-xs font-medium text-gray-500">
         Sin {isIngreso ? 'ingresos' : 'egresos'}
       </p>
-      <p className="text-[10px] text-gray-300 mt-0.5">Tocá + para agregar</p>
+      <p className="text-[11px] text-gray-500 mt-0.5">Tocá + para agregar</p>
     </div>
   )
 }

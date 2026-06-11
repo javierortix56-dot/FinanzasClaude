@@ -21,13 +21,13 @@ export default function AnalisisPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-gray-800 font-bold text-xl">Análisis</h1>
           <div className="flex items-center gap-1">
-            <button onClick={prevMonth} className="p-1.5 border border-gray-200 rounded-full">
+            <button onClick={prevMonth} className="p-1.5 border border-gray-200 rounded-full" aria-label="Mes anterior">
               <ChevronLeft size={13} className="text-gray-500" />
             </button>
             <span className="text-gray-600 text-xs font-medium px-2 capitalize">
               {monthLabel(currentMonth)}
             </span>
-            <button onClick={nextMonth} className="p-1.5 border border-gray-200 rounded-full">
+            <button onClick={nextMonth} className="p-1.5 border border-gray-200 rounded-full" aria-label="Mes siguiente">
               <ChevronRight size={13} className="text-gray-500" />
             </button>
           </div>

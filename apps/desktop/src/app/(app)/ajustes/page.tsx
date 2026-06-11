@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Save } from 'lucide-react'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
@@ -23,14 +23,25 @@ export default function AjustesPage() {
   const [cloning, setCloning] = useState(false)
   const [creatingRecurring, setCreatingRecurring] = useState(false)
 
+  // Refrescar los inputs cuando llega un update en tiempo real (p. ej. el
+  // otro dispositivo guardó un tipo de cambio nuevo).
+  useEffect(() => {
+    setArsUsd(String(settings.tipoCambio.ARS_USD))
+    setCopUsd(String(settings.tipoCambio.COP_USD))
+  }, [settings.tipoCambio.ARS_USD, settings.tipoCambio.COP_USD])
+
   async function saveRates() {
+    const ars = parseFloat(arsUsd)
+    const cop = parseFloat(copUsd)
+    // Un tipo de cambio en 0 rompería todas las conversiones
+    if (!Number.isFinite(ars) || !Number.isFinite(cop) || ars <= 0 || cop <= 0) {
+      showToast('Los tipos de cambio deben ser números mayores a 0', 'error')
+      return
+    }
     setSavingRates(true)
     try {
       await updateSettings('shared', {
-        tipoCambio: {
-          ARS_USD: parseFloat(arsUsd) || 0,
-          COP_USD: parseFloat(copUsd) || 0,
-        },
+        tipoCambio: { ARS_USD: ars, COP_USD: cop },
       })
       showToast('Tipos de cambio guardados')
     } catch {

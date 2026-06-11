@@ -99,7 +99,7 @@ export default function AssetCard({ asset, settings, onClick, onUpdateSnapshot }
         {/* Snapshot status + button */}
         {onUpdateSnapshot && isActivo && (
           <div className="mt-2 flex items-center justify-between">
-            <span className="text-[10px] text-gray-400">
+            <span className="text-[11px] text-gray-500">
               {currentSnap
                 ? <>Actualizado este mes</>
                 : lastSnap

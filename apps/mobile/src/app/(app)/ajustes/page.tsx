@@ -443,6 +443,7 @@ export default function AjustesPage() {
                   onClick={() => setSubModal({ open: true, tipo, groupId: group.id, category: null })}
                   className="p-1.5 rounded-lg hover:bg-gray-100 text-[#534AB7] flex-shrink-0"
                   title="Nueva subcategoría"
+                  aria-label={`Nueva subcategoría en ${group.nombre}`}
                 >
                   <Plus size={13} />
                 </button>
@@ -450,6 +451,7 @@ export default function AjustesPage() {
                   onClick={() => setGroupModal({ open: true, tipo, group })}
                   className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 flex-shrink-0"
                   title="Editar grupo"
+                  aria-label={`Editar ${group.nombre}`}
                 >
                   <Pencil size={13} />
                 </button>
@@ -459,6 +461,7 @@ export default function AjustesPage() {
                     confirmDeleteId === group.id ? 'bg-red-400 text-white' : 'hover:bg-red-50 text-red-400'
                   }`}
                   title={confirmDeleteId === group.id ? 'Tocá de nuevo para confirmar' : 'Eliminar grupo'}
+                  aria-label={confirmDeleteId === group.id ? `Confirmar eliminación de ${group.nombre}` : `Eliminar ${group.nombre}`}
                 >
                   <Trash2 size={13} />
                 </button>
@@ -479,6 +482,7 @@ export default function AjustesPage() {
                         <button
                           onClick={() => setSubModal({ open: true, tipo, groupId: group.id, category: sub })}
                           className="p-1 rounded hover:bg-gray-200 text-gray-400"
+                          aria-label={`Editar ${sub.nombre}`}
                         >
                           <Pencil size={11} />
                         </button>
@@ -488,6 +492,7 @@ export default function AjustesPage() {
                             confirmDeleteId === sub.id ? 'bg-red-400 text-white' : 'hover:bg-red-50 text-red-400'
                           }`}
                           title={confirmDeleteId === sub.id ? 'Tocá de nuevo para confirmar' : 'Eliminar subcategoría'}
+                          aria-label={confirmDeleteId === sub.id ? `Confirmar eliminación de ${sub.nombre}` : `Eliminar ${sub.nombre}`}
                         >
                           <Trash2 size={11} />
                         </button>
@@ -592,7 +597,7 @@ export default function AjustesPage() {
                       <div key={i} className="flex gap-2">
                         <input value={t} onChange={(e) => { const c = [...tiposActivo]; c[i] = e.target.value; setTiposActivo(c) }}
                           className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm" />
-                        <button onClick={() => setTiposActivo(tiposActivo.filter((_, j) => j !== i))} className="text-red-400 p-1.5"><Trash2 size={13} /></button>
+                        <button onClick={() => setTiposActivo(tiposActivo.filter((_, j) => j !== i))} className="text-red-400 p-1.5" aria-label={`Eliminar tipo ${t}`}><Trash2 size={13} /></button>
                       </div>
                     ))}
                     <div className="flex gap-2">
@@ -623,7 +628,7 @@ export default function AjustesPage() {
                       <div key={i} className="flex gap-2">
                         <input value={t} onChange={(e) => { const c = [...tiposPasivo]; c[i] = e.target.value; setTiposPasivo(c) }}
                           className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm" />
-                        <button onClick={() => setTiposPasivo(tiposPasivo.filter((_, j) => j !== i))} className="text-red-400 p-1.5"><Trash2 size={13} /></button>
+                        <button onClick={() => setTiposPasivo(tiposPasivo.filter((_, j) => j !== i))} className="text-red-400 p-1.5" aria-label={`Eliminar tipo ${t}`}><Trash2 size={13} /></button>
                       </div>
                     ))}
                     <div className="flex gap-2">
@@ -696,7 +701,11 @@ export default function AjustesPage() {
                             <span className="flex-1 text-xs text-gray-700 truncate">
                               {cat?.label ?? link.categoriaId} <span className="text-gray-400">→</span> {asset?.nombre ?? link.assetId}
                             </span>
-                            <button onClick={() => removeLink(link.categoriaId)} className="p-1 rounded hover:bg-red-50 text-red-400 flex-shrink-0">
+                            <button
+                              onClick={() => removeLink(link.categoriaId)}
+                              className="p-1 rounded hover:bg-red-50 text-red-400 flex-shrink-0"
+                              aria-label={`Eliminar vínculo de ${cat?.label ?? link.categoriaId}`}
+                            >
                               <Trash2 size={12} />
                             </button>
                           </div>

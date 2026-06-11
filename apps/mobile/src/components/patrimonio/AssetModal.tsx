@@ -144,7 +144,7 @@ export default function AssetModal({ open, onClose, editing }: Props) {
             <Dialog.Title className="text-base font-semibold text-gray-900">
               {editing ? 'Editar cuenta' : 'Nueva cuenta'}
             </Dialog.Title>
-            <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100 transition-colors">
+            <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100 transition-colors" aria-label="Cerrar">
               <X size={16} className="text-gray-500" />
             </button>
           </div>

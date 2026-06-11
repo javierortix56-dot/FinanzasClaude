@@ -1,6 +1,6 @@
 'use client'
 
-import { ReactNode, useEffect } from 'react'
+import { ReactNode, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import { cn } from '@finanzas/core/lib/utils'
 
@@ -19,17 +19,51 @@ const sizes = {
   lg: 'max-w-2xl',
 }
 
+const FOCUSABLE =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
 export function Modal({ open, onClose, title, children, size = 'md', footer }: Props) {
+  const panelRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     if (!open) return
+    const prevActive = document.activeElement as HTMLElement | null
+
+    function focusables(): HTMLElement[] {
+      return Array.from(panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])
+    }
+
+    // Foco inicial dentro del diálogo
+    focusables()[0]?.focus()
+
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        onClose()
+        return
+      }
+      // Focus trap: Tab/Shift+Tab ciclan dentro del diálogo
+      if (e.key === 'Tab') {
+        const els = focusables()
+        if (els.length === 0) return
+        const first = els[0]
+        const last = els[els.length - 1]
+        const active = document.activeElement
+        if (e.shiftKey && (active === first || !panelRef.current?.contains(active))) {
+          e.preventDefault()
+          last.focus()
+        } else if (!e.shiftKey && (active === last || !panelRef.current?.contains(active))) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
     }
     window.addEventListener('keydown', onKey)
     document.body.style.overflow = 'hidden'
     return () => {
       window.removeEventListener('keydown', onKey)
       document.body.style.overflow = ''
+      // Devolver el foco a quien abrió el diálogo
+      prevActive?.focus?.()
     }
   }, [open, onClose])
 
@@ -41,6 +75,10 @@ export function Modal({ open, onClose, title, children, size = 'md', footer }: P
       onClick={onClose}
     >
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
         className={cn('w-full rounded-xl bg-surface shadow-xl border border-border', sizes[size])}
         onClick={(e) => e.stopPropagation()}
       >

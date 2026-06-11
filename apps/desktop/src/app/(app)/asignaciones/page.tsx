@@ -169,7 +169,7 @@ export default function AsignacionesPage() {
         <GrupoCard
           titulo="Sin asignar"
           tone="warning"
-          subtitulo={`${sinAsignar.length} egresos · ${''}`}
+          subtitulo="Sin vincular a un ingreso"
           totalUSD={sinAsignarUSD}
           color="#ea580c"
           expanded={expanded['_sin'] ?? true}

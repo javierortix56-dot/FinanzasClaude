@@ -7,7 +7,7 @@ import { monthLabel, getCurrentMonth } from '@finanzas/core/lib/constants'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 const titles: Record<string, string> = {
   '/dashboard':    'Dashboard',
@@ -23,6 +23,30 @@ export function Topbar() {
   const { hideAmounts, toggleHideAmounts } = useSettingsStore()
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const menuBtnRef = useRef<HTMLButtonElement>(null)
+
+  // Cerrar el menú con clic afuera o Escape
+  useEffect(() => {
+    if (!open) return
+    function onPointerDown(e: MouseEvent | TouchEvent) {
+      const target = e.target as Node
+      if (menuRef.current?.contains(target)) return
+      if (menuBtnRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('touchstart', onPointerDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('touchstart', onPointerDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
 
   const title = Object.entries(titles).find(([k]) => pathname.startsWith(k))?.[1] ?? ''
   const isCurrent = currentMonth === getCurrentMonth()
@@ -30,6 +54,7 @@ export function Topbar() {
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-surface/85 backdrop-blur px-4 lg:px-8">
       <button
+        ref={menuBtnRef}
         className="lg:hidden -ml-1 p-2 text-muted hover:text-foreground"
         onClick={() => setOpen((v) => !v)}
         aria-label="Menú"
@@ -75,7 +100,7 @@ export function Topbar() {
       </div>
 
       {open && (
-        <div className="absolute top-16 left-0 right-0 lg:hidden border-b border-border bg-surface shadow-lg p-3 space-y-1">
+        <div ref={menuRef} className="absolute top-16 left-0 right-0 lg:hidden border-b border-border bg-surface shadow-lg p-3 space-y-1">
           {[
             ['/dashboard', 'Dashboard'],
             ['/movimientos', 'Movimientos'],

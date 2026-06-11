@@ -249,7 +249,9 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
                 if (budget) {
                   const spentUSD   = toUSD(slice.amount, monedaBase, settings)
                   const limiteUSD  = toUSD(budget.limite, budget.moneda as Currency, settings)
-                  budgetPct        = limiteUSD > 0 ? Math.min((spentUSD / limiteUSD) * 100, 100) : 0
+                  // El % se muestra real (puede superar 100); solo el ANCHO
+                  // de la barra se limita al render.
+                  budgetPct        = limiteUSD > 0 ? (spentUSD / limiteUSD) * 100 : 0
                   spentInBudgetMoneda = toBase(spentUSD, 'USD', budget.moneda as Currency, settings)
                 }
 
@@ -306,7 +308,7 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
                             className={`h-full rounded-full transition-all ${
                               budgetPct >= 100 ? 'bg-red-400' : budgetPct >= 80 ? 'bg-orange-300' : 'bg-green-500'
                             }`}
-                            style={{ width: `${budgetPct}%` }}
+                            style={{ width: `${Math.min(budgetPct, 100)}%` }}
                           />
                         </div>
                       </div>

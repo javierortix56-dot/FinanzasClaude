@@ -312,6 +312,7 @@ export default function TransactionModal() {
             <button
               onClick={closeTransactionModal}
               className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
+              aria-label="Cerrar"
             >
               <X size={15} className="text-gray-600" />
             </button>
