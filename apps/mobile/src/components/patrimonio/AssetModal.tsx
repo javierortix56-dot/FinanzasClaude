@@ -62,11 +62,14 @@ export default function AssetModal({ open, onClose, editing }: Props) {
     }
   }, [open, editing])
 
-  // Sync tipo when clase changes
-  useEffect(() => {
-    setTipo(clase === 'activo' ? ACTIVO_TIPOS[0] : pasivoTipos[0])
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clase])
+  // El reset de tipo al cambiar de clase se hace en el onClick del toggle
+  // (acción del usuario), no en un effect: un effect sobre [clase] pisaba el
+  // tipo recién cargado al abrir el modal en modo edición.
+  function handleClaseChange(next: 'activo' | 'pasivo') {
+    if (next === clase) return
+    setClase(next)
+    setTipo(next === 'activo' ? ACTIVO_TIPOS[0] : pasivoTipos[0])
+  }
 
   async function handleSave() {
     if (!nombre) return
@@ -141,7 +144,7 @@ export default function AssetModal({ open, onClose, editing }: Props) {
               {(['activo', 'pasivo'] as const).map((c) => (
                 <button
                   key={c}
-                  onClick={() => setClase(c)}
+                  onClick={() => handleClaseChange(c)}
                   className={`flex-1 py-2.5 rounded-lg text-sm font-semibold capitalize transition-all ${
                     clase === c ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
                   }`}

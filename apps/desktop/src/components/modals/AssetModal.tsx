@@ -65,12 +65,12 @@ function Form({ editing, onClose }: { editing: Asset | null; onClose: () => void
       fechaAlta: { toDate: () => new Date(fechaAlta + 'T12:00:00') },
       metaObjetivo: meta ? parseFloat(meta) : null,
       metaMoneda: meta ? metaMoneda : null,
-      snapshots: [],
     }
     setSaving(true)
     try {
+      // En edición NO se mandan snapshots: mandarlos vacíos borraría el historial.
       if (editing?.id) await updateAsset(editing.id, payload)
-      else await addAsset(payload)
+      else await addAsset({ ...payload, snapshots: [] })
       showToast(editing ? 'Cuenta actualizada' : 'Cuenta creada')
       onClose()
     } catch {
@@ -104,7 +104,16 @@ function Form({ editing, onClose }: { editing: Asset | null; onClose: () => void
       <div className="grid grid-cols-2 gap-3">
         <div>
           <Label>Clase</Label>
-          <Select value={clase} onChange={(e) => setClase(e.target.value as 'activo' | 'pasivo')}>
+          <Select
+            value={clase}
+            onChange={(e) => {
+              const next = e.target.value as 'activo' | 'pasivo'
+              if (next === clase) return
+              setClase(next)
+              // El tipo de la otra clase no aplica: resetear al primero disponible
+              setTipo((next === 'activo' ? settings.tiposActivo : settings.tiposPasivo)[0] ?? '')
+            }}
+          >
             <option value="activo">Activo</option>
             <option value="pasivo">Pasivo</option>
           </Select>

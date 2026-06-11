@@ -58,10 +58,12 @@ function rowToSettings(row: Record<string, any>): Settings {
   }
 }
 
-function settingsToRow(settings: Settings) {
+function settingsToRow(settings: Settings, currentAppSettings: Record<string, unknown> = {}) {
   return {
     user_id:         SHARED_UUID,
-    app_settings:    { tipoCambio: settings.tipoCambio, ahorroLinks: settings.ahorroLinks ?? [] },
+    // Spread del app_settings actual para no pisar claves ajenas a Settings
+    // (p. ej. budgets, que guarda saveBudgets en la misma columna).
+    app_settings:    { ...currentAppSettings, tipoCambio: settings.tipoCambio, ahorroLinks: settings.ahorroLinks ?? [] },
     monthly_rates:   settings.historialTipoCambio,
     transaction_cats: settings.categoriasGasto,
     categories:      settings.categoriasIngreso,
@@ -124,8 +126,15 @@ export function subscribeToSettings(
 export async function updateSettings(_userId: string, partial: Partial<Settings>) {
   const current = await getOrInitSettings(_userId)
   const merged  = { ...current, ...partial }
+  // Re-leer el app_settings crudo justo antes de escribir, igual que saveBudgets,
+  // para preservar claves que Settings no modela (p. ej. budgets).
+  const { data: row } = await supabase
+    .from('configuracion')
+    .select('app_settings')
+    .eq('user_id', SHARED_UUID)
+    .maybeSingle()
   const { error } = await supabase
     .from('configuracion')
-    .upsert(settingsToRow(merged), { onConflict: 'user_id' })
+    .upsert(settingsToRow(merged, row?.app_settings ?? {}), { onConflict: 'user_id' })
   if (error) throw error
 }

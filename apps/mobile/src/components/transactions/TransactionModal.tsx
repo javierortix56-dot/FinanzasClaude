@@ -133,6 +133,14 @@ export default function TransactionModal() {
   const accentColor  = tipo === 'egreso' ? '#f87171' : '#22c55e'
   const accentBg     = tipo === 'egreso' ? 'bg-red-400' : 'bg-green-500'
 
+  // Convierte un monto desde la moneda de la transacción a la moneda del
+  // activo destino — el saldo del activo se lleva en SU moneda.
+  function toAssetCurrency(amount: number, currency: Currency, assetId: string): number {
+    const asset = assets.find((a) => a.id === assetId)
+    if (!asset || asset.moneda === currency) return amount
+    return toBase(amount, currency, asset.moneda, s)
+  }
+
   async function handleSave() {
     if (!montoValido) return
     setSaving(true)
@@ -148,8 +156,9 @@ export default function TransactionModal() {
         recurrente,
       }
 
-      // Use the explicitly selected cuenta de ahorro
-      data.ahorroAssetId = ahorroAssetId || null
+      // Use the explicitly selected cuenta de ahorro (solo aplica a egresos)
+      const effectiveAhorroAssetId = tipo === 'egreso' ? ahorroAssetId : ''
+      data.ahorroAssetId = effectiveAhorroAssetId || null
 
       if (editingTransaction?.id) {
         await updateTransaction(editingTransaction.id, data)
@@ -159,25 +168,36 @@ export default function TransactionModal() {
         showToast('Movimiento guardado')
       }
 
-      // Sync asset saldo (non-blocking, fetches asset from DB directly)
+      // Sync asset saldo (non-blocking, fetches asset from DB directly).
+      // Los deltas se convierten siempre a la moneda del activo destino.
       try {
         const txMonth = fecha.slice(0, 7)
         const oldAssetId = editingTransaction?.ahorroAssetId ?? ''
-        const newAssetId = ahorroAssetId
+        const newAssetId = effectiveAhorroAssetId
         if (editingTransaction?.id) {
-          if (oldAssetId && oldAssetId !== newAssetId) {
-            // Asset changed — reverse the old one
-            const oldMonth = editingTransaction.fecha.toDate().toISOString().slice(0, 7)
-            await adjustAssetSaldo(oldAssetId, -editingTransaction.monto, oldMonth)
-          }
-          if (newAssetId) {
-            const delta = oldAssetId === newAssetId
-              ? parsedMonto - editingTransaction.monto   // same asset: only the diff
-              : parsedMonto                              // new asset: full amount
+          const oldMonth = editingTransaction.fecha.toDate().toISOString().slice(0, 7)
+          if (oldAssetId && oldAssetId === newAssetId && oldMonth === txMonth) {
+            // Mismo activo y mismo mes: aplicar solo la diferencia
+            const delta =
+              toAssetCurrency(parsedMonto, moneda, newAssetId) -
+              toAssetCurrency(editingTransaction.monto, editingTransaction.moneda, newAssetId)
             if (delta !== 0) await adjustAssetSaldo(newAssetId, delta, txMonth)
+          } else {
+            // Cambió el activo y/o el mes: revertir el aporte viejo completo
+            // en el mes viejo y aplicar el nuevo en el mes nuevo.
+            if (oldAssetId) {
+              await adjustAssetSaldo(
+                oldAssetId,
+                -toAssetCurrency(editingTransaction.monto, editingTransaction.moneda, oldAssetId),
+                oldMonth,
+              )
+            }
+            if (newAssetId) {
+              await adjustAssetSaldo(newAssetId, toAssetCurrency(parsedMonto, moneda, newAssetId), txMonth)
+            }
           }
         } else if (newAssetId) {
-          await adjustAssetSaldo(newAssetId, parsedMonto, txMonth)
+          await adjustAssetSaldo(newAssetId, toAssetCurrency(parsedMonto, moneda, newAssetId), txMonth)
         }
       } catch (syncErr) {
         console.error('[handleSave] asset sync error:', syncErr)
@@ -212,7 +232,11 @@ export default function TransactionModal() {
       if (editingTransaction.ahorroAssetId) {
         try {
           const txMonth = editingTransaction.fecha.toDate().toISOString().slice(0, 7)
-          await adjustAssetSaldo(editingTransaction.ahorroAssetId, -editingTransaction.monto, txMonth)
+          await adjustAssetSaldo(
+            editingTransaction.ahorroAssetId,
+            -toAssetCurrency(editingTransaction.monto, editingTransaction.moneda, editingTransaction.ahorroAssetId),
+            txMonth,
+          )
         } catch (syncErr) {
           console.error('[handleDelete] asset sync error:', syncErr)
         }
@@ -235,6 +259,21 @@ export default function TransactionModal() {
       } else {
         await moveTransactionToMonth(editingTransaction.id, cloneMonth)
         showToast('Movimiento movido')
+      }
+      // Mantener el activo de ahorro en sync: el clon agrega un aporte nuevo
+      // en el mes destino; el move traslada el aporte del mes viejo al nuevo.
+      if (editingTransaction.ahorroAssetId) {
+        try {
+          const aid = editingTransaction.ahorroAssetId
+          const conv = toAssetCurrency(editingTransaction.monto, editingTransaction.moneda, aid)
+          if (cloneAction === 'move') {
+            const oldMonth = editingTransaction.fecha.toDate().toISOString().slice(0, 7)
+            await adjustAssetSaldo(aid, -conv, oldMonth)
+          }
+          await adjustAssetSaldo(aid, conv, cloneMonth)
+        } catch (syncErr) {
+          console.error('[handleCloneMove] asset sync error:', syncErr)
+        }
       }
       closeTransactionModal()
     } catch (err) {
@@ -284,7 +323,7 @@ export default function TransactionModal() {
                   {(['egreso', 'ingreso'] as TransactionType[]).map((t) => (
                     <button
                       key={t}
-                      onClick={() => { setTipo(t); setSelectedGroup(''); setSelectedSub(''); setAsignadoA(null) }}
+                      onClick={() => { setTipo(t); setSelectedGroup(''); setSelectedSub(''); setAsignadoA(null); setAhorroAssetId('') }}
                       className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${
                         tipo === t
                           ? t === 'egreso' ? 'bg-red-400 text-white shadow' : 'bg-green-500 text-white shadow'
