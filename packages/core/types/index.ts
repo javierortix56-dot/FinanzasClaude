@@ -82,6 +82,8 @@ export interface AhorroLink {
 }
 
 export interface Settings {
+  /** Moneda en la que se muestran balances y totales en la UI */
+  monedaBase?: Currency
   tipoCambio: {
     ARS_USD: number
     COP_USD: number

@@ -1,8 +1,9 @@
 import { supabase, SHARED_UUID } from './supabase'
 import { Transaction } from '../types'
 
+// Conversión fila Supabase → Transaction (única fuente; analytics la reusa)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function rowToTx(row: Record<string, any>): Transaction {
+export function rowToTx(row: Record<string, any>): Transaction {
   const dateStr = row.date as string
   const extra = row.children ?? {}
   // DB may store 'inc'/'exp' (old app) or 'ingreso'/'egreso' (new)

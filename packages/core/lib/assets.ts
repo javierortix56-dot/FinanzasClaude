@@ -154,7 +154,8 @@ export async function upsertSnapshot(asset: Asset, snap: AssetSnapshot) {
   const latest = next[next.length - 1]
   const partial: Record<string, unknown> = { snapshots: next }
   // El saldo "current" del activo refleja el snapshot más reciente
-  if (latest && latest.month >= snap.month) partial.init_bal = latest.saldo
+  // (latest es el máximo de la lista, que siempre incluye a snap)
+  if (latest) partial.init_bal = latest.saldo
   const { error } = await supabase.from('cuentas').update(partial).eq('id', asset.id!)
   if (error) throw error
 }

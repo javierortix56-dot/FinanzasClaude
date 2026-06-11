@@ -135,11 +135,7 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
   )
 
   // ── Centro del donut ─────────────────────────────────────────────────
-  const centerSlice = selectedSub
-    ? slices.find((s) => s.id === selectedSub)
-    : selectedGroup
-      ? null
-      : null
+  const centerSlice = selectedSub ? slices.find((s) => s.id === selectedSub) : null
   const groupSlice = selectedGroup && !selectedSub
     ? { amount: total, nombre: groups.find((g) => g.id === selectedGroup)?.nombre ?? '' }
     : null

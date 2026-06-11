@@ -3,6 +3,7 @@ import { Settings, CategoryGroup, Category } from '../types'
 import { DEFAULT_GASTO_CATEGORY_GROUPS, DEFAULT_INGRESO_CATEGORY_GROUPS } from './constants'
 
 export const DEFAULT_SETTINGS: Settings = {
+  monedaBase: 'ARS',
   tipoCambio: {
     ARS_USD: 1200,
     COP_USD: 4100,
@@ -46,7 +47,12 @@ function rowToSettings(row: Record<string, any>): Settings {
       ? { ARS_USD: latestRate.ARS_USD, COP_USD: latestRate.COP_USD }
       : DEFAULT_SETTINGS.tipoCambio
 
+  const monedaBase = ['ARS', 'COP', 'USD'].includes(appSettings.monedaBase)
+    ? appSettings.monedaBase
+    : 'ARS'
+
   return {
+    monedaBase,
     tipoCambio,
     historialTipoCambio: Array.isArray(row.monthly_rates)  ? row.monthly_rates : [],
     categoriasGasto:     migrateToGroups(row.transaction_cats, DEFAULT_GASTO_CATEGORY_GROUPS),
@@ -63,7 +69,7 @@ function settingsToRow(settings: Settings, existingAppSettings: Record<string, u
     user_id:         SHARED_UUID,
     // app_settings comparte columna con claves que este módulo no maneja
     // (p. ej. budgets, que lib/budgets.ts guarda acá) — preservarlas.
-    app_settings:    { ...existingAppSettings, tipoCambio: settings.tipoCambio, ahorroLinks: settings.ahorroLinks ?? [] },
+    app_settings:    { ...existingAppSettings, monedaBase: settings.monedaBase ?? 'ARS', tipoCambio: settings.tipoCambio, ahorroLinks: settings.ahorroLinks ?? [] },
     monthly_rates:   settings.historialTipoCambio,
     transaction_cats: settings.categoriasGasto,
     categories:      settings.categoriasIngreso,

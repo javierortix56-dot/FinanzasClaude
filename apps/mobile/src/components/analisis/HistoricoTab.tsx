@@ -128,7 +128,7 @@ export default function HistoricoTab() {
             <div className="w-5 h-5 border-2 border-[#534AB7] border-t-transparent rounded-full animate-spin" />
           </div>
         ) : (
-          <MultiLineChart months={chartMonths} series={lineSeries} currency={base} />
+          <MultiLineChart months={chartMonths} series={lineSeries} />
         )}
       </div>
     </div>

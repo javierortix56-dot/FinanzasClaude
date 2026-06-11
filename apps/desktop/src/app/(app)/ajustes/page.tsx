@@ -7,10 +7,11 @@ import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input, Label } from '@/components/ui/input'
+import { Input, Select, Label } from '@/components/ui/input'
 import { updateSettings, DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { cloneMonthTransactions, createRecurringTransactions, countMonthTransactions } from '@finanzas/core/lib/transactions'
 import { shiftMonth, monthLabel, isMonthClosed, CLOSED_MONTH_MSG } from '@finanzas/core/lib/constants'
+import { Currency } from '@finanzas/core/types'
 
 export default function AjustesPage() {
   const settings = useSettingsStore((s) => s.settings) ?? DEFAULT_SETTINGS
@@ -20,8 +21,21 @@ export default function AjustesPage() {
   const [arsUsd, setArsUsd] = useState(String(settings.tipoCambio.ARS_USD))
   const [copUsd, setCopUsd] = useState(String(settings.tipoCambio.COP_USD))
   const [savingRates, setSavingRates] = useState(false)
+  const [savingBase, setSavingBase] = useState(false)
   const [cloning, setCloning] = useState(false)
   const [creatingRecurring, setCreatingRecurring] = useState(false)
+
+  async function saveMonedaBase(monedaBase: Currency) {
+    setSavingBase(true)
+    try {
+      await updateSettings('shared', { monedaBase })
+      showToast(`Moneda base: ${monedaBase}`)
+    } catch {
+      showToast('Error al guardar', 'error')
+    } finally {
+      setSavingBase(false)
+    }
+  }
 
   // Si las tasas cambian en tiempo real (p. ej. desde la app móvil), refrescar
   // los inputs — patrón de estado derivado durante el render, sin effect.
@@ -92,6 +106,27 @@ export default function AjustesPage() {
   return (
     <div className="space-y-5 max-w-3xl">
       <h2 className="text-2xl font-semibold tracking-tight">Ajustes</h2>
+
+      <Card>
+        <div className="px-5 py-4 border-b border-border">
+          <div className="text-sm font-semibold">Moneda base</div>
+          <div className="text-xs text-muted mt-0.5">Moneda en la que se muestran balances y totales.</div>
+        </div>
+        <CardContent className="pt-5">
+          <div className="max-w-[200px]">
+            <Select
+              value={settings.monedaBase ?? 'ARS'}
+              onChange={(e) => saveMonedaBase(e.target.value as Currency)}
+              disabled={savingBase}
+              aria-label="Moneda base"
+            >
+              {(['ARS', 'COP', 'USD'] as Currency[]).map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <div className="px-5 py-4 border-b border-border">

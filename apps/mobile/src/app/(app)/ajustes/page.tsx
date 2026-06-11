@@ -3,12 +3,13 @@
 import { useState, useRef } from 'react'
 import {
   ChevronRight, Plus, Pencil, ChevronDown, ChevronUp,
-  Copy, RotateCcw, Lock, Trash2, Check, Download, Upload, ChevronLeft,
+  Copy, RotateCcw, Lock, Trash2, Check, Download, Upload,
 } from 'lucide-react'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useAssetStore } from '@finanzas/core/store/useAssetStore'
-import { updateSettings } from '@finanzas/core/lib/settings'
+import { useAuthStore } from '@finanzas/core/store/useAuthStore'
+import { updateSettings, DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import {
   deleteMonthTransactions,
   cloneMonthTransactions,
@@ -17,13 +18,13 @@ import {
   countTransactionsByCategories,
 } from '@finanzas/core/lib/transactions'
 import { exportBackup, downloadBackup, importBackup, parseBackupFile, NonEmptyDatabaseError } from '@finanzas/core/lib/backup'
-import { monthLabel, SHARED_USER_ID, isMonthClosed, CLOSED_MONTH_MSG } from '@finanzas/core/lib/constants'
+import { monthLabel, shiftMonth, SHARED_USER_ID, isMonthClosed, CLOSED_MONTH_MSG } from '@finanzas/core/lib/constants'
 import dynamic from 'next/dynamic'
-import { Category, CategoryGroup, AhorroLink } from '@finanzas/core/types'
+import { Category, CategoryGroup, AhorroLink, Currency } from '@finanzas/core/types'
 
 const CategoryModal = dynamic(() => import('@/components/ajustes/CategoryModal'), { ssr: false })
 
-type Section = 'cambio' | 'categorias' | 'categorias_ing' | 'tipos' | 'ahorro_links' | 'mes' | 'datos' | null
+type Section = 'moneda' | 'cambio' | 'categorias' | 'categorias_ing' | 'tipos' | 'ahorro_links' | 'mes' | 'datos' | null
 
 // ── Modal state types ─────────────────────────────────────────────────────────
 type GroupModalState = {
@@ -42,6 +43,7 @@ export default function AjustesPage() {
   const { settings, setSettings } = useSettingsStore()
   const { currentMonth } = useTransactionStore()
   const { assets } = useAssetStore()
+  const { setMonedaBase } = useAuthStore()
   const [openSection, setOpenSection] = useState<Section>(null)
 
   // Tipos de cambio
@@ -50,6 +52,9 @@ export default function AjustesPage() {
   const [savingRate, setSavingRate] = useState(false)
   const [rateSaved, setRateSaved] = useState(false)
   const [rateError, setRateError] = useState<string | null>(null)
+
+  // Moneda base
+  const [savingBase, setSavingBase] = useState(false)
 
   // Category tree: expanded groups
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
@@ -95,21 +100,9 @@ export default function AjustesPage() {
   const [newLinkCatId, setNewLinkCatId] = useState('')
   const [newLinkAssetId, setNewLinkAssetId] = useState('')
 
-  if (!settings) {
-    return (
-      <div className="flex flex-col h-full bg-gray-50">
-        <div className="bg-white px-4 pt-10 pb-4 shadow-sm">
-          <h1 className="text-gray-800 font-bold text-xl">Ajustes</h1>
-          <p className="text-gray-400 text-xs mt-0.5">Javier &amp; Mary</p>
-        </div>
-        <div className="flex items-center justify-center flex-1">
-          <div className="w-6 h-6 border-2 border-[#534AB7] border-t-transparent rounded-full animate-spin" />
-        </div>
-      </div>
-    )
-  }
-
-  const s = settings  // narrowed to Settings (non-null) after guard above
+  // El store arranca con DEFAULT_SETTINGS y nunca vuelve a null: el guard
+  // con spinner que había acá era inalcanzable.
+  const s = settings ?? DEFAULT_SETTINGS
 
   function toggle(section: Section) {
     setOpenSection((prev) => (prev === section ? null : section))
@@ -118,9 +111,24 @@ export default function AjustesPage() {
   function toggleGroup(id: string) {
     setExpandedGroups((prev) => {
       const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return next
     })
+  }
+
+  // ── Moneda base ──────────────────────────────────────────────────────────────
+  async function saveMonedaBase(c: Currency) {
+    setSavingBase(true)
+    try {
+      await updateSettings(SHARED_USER_ID, { monedaBase: c })
+      setSettings({ ...s, monedaBase: c })
+      setMonedaBase(c)
+    } catch (err) {
+      console.error('[saveMonedaBase] error:', err)
+    } finally {
+      setSavingBase(false)
+    }
   }
 
   // ── Tipos de cambio ──────────────────────────────────────────────────────────
@@ -264,7 +272,6 @@ export default function AjustesPage() {
 
   async function handleClonarMes() {
     resetMesFeedback()
-    const { shiftMonth } = await import('@finanzas/core/lib/constants')
     const nextMonth = shiftMonth(currentMonth, 1)
     if (isMonthClosed(nextMonth, s)) {
       setMesError(`${monthLabel(nextMonth)} está cerrado — ${CLOSED_MONTH_MSG.toLowerCase()}`)
@@ -296,7 +303,6 @@ export default function AjustesPage() {
 
   async function handleCrearRecurrentes() {
     resetMesFeedback()
-    const { shiftMonth } = await import('@finanzas/core/lib/constants')
     const nextMonth = shiftMonth(currentMonth, 1)
     if (isMonthClosed(nextMonth, s)) {
       setMesError(`${monthLabel(nextMonth)} está cerrado — ${CLOSED_MONTH_MSG.toLowerCase()}`)
@@ -445,7 +451,7 @@ export default function AjustesPage() {
                   <span className="text-[10px] text-gray-400 ml-1">({group.subcategorias.length})</span>
                   {isOpen
                     ? <ChevronDown size={13} className="text-gray-400 flex-shrink-0 ml-auto" />
-                    : <ChevronLeft size={13} className="text-gray-400 flex-shrink-0 ml-auto rotate-180" />
+                    : <ChevronRight size={13} className="text-gray-400 flex-shrink-0 ml-auto" />
                   }
                 </button>
 
@@ -532,6 +538,36 @@ export default function AjustesPage() {
       {/* Card */}
       <div className="flex-1 bg-white overflow-y-auto">
         <div className="px-4 pt-4 pb-24 space-y-1">
+
+          {/* ── Moneda base ── */}
+          <Section
+            label="Moneda base"
+            open={openSection === 'moneda'}
+            onToggle={() => toggle('moneda')}
+          >
+            <div className="pt-2">
+              <div className="flex gap-2">
+                {(['ARS', 'COP', 'USD'] as Currency[]).map((c) => {
+                  const active = (s.monedaBase ?? 'ARS') === c
+                  return (
+                    <button
+                      key={c}
+                      onClick={() => saveMonedaBase(c)}
+                      disabled={savingBase}
+                      className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50 ${
+                        active ? 'bg-[#534AB7] text-white shadow' : 'bg-gray-100 text-gray-500'
+                      }`}
+                    >
+                      {c}
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="text-[11px] text-gray-500 mt-2">
+                Moneda en la que se muestran balances y totales en toda la app.
+              </p>
+            </div>
+          </Section>
 
           {/* ── Tipos de cambio ── */}
           <Section

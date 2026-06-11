@@ -10,7 +10,6 @@ interface Props {
   title: string
   children: ReactNode
   size?: 'sm' | 'md' | 'lg'
-  footer?: ReactNode
 }
 
 const sizes = {
@@ -21,7 +20,7 @@ const sizes = {
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
-export function Modal({ open, onClose, title, children, size = 'md', footer }: Props) {
+export function Modal({ open, onClose, title, children, size = 'md' }: Props) {
   const panelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -87,7 +86,6 @@ export function Modal({ open, onClose, title, children, size = 'md', footer }: P
           </button>
         </div>
         <div className="px-6 py-5">{children}</div>
-        {footer && <div className="px-6 py-4 border-t border-border bg-surface-2 rounded-b-xl">{footer}</div>}
       </div>
     </div>
   )

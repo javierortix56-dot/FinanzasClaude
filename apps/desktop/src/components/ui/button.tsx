@@ -3,7 +3,7 @@
 import { ButtonHTMLAttributes, forwardRef } from 'react'
 import { cn } from '@finanzas/core/lib/utils'
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline'
+type Variant = 'primary' | 'secondary' | 'ghost'
 type Size = 'sm' | 'md' | 'lg' | 'icon'
 
 interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -15,8 +15,6 @@ const variants: Record<Variant, string> = {
   primary:   'bg-primary text-primary-foreground hover:bg-primary-hover',
   secondary: 'bg-surface text-foreground border border-border hover:bg-surface-2',
   ghost:     'text-foreground hover:bg-surface-2',
-  danger:    'bg-expense text-white hover:bg-red-700',
-  outline:   'border border-border-strong bg-transparent text-foreground hover:bg-surface-2',
 }
 
 const sizes: Record<Size, string> = {
