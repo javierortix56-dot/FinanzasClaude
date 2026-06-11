@@ -17,7 +17,7 @@ import { getCatFromSettings } from '@finanzas/core/lib/constants'
 import { Transaction } from '@finanzas/core/types'
 
 export default function AsignacionesPage() {
-  const { transactions } = useTransactionStore()
+  const { transactions, isLoading } = useTransactionStore()
   const settings = useSettingsStore((s) => s.settings) ?? DEFAULT_SETTINGS
   const showToast = useUIStore((s) => s.showToast)
 
@@ -65,32 +65,58 @@ export default function AsignacionesPage() {
     if (sinAsignar.length === 0) return showToast('No hay egresos sin asignar', 'error')
     if (ingresos.length === 0) return showToast('No hay ingresos para asignar', 'error')
     let count = 0
-    for (const e of sinAsignar) {
-      // ingreso más cercano en fecha
-      const eDate = e.fecha.toDate().getTime()
-      let best = ingresos[0]
-      let bestDiff = Math.abs(eDate - best.fecha.toDate().getTime())
-      for (const ing of ingresos) {
-        const d = Math.abs(eDate - ing.fecha.toDate().getTime())
-        if (d < bestDiff) { best = ing; bestDiff = d }
+    try {
+      for (const e of sinAsignar) {
+        // ingreso más cercano en fecha
+        const eDate = e.fecha.toDate().getTime()
+        let best = ingresos[0]
+        let bestDiff = Math.abs(eDate - best.fecha.toDate().getTime())
+        for (const ing of ingresos) {
+          const d = Math.abs(eDate - ing.fecha.toDate().getTime())
+          if (d < bestDiff) { best = ing; bestDiff = d }
+        }
+        if (e.id && best.id) {
+          await updateTransaction(e.id, { asignadoA: best.id })
+          count++
+        }
       }
-      if (e.id && best.id) {
-        await updateTransaction(e.id, { asignadoA: best.id })
-        count++
-      }
+      showToast(`Asignados ${count} egresos`)
+    } catch (err) {
+      console.error('[autoAsignar] error:', err)
+      showToast(
+        err instanceof Error ? err.message : `Error al asignar (${count} asignados antes del fallo)`,
+        'error',
+      )
     }
-    showToast(`Asignados ${count} egresos`)
   }
 
   async function reasignar(toIngresoId: string | null) {
     let count = 0
-    for (const id of selected) {
-      await updateTransaction(id, { asignadoA: toIngresoId })
-      count++
+    try {
+      for (const id of selected) {
+        await updateTransaction(id, { asignadoA: toIngresoId })
+        count++
+      }
+      showToast(toIngresoId ? `Reasignados ${count}` : `Desasignados ${count}`)
+    } catch (err) {
+      console.error('[reasignar] error:', err)
+      showToast(
+        err instanceof Error ? err.message : `Error al reasignar (${count} procesados antes del fallo)`,
+        'error',
+      )
+    } finally {
+      setSelected(new Set())
+      setReassignOpen(false)
     }
-    setSelected(new Set())
-    setReassignOpen(false)
-    showToast(toIngresoId ? `Reasignados ${count}` : `Desasignados ${count}`)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-5">
+        <h2 className="text-2xl font-semibold tracking-tight">Asignación de egresos</h2>
+        <div className="flex items-center justify-center py-24 text-sm text-muted">Cargando movimientos…</div>
+      </div>
+    )
   }
 
   return (

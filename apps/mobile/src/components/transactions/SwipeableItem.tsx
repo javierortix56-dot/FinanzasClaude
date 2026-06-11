@@ -139,7 +139,9 @@ export default function SwipeableItem({ tx }: Props) {
         className={`relative bg-white flex items-center gap-2.5 py-2 px-4 ${tx.ejecutado ? 'opacity-50' : ''}`}
         style={{
           transform: `translateX(${offset}px)`,
-          transition: transitioning && !dragging.current ? 'transform 0.2s ease' : 'none',
+          // `transitioning` ya es false durante el drag (onTouchStart lo
+          // apaga), así que no hace falta leer el ref durante el render.
+          transition: transitioning ? 'transform 0.2s ease' : 'none',
         }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}

@@ -8,14 +8,16 @@ import {
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useAssetStore } from '@finanzas/core/store/useAssetStore'
+import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { updateSettings } from '@finanzas/core/lib/settings'
 import {
   deleteMonthTransactions,
   cloneMonthTransactions,
   createRecurringTransactions,
   countMonthTransactions,
+  countTransactionsByCategories,
 } from '@finanzas/core/lib/transactions'
-import { exportBackup, downloadBackup, importBackup, parseBackupFile } from '@finanzas/core/lib/backup'
+import { exportBackup, downloadBackup, importBackup, parseBackupFile, BackupData } from '@finanzas/core/lib/backup'
 import { monthLabel, SHARED_USER_ID } from '@finanzas/core/lib/constants'
 import dynamic from 'next/dynamic'
 import { Category, CategoryGroup, AhorroLink } from '@finanzas/core/types'
@@ -41,6 +43,7 @@ export default function AjustesPage() {
   const { settings, setSettings } = useSettingsStore()
   const { currentMonth } = useTransactionStore()
   const { assets } = useAssetStore()
+  const showToast = useUIStore((st) => st.showToast)
   const [openSection, setOpenSection] = useState<Section>(null)
 
   // Tipos de cambio
@@ -52,6 +55,8 @@ export default function AjustesPage() {
 
   // Category tree: expanded groups
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  // Dos toques para borrar categoría/subcategoría desde el árbol
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   // Modal for top-level groups
   const [groupModal, setGroupModal] = useState<GroupModalState>({
@@ -84,6 +89,8 @@ export default function AjustesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [backupAction, setBackupAction] = useState<string | null>(null)
   const [backupResult, setBackupResult] = useState<string | null>(null)
+  // Backup parseado a la espera de confirmación (la DB ya tiene datos)
+  const [pendingImport, setPendingImport] = useState<BackupData | null>(null)
 
   // Ahorro links
   const [newLinkCatId, setNewLinkCatId] = useState('')
@@ -107,6 +114,7 @@ export default function AjustesPage() {
 
   function toggle(section: Section) {
     setOpenSection((prev) => (prev === section ? null : section))
+    setConfirmDeleteId(null)
   }
 
   function toggleGroup(id: string) {
@@ -158,11 +166,24 @@ export default function AjustesPage() {
 
   async function handleDeleteGroup(id: string, tipo: 'gasto' | 'ingreso') {
     const key  = tipo === 'gasto' ? 'categoriasGasto' : 'categoriasIngreso'
-    const list = (tipo === 'gasto' ? s.categoriasGasto : s.categoriasIngreso).filter((g) => g.id !== id)
-    const partial = { [key]: list }
-    await updateSettings(SHARED_USER_ID, partial)
-    setSettings({ ...s, ...partial })
-    setGroupModal((prev) => ({ ...prev, open: false, group: null }))
+    const all  = tipo === 'gasto' ? s.categoriasGasto : s.categoriasIngreso
+    try {
+      // Bloquear el borrado si la categoría (o sus subcategorías) está en uso
+      const group = all.find((g) => g.id === id)
+      const ids = group ? [group.id, ...group.subcategorias.map((c) => c.id)] : [id]
+      const inUse = await countTransactionsByCategories(ids)
+      if (inUse > 0) {
+        showToast(`No se puede eliminar: ${inUse} movimiento(s) usan esta categoría. Desactivala en su lugar.`, 'error')
+        return
+      }
+      const partial = { [key]: all.filter((g) => g.id !== id) }
+      await updateSettings(SHARED_USER_ID, partial)
+      setSettings({ ...s, ...partial })
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Error al eliminar la categoría', 'error')
+    } finally {
+      setGroupModal((prev) => ({ ...prev, open: false, group: null }))
+    }
   }
 
   // ── CRUD Subcategorías ───────────────────────────────────────────────────────
@@ -187,11 +208,31 @@ export default function AjustesPage() {
     const list = (tipo === 'gasto' ? [...s.categoriasGasto] : [...s.categoriasIngreso])
     const gIdx = list.findIndex((g) => g.id === groupId)
     if (gIdx < 0) return
-    list[gIdx] = { ...list[gIdx], subcategorias: list[gIdx].subcategorias.filter((c) => c.id !== id) }
-    const partial = { [key]: list }
-    await updateSettings(SHARED_USER_ID, partial)
-    setSettings({ ...s, ...partial })
-    setSubModal((prev) => ({ ...prev, open: false, category: null }))
+    try {
+      const inUse = await countTransactionsByCategories([id])
+      if (inUse > 0) {
+        showToast(`No se puede eliminar: ${inUse} movimiento(s) usan esta subcategoría. Desactivala en su lugar.`, 'error')
+        return
+      }
+      list[gIdx] = { ...list[gIdx], subcategorias: list[gIdx].subcategorias.filter((c) => c.id !== id) }
+      const partial = { [key]: list }
+      await updateSettings(SHARED_USER_ID, partial)
+      setSettings({ ...s, ...partial })
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Error al eliminar la subcategoría', 'error')
+    } finally {
+      setSubModal((prev) => ({ ...prev, open: false, category: null }))
+    }
+  }
+
+  /** Dos toques para borrar desde el árbol: el primero arma, el segundo ejecuta. */
+  function requestDelete(id: string, exec: () => void) {
+    if (confirmDeleteId !== id) {
+      setConfirmDeleteId(id)
+      return
+    }
+    setConfirmDeleteId(null)
+    exec()
   }
 
   // ── Tipos activo/pasivo ──────────────────────────────────────────────────────
@@ -219,12 +260,20 @@ export default function AjustesPage() {
     resetMesFeedback()
     setMesAction('cerrando')
     try {
-      const { ARS_USD, COP_USD } = s.tipoCambio
-      const hist    = [...(s.historialTipoCambio ?? []).filter((h) => h.mes !== currentMonth), { mes: currentMonth, ARS_USD, COP_USD }]
-      const cerrados = [...(s.mesesCerrados ?? []).filter((m) => m !== currentMonth), currentMonth]
-      await updateSettings(SHARED_USER_ID, { historialTipoCambio: hist, mesesCerrados: cerrados })
-      setSettings({ ...s, historialTipoCambio: hist, mesesCerrados: cerrados })
-      setMesResult(`Mes ${monthLabel(currentMonth)} cerrado. Tipo de cambio guardado.`)
+      if (isClosed) {
+        // Reabrir: el mes cerrado es de solo lectura, esto lo desbloquea
+        const cerrados = (s.mesesCerrados ?? []).filter((m) => m !== currentMonth)
+        await updateSettings(SHARED_USER_ID, { mesesCerrados: cerrados })
+        setSettings({ ...s, mesesCerrados: cerrados })
+        setMesResult(`Mes ${monthLabel(currentMonth)} reabierto. Ya se puede editar.`)
+      } else {
+        const { ARS_USD, COP_USD } = s.tipoCambio
+        const hist    = [...(s.historialTipoCambio ?? []).filter((h) => h.mes !== currentMonth), { mes: currentMonth, ARS_USD, COP_USD }]
+        const cerrados = [...(s.mesesCerrados ?? []).filter((m) => m !== currentMonth), currentMonth]
+        await updateSettings(SHARED_USER_ID, { historialTipoCambio: hist, mesesCerrados: cerrados })
+        setSettings({ ...s, historialTipoCambio: hist, mesesCerrados: cerrados })
+        setMesResult(`Mes ${monthLabel(currentMonth)} cerrado. Tipo de cambio guardado y movimientos en solo lectura.`)
+      }
     } catch (err) {
       setMesError('Error al cerrar mes: ' + (err instanceof Error ? err.message : String(err)))
     } finally { setMesAction(null) }
@@ -312,19 +361,46 @@ export default function AjustesPage() {
     } finally { setBackupAction(null) }
   }
 
+  function fmtImportResult(r: { transactions: number; assets: number; budgets: number; settings: boolean }) {
+    return `Importados: ${r.transactions} movimientos, ${r.assets} cuentas, ${r.budgets} presupuestos${r.settings ? ' y ajustes' : ''}.`
+  }
+
   async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     setBackupAction('importando')
+    setPendingImport(null)
+    let data: BackupData | null = null
     try {
-      const data   = await parseBackupFile(file)
+      data = await parseBackupFile(file)
       const result = await importBackup(SHARED_USER_ID, data)
-      setBackupResult(`Importados: ${result.transactions} movimientos, ${result.assets} activos.`)
+      setBackupResult(fmtImportResult(result))
     } catch (err) {
-      setBackupResult('Error: ' + String(err))
+      const msg = err instanceof Error ? err.message : String(err)
+      if (data && msg.includes('duplicaría')) {
+        // DB no vacía: pedir confirmación explícita antes de duplicar
+        setPendingImport(data)
+        setBackupResult(msg)
+      } else {
+        setBackupResult('Error: ' + msg)
+      }
     } finally {
       setBackupAction(null)
       if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  async function handleForceImport() {
+    if (!pendingImport) return
+    setBackupAction('importando')
+    try {
+      const result = await importBackup(SHARED_USER_ID, pendingImport, { force: true })
+      setBackupResult(fmtImportResult(result))
+      setPendingImport(null)
+    } catch (err) {
+      setBackupResult('Error: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setBackupAction(null)
     }
   }
 
@@ -378,9 +454,11 @@ export default function AjustesPage() {
                   <Pencil size={13} />
                 </button>
                 <button
-                  onClick={() => handleDeleteGroup(group.id, tipo)}
-                  className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 flex-shrink-0"
-                  title="Eliminar grupo"
+                  onClick={() => requestDelete(group.id, () => handleDeleteGroup(group.id, tipo))}
+                  className={`p-1.5 rounded-lg flex-shrink-0 transition-colors ${
+                    confirmDeleteId === group.id ? 'bg-red-400 text-white' : 'hover:bg-red-50 text-red-400'
+                  }`}
+                  title={confirmDeleteId === group.id ? 'Tocá de nuevo para confirmar' : 'Eliminar grupo'}
                 >
                   <Trash2 size={13} />
                 </button>
@@ -405,8 +483,11 @@ export default function AjustesPage() {
                           <Pencil size={11} />
                         </button>
                         <button
-                          onClick={() => handleDeleteSubcat(sub.id, tipo, group.id)}
-                          className="p-1 rounded hover:bg-red-50 text-red-400"
+                          onClick={() => requestDelete(sub.id, () => handleDeleteSubcat(sub.id, tipo, group.id))}
+                          className={`p-1 rounded transition-colors ${
+                            confirmDeleteId === sub.id ? 'bg-red-400 text-white' : 'hover:bg-red-50 text-red-400'
+                          }`}
+                          title={confirmDeleteId === sub.id ? 'Tocá de nuevo para confirmar' : 'Eliminar subcategoría'}
                         >
                           <Trash2 size={11} />
                         </button>
@@ -673,10 +754,19 @@ export default function AjustesPage() {
               {isClosed && (
                 <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
                   <Lock size={13} className="text-amber-400 flex-shrink-0" />
-                  <p className="text-xs text-amber-700 font-medium">Mes cerrado — tipo de cambio guardado</p>
+                  <p className="text-xs text-amber-700 font-medium">Mes cerrado — solo lectura, tipo de cambio guardado</p>
                 </div>
               )}
-              <ActionButton icon={<Lock size={14} />} label="Cerrar mes" sublabel="Guarda el tipo de cambio actual en el historial" onClick={handleCerrarMes} loading={mesAction === 'cerrando'} color="purple" />
+              <ActionButton
+                icon={<Lock size={14} />}
+                label={isClosed ? 'Reabrir mes' : 'Cerrar mes'}
+                sublabel={isClosed
+                  ? 'Quita el solo-lectura para volver a editar el mes'
+                  : 'Guarda el tipo de cambio y deja el mes en solo lectura'}
+                onClick={handleCerrarMes}
+                loading={mesAction === 'cerrando'}
+                color="purple"
+              />
               <ActionButton
                 icon={<Copy size={14} />}
                 label={clonarConfirm ? '¿Clonar igual? (duplicados)' : 'Clonar mes al siguiente'}
@@ -732,7 +822,29 @@ export default function AjustesPage() {
                 <ChevronRight size={13} className="opacity-40 flex-shrink-0" />
               </button>
               <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleImportFile} />
-              {backupResult && (
+              {pendingImport && (
+                <div className="space-y-2">
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-xs text-amber-700 font-medium">
+                    ⚠ {backupResult}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleForceImport}
+                      disabled={!!backupAction}
+                      className="flex-1 py-2.5 rounded-xl bg-amber-400 text-white text-xs font-bold disabled:opacity-50"
+                    >
+                      {backupAction === 'importando' ? 'Importando…' : 'Importar igual (duplica datos)'}
+                    </button>
+                    <button
+                      onClick={() => { setPendingImport(null); setBackupResult(null) }}
+                      className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-600 text-xs font-bold"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+              {backupResult && !pendingImport && (
                 <div className="bg-blue-50 border border-blue-200 rounded-xl px-3 py-2.5 text-xs text-blue-700 font-medium">
                   {backupResult}
                 </div>

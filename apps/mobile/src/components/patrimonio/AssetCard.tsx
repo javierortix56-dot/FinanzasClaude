@@ -6,7 +6,8 @@ import {
 } from 'lucide-react'
 import { Asset, Settings, Currency } from '@finanzas/core/types'
 import { toUSD } from '@finanzas/core/lib/currency'
-import { formatAmount, getCurrentMonth, monthLabel } from '@finanzas/core/lib/constants'
+import { getCurrentMonth, monthLabel } from '@finanzas/core/lib/constants'
+import Amount from '@/components/ui/Amount'
 
 const TIPO_ICONS: Record<string, React.ReactNode> = {
   banco:        <Landmark     size={18} />,
@@ -33,12 +34,10 @@ export default function AssetCard({ asset, settings, onClick, onUpdateSnapshot }
 
   // Meta progress
   let metaPercent = 0
-  let metaLabel   = ''
   if (asset.metaObjetivo && asset.metaMoneda) {
     const currentUSD = toUSD(asset.saldo, asset.moneda, settings)
     const goalUSD    = toUSD(asset.metaObjetivo, asset.metaMoneda as Currency, settings)
     metaPercent = goalUSD > 0 ? Math.min((currentUSD / goalUSD) * 100, 100) : 0
-    metaLabel = `${asset.metaMoneda} ${new Intl.NumberFormat('es-AR').format(asset.metaObjetivo)}`
   }
 
   const icon = TIPO_ICONS[asset.tipo.toLowerCase()] ?? <Landmark size={18} />
@@ -69,19 +68,23 @@ export default function AssetCard({ asset, settings, onClick, onUpdateSnapshot }
         <div className="flex items-center justify-between mb-0.5">
           <p className="text-sm font-semibold text-gray-900 truncate pr-2">{asset.nombre}</p>
           <p className={`text-sm font-bold flex-shrink-0 ${isActivo ? 'text-gray-900' : 'text-red-400'}`}>
-            {isActivo ? '' : '-'}{formatAmount(asset.saldo, asset.moneda)}
+            <Amount value={asset.saldo} currency={asset.moneda} prefix={isActivo ? '' : '-'} />
           </p>
         </div>
         <div className="flex items-center justify-between">
           <span className="text-xs text-gray-400 capitalize">{asset.tipo}</span>
-          <span className="text-xs text-gray-400">≈ {formatAmount(usdValue, 'USD')}</span>
+          <span className="text-xs text-gray-400"><Amount value={usdValue} currency="USD" prefix="≈ " /></span>
         </div>
 
         {/* Meta progress */}
         {asset.metaObjetivo != null && (
           <div className="mt-2">
             <div className="flex justify-between text-[10px] text-gray-400 mb-1">
-              <span>Meta: {metaLabel}</span>
+              <span>
+                {asset.metaMoneda != null && (
+                  <>Meta: <Amount value={asset.metaObjetivo ?? 0} currency={asset.metaMoneda} /></>
+                )}
+              </span>
               <span className="font-medium text-[#534AB7]">{Math.round(metaPercent)}%</span>
             </div>
             <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">

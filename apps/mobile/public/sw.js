@@ -1,8 +1,9 @@
-const CACHE_NAME = 'finanzas-jm-v3'
+const CACHE_NAME = 'finanzas-jm-v4'
 
 // Assets to cache on install (app shell)
 const PRECACHE_URLS = [
   '/',
+  '/dashboard',
   '/icon-192.png',
   '/icon-512.png',
 ]
@@ -38,16 +39,21 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return
   if (url.origin !== self.location.origin) return
 
-  // Navigation requests: network-first, fall back to cached '/'
+  // Navigation requests: network-first; offline cae a la misma ruta cacheada
+  // y, si no está, al shell de /dashboard (cachear errores rompería el shell)
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const clone = response.clone()
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
+          if (response.ok) {
+            const clone = response.clone()
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
+          }
           return response
         })
-        .catch(() => caches.match('/'))
+        .catch(() =>
+          caches.match(request).then((cached) => cached || caches.match('/dashboard'))
+        )
     )
     return
   }
@@ -63,8 +69,10 @@ self.addEventListener('fetch', (event) => {
         (cached) =>
           cached ||
           fetch(request).then((response) => {
-            const clone = response.clone()
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
+            if (response.ok) {
+              const clone = response.clone()
+              caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
+            }
             return response
           })
       ).catch(() => fetch(request))

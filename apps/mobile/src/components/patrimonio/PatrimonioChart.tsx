@@ -1,5 +1,7 @@
 'use client'
 
+import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
+
 interface DataPoint {
   label: string
   /** Saldo total (neto) USD a fin del mes */
@@ -34,6 +36,8 @@ const COLOR_REVAL_POS = '#22c55e' // verde
 const COLOR_REVAL_NEG = '#f87171' // rojo
 
 export default function PatrimonioChart({ data, currency }: Props) {
+  const hideAmounts = useSettingsStore((s) => s.hideAmounts)
+  const blur = hideAmounts ? 'blur-sm select-none' : ''
   if (data.length === 0) return null
 
   // Para escalar las barras usamos el mayor neto absoluto de la serie
@@ -84,7 +88,7 @@ export default function PatrimonioChart({ data, currency }: Props) {
                   )}
                 </div>
               </div>
-              <p className={`text-[9px] font-semibold tabular-nums ${d.neto >= 0 ? 'text-[#534AB7]' : 'text-red-400'}`}>
+              <p className={`text-[9px] font-semibold tabular-nums ${d.neto >= 0 ? 'text-[#534AB7]' : 'text-red-400'} ${blur}`}>
                 {fmt(d.neto)}
               </p>
               <p className={`text-[9px] ${d.current ? 'text-gray-700 font-semibold' : 'text-gray-400'}`}>
@@ -100,14 +104,14 @@ export default function PatrimonioChart({ data, currency }: Props) {
         <div className="mt-1.5 flex items-center justify-around text-[9px] bg-gray-50 rounded-lg py-1.5 px-3">
           <div className="text-center">
             <p className="text-gray-400">Aportes este mes</p>
-            <p className="font-bold tabular-nums" style={{ color: COLOR_APORTES }}>
+            <p className={`font-bold tabular-nums ${blur}`} style={{ color: COLOR_APORTES }}>
               {last.deltaAportes >= 0 ? '+' : ''}{fmt(last.deltaAportes)}
             </p>
           </div>
           <div className="w-px h-5 bg-gray-200" />
           <div className="text-center">
             <p className="text-gray-400">Revalorización</p>
-            <p className="font-bold tabular-nums" style={{ color: last.deltaReval >= 0 ? COLOR_REVAL_POS : COLOR_REVAL_NEG }}>
+            <p className={`font-bold tabular-nums ${blur}`} style={{ color: last.deltaReval >= 0 ? COLOR_REVAL_POS : COLOR_REVAL_NEG }}>
               {last.deltaReval >= 0 ? '+' : ''}{fmt(last.deltaReval)}
             </p>
           </div>

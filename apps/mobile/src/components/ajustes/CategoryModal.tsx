@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { X, Trash2 } from 'lucide-react'
 import { Category } from '@finanzas/core/types'
@@ -21,34 +21,6 @@ interface Props {
 }
 
 export default function CategoryModal({ open, category, onClose, onSave, onDelete, title }: Props) {
-  const [nombre, setNombre] = useState('')
-  const [color, setColor] = useState(PRESET_COLORS[0])
-  const [activa, setActiva] = useState(true)
-  const [deleteConfirm, setDeleteConfirm] = useState(false)
-
-  useEffect(() => {
-    if (!open) { setDeleteConfirm(false); return }
-    if (category) {
-      setNombre(category.nombre)
-      setColor(category.color)
-      setActiva(category.activa)
-    } else {
-      setNombre('')
-      setColor(PRESET_COLORS[0])
-      setActiva(true)
-    }
-  }, [open, category])
-
-  function handleSave() {
-    if (!nombre.trim()) return
-    onSave({
-      id: category?.id ?? nombre.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''),
-      nombre: nombre.trim(),
-      color,
-      activa,
-    })
-  }
-
   return (
     <Dialog.Root open={open} onOpenChange={(o) => { if (!o) onClose() }}>
       <Dialog.Portal>
@@ -73,7 +45,40 @@ export default function CategoryModal({ open, category, onClose, onSave, onDelet
             </button>
           </div>
 
-          <div className="px-5 pb-8 space-y-5">
+          {/* El form se remonta por key al abrir/cambiar de categoría: el
+              estado inicial se toma en useState, sin setState en un effect. */}
+          {open && (
+            <Form
+              key={category?.id ?? 'new'}
+              category={category}
+              onSave={onSave}
+              onDelete={onDelete}
+            />
+          )}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  )
+}
+
+function Form({ category, onSave, onDelete }: Pick<Props, 'category' | 'onSave' | 'onDelete'>) {
+  const [nombre, setNombre] = useState(category?.nombre ?? '')
+  const [color, setColor] = useState(category?.color ?? PRESET_COLORS[0])
+  const [activa, setActiva] = useState(category?.activa ?? true)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+
+  function handleSave() {
+    if (!nombre.trim()) return
+    onSave({
+      id: category?.id ?? nombre.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''),
+      nombre: nombre.trim(),
+      color,
+      activa,
+    })
+  }
+
+  return (
+    <div className="px-5 pb-8 space-y-5">
             {/* Nombre */}
             <div>
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Nombre</label>
@@ -153,14 +158,11 @@ export default function CategoryModal({ open, category, onClose, onSave, onDelet
                 {category ? 'Guardar cambios' : 'Crear categoría'}
               </button>
             </div>
-            {deleteConfirm && (
-              <p className="text-[11px] text-red-400 text-center -mt-2">
-                Tocá el ícono rojo de nuevo para confirmar
-              </p>
-            )}
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+      {deleteConfirm && (
+        <p className="text-[11px] text-red-400 text-center -mt-2">
+          Tocá el ícono rojo de nuevo para confirmar
+        </p>
+      )}
+    </div>
   )
 }

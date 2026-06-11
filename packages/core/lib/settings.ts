@@ -128,6 +128,8 @@ export async function updateSettings(_userId: string, partial: Partial<Settings>
   const merged  = { ...current, ...partial }
   // Re-leer el app_settings crudo justo antes de escribir, igual que saveBudgets,
   // para preservar claves que Settings no modela (p. ej. budgets).
+  // Riesgo residual: sin transacciones del lado del cliente, dos escrituras
+  // concurrentes sobre configuracion siguen siendo last-write-wins.
   const { data: row } = await supabase
     .from('configuracion')
     .select('app_settings')

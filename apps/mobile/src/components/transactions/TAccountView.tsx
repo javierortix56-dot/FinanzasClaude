@@ -22,7 +22,17 @@ interface TxRowProps {
 
 function TxRow({ tx, hideAmounts, settings, monedaBase, onEdit }: TxRowProps) {
   const { transactions } = useTransactionStore()
+  const showToast = useUIStore((s) => s.showToast)
   const cat = getCatFromSettings(tx.categoria, settings)
+
+  async function toggleEjecutado() {
+    try {
+      await markEjecutado(tx.id!, !tx.ejecutado)
+    } catch (err) {
+      console.error('[TxRow] markEjecutado error:', err)
+      showToast(err instanceof Error ? err.message : 'Error al actualizar el estado', 'error')
+    }
+  }
   const isIngreso = tx.tipo === 'ingreso'
   const dateStr = tx.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
   const dotColor = cat?.color ?? (isIngreso ? '#22c55e' : '#f87171')
@@ -71,7 +81,7 @@ function TxRow({ tx, hideAmounts, settings, monedaBase, onEdit }: TxRowProps) {
           </div>
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); markEjecutado(tx.id!, !tx.ejecutado) }}
+            onClick={(e) => { e.stopPropagation(); toggleEjecutado() }}
             className="p-1 -m-1 flex-shrink-0 inline-flex"
             title={tx.ejecutado ? 'Marcar pendiente' : 'Marcar ejecutado'}
           >

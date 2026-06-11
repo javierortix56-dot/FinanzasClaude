@@ -3,7 +3,7 @@
 import { ArrowUp, ArrowDown } from 'lucide-react'
 import { Transaction, Settings, Currency } from '@finanzas/core/types'
 import { toBase } from '@finanzas/core/lib/currency'
-import { formatAmount } from '@finanzas/core/lib/constants'
+import Amount from '@/components/ui/Amount'
 
 interface Props {
   current:  Transaction[]
@@ -39,7 +39,7 @@ function Metric({ label, value, prev, curr, currency = '', higherIsBetter = true
     <div className="bg-gray-50 rounded-xl px-3 py-2.5">
       <p className="text-[9px] text-gray-400 font-medium uppercase tracking-wide mb-1">{label}</p>
       <p className="text-sm font-bold text-gray-900 leading-tight tabular-nums">
-        {typeof value === 'string' ? value : formatAmount(value, currency)}
+        {typeof value === 'string' ? value : <Amount value={value} currency={currency} />}
       </p>
       <div className="flex items-center gap-0.5 mt-0.5 h-3">
         {diff !== 0 && (

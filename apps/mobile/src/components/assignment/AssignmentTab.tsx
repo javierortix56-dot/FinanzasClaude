@@ -164,7 +164,12 @@ export default function AssignmentTab() {
         if (tx.ahorroAssetId) {
           try {
             const txMonth = tx.fecha.toDate().toISOString().slice(0, 7)
-            await adjustAssetSaldo(tx.ahorroAssetId, -tx.monto, txMonth)
+            // Revertir en la moneda del activo, no en la de la transacción
+            const asset = assets.find((a) => a.id === tx.ahorroAssetId)
+            const monto = asset && asset.moneda !== tx.moneda
+              ? toBase(tx.monto, tx.moneda, asset.moneda, s)
+              : tx.monto
+            await adjustAssetSaldo(tx.ahorroAssetId, -monto, txMonth)
           } catch { /* non-blocking */ }
         }
         await deleteTransaction(tx.id!)
@@ -178,7 +183,8 @@ export default function AssignmentTab() {
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
       const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return next
     })
   }
@@ -186,7 +192,8 @@ export default function AssignmentTab() {
   function toggleGroup(key: string) {
     setExpandedGroups((prev) => {
       const next = new Set(prev)
-      next.has(key) ? next.delete(key) : next.add(key)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
       return next
     })
   }

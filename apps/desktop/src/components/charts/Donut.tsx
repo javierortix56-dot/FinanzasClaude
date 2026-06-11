@@ -11,7 +11,7 @@ interface Props {
   size?: number
   thickness?: number
   centerLabel?: string
-  centerValue?: string
+  centerValue?: React.ReactNode
 }
 
 export function Donut({ data, size = 200, thickness = 28, centerLabel, centerValue }: Props) {
@@ -26,6 +26,28 @@ export function Donut({ data, size = 200, thickness = 28, centerLabel, centerVal
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         <circle cx={cx} cy={cy} r={radius - thickness / 2} fill="none" stroke="var(--border)" strokeWidth={thickness} />
       </svg>
+    )
+  }
+
+  // Una porción del 100% genera un arco con inicio == fin (invisible):
+  // se dibuja como anillo completo en lugar de path.
+  const fullSlice = data.find((d) => d.value / total >= 0.9999)
+  if (fullSlice) {
+    return (
+      <div className="relative inline-block">
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+          <circle
+            cx={cx} cy={cy} r={radius - thickness / 2}
+            fill="none" stroke={fullSlice.color} strokeWidth={thickness}
+          />
+        </svg>
+        {(centerLabel || centerValue) && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            {centerLabel && <span className="text-xs text-muted">{centerLabel}</span>}
+            {centerValue && <span className="text-base font-semibold text-foreground">{centerValue}</span>}
+          </div>
+        )}
+      </div>
     )
   }
 

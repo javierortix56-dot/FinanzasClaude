@@ -1,5 +1,7 @@
 'use client'
 
+import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
+
 const W     = 320
 const H     = 120
 const PAD_L = 34
@@ -57,6 +59,7 @@ function areaFill(pts: [number, number][], bottom: number): string {
 const GRID_ROWS = 3
 
 export default function MultiLineChart({ months, series, currency = '' }: Props) {
+  const hideAmounts = useSettingsStore((s) => s.hideAmounts)
   if (!months.length || !series.length) return null
 
   const allVals = series.flatMap((s) => s.values)
@@ -105,6 +108,7 @@ export default function MultiLineChart({ months, series, currency = '' }: Props)
                 x={PAD_L - 3} y={y + 3}
                 textAnchor="end" fontSize="6.5" fill="#d1d5db"
                 fontFamily="system-ui"
+                className={hideAmounts ? 'blur-[2px] select-none' : ''}
               >
                 {fmt(v)}
               </text>

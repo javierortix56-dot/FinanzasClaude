@@ -115,6 +115,13 @@ export function getCurrentMonth(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
+/** Fecha de hoy 'YYYY-MM-DD' con getters LOCALES (toISOString usa UTC y
+ *  devuelve el día siguiente después de ~21:00 en ART). */
+export function getTodayLocal(): string {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
 export function monthLabel(month: string): string {
   const [year, mon] = month.split('-').map(Number)
   const d = new Date(year, mon - 1, 1)

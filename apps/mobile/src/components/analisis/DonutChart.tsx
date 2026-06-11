@@ -1,5 +1,7 @@
 'use client'
 
+import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
+
 const R    = 42
 const CX   = 60
 const CY   = 60
@@ -22,6 +24,7 @@ interface Props {
 }
 
 export default function DonutChart({ slices, total, centerLabel, centerSub, size = 150 }: Props) {
+  const hideAmounts = useSettingsStore((s) => s.hideAmounts)
   if (total === 0) {
     return (
       <div style={{ width: size, height: size }} className="flex items-center justify-center">
@@ -36,25 +39,24 @@ export default function DonutChart({ slices, total, centerLabel, centerSub, size
     )
   }
 
-  let accumulated = 0
-  const circles = slices.map((slice) => {
-    const portion = Math.max(0, (slice.amount / total) * CIRC - GAP)
-    const el = (
-      <circle
-        key={slice.id}
-        cx={CX} cy={CY} r={R}
-        fill="none"
-        stroke={slice.color}
-        strokeWidth={13}
-        strokeDasharray={`${portion} ${CIRC - portion}`}
-        strokeDashoffset={-accumulated}
-        opacity={slice.dimmed ? 0.15 : 1}
-        style={{ transition: 'opacity 0.2s' }}
-      />
-    )
-    accumulated += portion + GAP
-    return el
-  })
+  // Offsets precalculados sin mutar variables durante el render
+  const portions = slices.map((slice) => Math.max(0, (slice.amount / total) * CIRC - GAP))
+  const offsets  = portions.map((_, i) =>
+    portions.slice(0, i).reduce((acc, p) => acc + p + GAP, 0)
+  )
+  const circles = slices.map((slice, i) => (
+    <circle
+      key={slice.id}
+      cx={CX} cy={CY} r={R}
+      fill="none"
+      stroke={slice.color}
+      strokeWidth={13}
+      strokeDasharray={`${portions[i]} ${CIRC - portions[i]}`}
+      strokeDashoffset={-offsets[i]}
+      opacity={slice.dimmed ? 0.15 : 1}
+      style={{ transition: 'opacity 0.2s' }}
+    />
+  ))
 
   return (
     <svg
@@ -80,7 +82,7 @@ export default function DonutChart({ slices, total, centerLabel, centerSub, size
       >
         {centerSub}
       </text>
-      {/* Center: main amount */}
+      {/* Center: main amount (respeta modo incógnito) */}
       <text
         x={CX} y={CY + 8}
         textAnchor="middle"
@@ -88,6 +90,7 @@ export default function DonutChart({ slices, total, centerLabel, centerSub, size
         fontWeight="800"
         fill="#111827"
         fontFamily="system-ui"
+        className={hideAmounts ? 'blur-sm select-none' : ''}
       >
         {centerLabel}
       </text>

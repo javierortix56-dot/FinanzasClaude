@@ -6,7 +6,23 @@ import { X, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { Asset } from '@finanzas/core/types'
 import { upsertSnapshot } from '@finanzas/core/lib/assets'
 import { formatAmount, getCurrentMonth, monthLabel } from '@finanzas/core/lib/constants'
+import { parseAmount } from '@finanzas/core/lib/parse'
+import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { Button } from '@/components/ui/button'
+
+/** Saldo del mes inmediato anterior a `month` para el activo dado. */
+function calcSaldoPrev(asset: Asset, month: string): number {
+  const prev = (asset.snapshots ?? [])
+    .filter((s) => s.month < month)
+    .sort((a, b) => b.month.localeCompare(a.month))[0]
+  if (prev) return prev.saldo
+  // Si no hay snapshot anterior, el saldo previo es el saldo inicial sólo
+  // si fechaAlta es ANTERIOR al mes editado. Si es el mismo mes o posterior,
+  // no había nada → saldoPrev = 0.
+  const fa = asset.fechaAlta.toDate()
+  const fechaAltaMonth = `${fa.getFullYear()}-${String(fa.getMonth() + 1).padStart(2, '0')}`
+  return fechaAltaMonth < month ? asset.saldo : 0
+}
 
 interface Props {
   open: boolean
@@ -22,29 +38,18 @@ interface Props {
  * Con eso se calcula la revalorización: saldo - saldo_anterior - aporte.
  */
 export default function SnapshotModal({ open, onClose, asset }: Props) {
+  const showToast = useUIStore((st) => st.showToast)
   const [month, setMonth]   = useState(getCurrentMonth())
   const [aporte, setAporte] = useState('')
   const [saldo, setSaldo]   = useState('')
   const [saving, setSaving] = useState(false)
 
   // Saldo del mes inmediato anterior al seleccionado (para calcular reval.)
-  const saldoPrev = useMemo(() => {
-    if (!asset) return 0
-    const prev = (asset.snapshots ?? [])
-      .filter((s) => s.month < month)
-      .sort((a, b) => b.month.localeCompare(a.month))[0]
-    if (prev) return prev.saldo
-    // Si no hay snapshot anterior, el saldo previo es el saldo inicial sólo
-    // si fechaAlta es ANTERIOR al mes editado. Si es el mismo mes o posterior,
-    // no había nada → saldoPrev = 0.
-    const fechaAltaMonth = `${asset.fechaAlta.toDate().getFullYear()}-${String(
-      asset.fechaAlta.toDate().getMonth() + 1
-    ).padStart(2, '0')}`
-    return fechaAltaMonth < month ? asset.saldo : 0
-  }, [asset, month])
+  const saldoPrev = useMemo(() => (asset ? calcSaldoPrev(asset, month) : 0), [asset, month])
 
-  const aporteNum = parseFloat((aporte || '0').replace(',', '.')) || 0
-  const saldoNum  = parseFloat((saldo || '0').replace(',', '.')) || 0
+  // El aporte puede ser negativo (retiro); el saldo no.
+  const aporteNum = parseAmount(aporte || '0', { allowNegative: true }) ?? 0
+  const saldoNum  = parseAmount(saldo || '0') ?? 0
   const reval     = saldoNum - saldoPrev - aporteNum
 
   // Lista de meses disponibles: desde fechaAlta hasta mes actual
@@ -79,13 +84,18 @@ export default function SnapshotModal({ open, onClose, asset }: Props) {
     }
   }, [open, asset])
 
-  // Cuando cambia el mes, precarga snapshot existente si lo hay
+  // Cuando cambia el mes, precarga el snapshot existente; si el mes no tiene
+  // snapshot, limpia el aporte y propone el saldo previo correcto de ESE mes
+  // (no los valores que quedaron del mes anterior seleccionado).
   useEffect(() => {
     if (!asset) return
     const existing = asset.snapshots?.find((s) => s.month === month)
     if (existing) {
       setAporte(String(existing.aporte))
       setSaldo(String(existing.saldo))
+    } else {
+      setAporte('')
+      setSaldo(String(calcSaldoPrev(asset, month)))
     }
   }, [month, asset])
 
@@ -99,6 +109,9 @@ export default function SnapshotModal({ open, onClose, asset }: Props) {
         saldo: saldoNum,
       })
       onClose()
+    } catch (err) {
+      console.error('[SnapshotModal] save error:', err)
+      showToast(err instanceof Error ? err.message : 'Error al guardar el snapshot', 'error')
     } finally {
       setSaving(false)
     }

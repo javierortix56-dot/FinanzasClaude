@@ -11,6 +11,7 @@ import { toBase, toUSD } from '@finanzas/core/lib/currency'
 import { useBudgetStore } from '@finanzas/core/store/useBudgetStore'
 import DonutChart, { DonutSlice } from './DonutChart'
 import BudgetModal from './BudgetModal'
+import Amount from '@/components/ui/Amount'
 
 // High-contrast palette: colours spaced across the full hue wheel
 const PALETTE = [
@@ -151,12 +152,6 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
       ? groupSlice.nombre
       : (tipoTab === 'egreso' ? 'Total gastos' : 'Total ingresos')
 
-  function fmtShort(n: number) {
-    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-    if (n >= 1_000)     return `${(n / 1_000).toFixed(0)}k`
-    return n.toFixed(0)
-  }
-
   const breadcrumb = selectedGroup
     ? groups.find((g) => g.id === selectedGroup)?.nombre ?? ''
     : ''
@@ -232,7 +227,7 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
                     </span>
                     <span className="text-xs text-gray-400">{pct.toFixed(0)}%</span>
                     <span className="text-sm font-semibold text-gray-800 text-right">
-                      {formatAmount(amt, monedaBase)}
+                      <Amount value={amt} currency={monedaBase} />
                     </span>
                   </div>
                 )
@@ -260,42 +255,48 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
 
                 return (
                   <div key={slice.id}>
-                    <button
-                      className="w-full flex items-center gap-2 hover:bg-gray-50 rounded-lg px-1 py-1.5 transition-colors"
-                      onClick={() => {
-                        if (selectedGroup === null) setSelectedGroup(slice.id)
-                        else setSelectedSub(slice.id)
-                      }}
-                    >
-                      <div
-                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: slice.color }}
-                      />
-                      <span className="flex-1 text-xs font-medium text-gray-700 text-left truncate">
-                        {slice.nombre}
-                      </span>
-                      <span className="text-[10px] text-gray-400 tabular-nums w-7 text-right">
-                        {slice.percent.toFixed(0)}%
-                      </span>
-                      <span className="text-xs font-semibold text-gray-800 tabular-nums w-12 text-right">
-                        {fmtShort(slice.amount)}
-                      </span>
+                    {/* "Agregar presupuesto" es HERMANO del botón principal:
+                        un <button> no puede contener otro <button>. */}
+                    <div className="flex items-center gap-0.5">
+                      <button
+                        className="flex-1 min-w-0 flex items-center gap-2 hover:bg-gray-50 rounded-lg px-1 py-1.5 transition-colors"
+                        onClick={() => {
+                          if (selectedGroup === null) setSelectedGroup(slice.id)
+                          else setSelectedSub(slice.id)
+                        }}
+                      >
+                        <div
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: slice.color }}
+                        />
+                        <span className="flex-1 text-xs font-medium text-gray-700 text-left truncate">
+                          {slice.nombre}
+                        </span>
+                        <span className="text-[10px] text-gray-400 tabular-nums w-7 text-right">
+                          {slice.percent.toFixed(0)}%
+                        </span>
+                        <span className="text-xs font-semibold text-gray-800 tabular-nums w-12 text-right">
+                          <Amount value={slice.amount} compact />
+                        </span>
+                      </button>
                       {tipoTab === 'egreso' && !budget && (
                         <button
-                          className="text-gray-300 hover:text-[#534AB7] transition-colors ml-0.5"
-                          onClick={(e) => { e.stopPropagation(); setBudgetCat(slice.id) }}
+                          className="text-gray-300 hover:text-[#534AB7] transition-colors p-1 flex-shrink-0"
+                          onClick={() => setBudgetCat(slice.id)}
                           title="Agregar presupuesto"
                         >
                           <SlidersHorizontal size={11} />
                         </button>
                       )}
-                    </button>
+                    </div>
 
                     {/* Budget bar (only when budget exists) */}
                     {budget && (
                       <div className="ml-4 mb-0.5">
                         <div className="flex justify-between text-[9px] text-gray-400 mb-0.5">
-                          <span>{budget.moneda} {fmtShort(spentInBudgetMoneda)} / {fmtShort(budget.limite)}</span>
+                          <span>
+                            {budget.moneda} <Amount value={spentInBudgetMoneda} compact /> / <Amount value={budget.limite} compact />
+                          </span>
                           <span className={`font-semibold ${
                             budgetPct >= 100 ? 'text-red-400' : budgetPct >= 80 ? 'text-orange-400' : 'text-green-600'
                           }`}>{Math.round(budgetPct)}%</span>

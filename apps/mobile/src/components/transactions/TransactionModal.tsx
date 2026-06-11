@@ -9,10 +9,11 @@ import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useAssetStore } from '@finanzas/core/store/useAssetStore'
 import { addTransaction, updateTransaction, deleteTransaction, cloneTransactionToMonth, moveTransactionToMonth } from '@finanzas/core/lib/transactions'
-import { SHARED_USER_ID, SHARED_USERS, formatAmount, getParentGroup, getCatFromSettings, DEFAULT_GASTO_CATEGORY_GROUPS, DEFAULT_INGRESO_CATEGORY_GROUPS } from '@finanzas/core/lib/constants'
+import { SHARED_USER_ID, SHARED_USERS, formatAmount, getParentGroup, getCatFromSettings, getTodayLocal, DEFAULT_GASTO_CATEGORY_GROUPS, DEFAULT_INGRESO_CATEGORY_GROUPS } from '@finanzas/core/lib/constants'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { adjustAssetSaldo } from '@finanzas/core/lib/assets'
 import { toBase } from '@finanzas/core/lib/currency'
+import { parseAmount } from '@finanzas/core/lib/parse'
 import { Transaction, Currency, TransactionType, CategoryGroup } from '@finanzas/core/types'
 
 const CURRENCIES: Currency[] = ['ARS', 'COP', 'USD']
@@ -32,7 +33,7 @@ export default function TransactionModal() {
   const [selectedGroup, setSelectedGroup] = useState('')
   const [selectedSub, setSelectedSub] = useState('')
   const [descripcion, setDescripcion] = useState('')
-  const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
+  const [fecha, setFecha] = useState(getTodayLocal())
   const [creadoPor, setCreadoPor] = useState(SHARED_USERS[0].id)
   const [ejecutado, setEjecutado] = useState(false)
   const [asignadoA, setAsignadoA] = useState<string | null>(null)
@@ -74,7 +75,7 @@ export default function TransactionModal() {
     } else {
       setTipo('egreso'); setMonto(''); setMoneda('ARS')
       setSelectedGroup(''); setSelectedSub(''); setDescripcion('')
-      setFecha(new Date().toISOString().split('T')[0])
+      setFecha(getTodayLocal())
       setCreadoPor(SHARED_USERS[0].id); setEjecutado(false); setAsignadoA(null); setRecurrente(false); setAhorroAssetId('')
     }
   }, [isTransactionModalOpen, editingTransaction, settings])
@@ -109,7 +110,7 @@ export default function TransactionModal() {
   }, [transactions, selectedSub, selectedGroup, descripcion])
 
   const ingresoOptions = useMemo(() => {
-    const montoExp = parseFloat(monto.replace(',', '.')) || 0
+    const montoExp = parseAmount(monto) ?? 0
     const expBase = toBase(montoExp, moneda, base, s)
     return transactions
       .filter((t) => t.tipo === 'ingreso')
@@ -125,7 +126,7 @@ export default function TransactionModal() {
       })
   }, [transactions, monto, moneda, base, s, editingTransaction])
 
-  const parsedMonto  = parseFloat(monto.replace(',', '.'))
+  const parsedMonto  = parseAmount(monto) ?? NaN
   const montoValido  = Number.isFinite(parsedMonto) && parsedMonto > 0
   const montoInvalid = !!monto.trim() && !montoValido
   const canSave      = montoValido
@@ -243,6 +244,10 @@ export default function TransactionModal() {
       }
       await deleteTransaction(editingTransaction.id)
       closeTransactionModal()
+    } catch (err) {
+      console.error('[handleDelete] error:', err)
+      setSaveError(err instanceof Error ? err.message : 'Error al eliminar')
+      setDeleteConfirm(false)
     } finally {
       setSaving(false)
     }

@@ -5,6 +5,7 @@ import { Transaction, Settings, Currency } from '@finanzas/core/types'
 import { getCatFromSettings, formatAmount } from '@finanzas/core/lib/constants'
 import { toBase } from '@finanzas/core/lib/currency'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
+import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { markEjecutado } from '@finanzas/core/lib/transactions'
 
 interface Props {
@@ -35,7 +36,17 @@ export default function AssignmentGroup({
   monedaBase,
 }: Props) {
   const { hideAmounts } = useSettingsStore()
+  const showToast = useUIStore((s) => s.showToast)
   const isUnassigned = income === null
+
+  async function toggleEjecutado(exp: Transaction) {
+    try {
+      await markEjecutado(exp.id!, !exp.ejecutado)
+    } catch (err) {
+      console.error('[AssignmentGroup] markEjecutado error:', err)
+      showToast(err instanceof Error ? err.message : 'Error al actualizar el estado', 'error')
+    }
+  }
 
   const totalGastado = expenses.reduce(
     (sum, e) => sum + toBase(e.monto, e.moneda, monedaBase, settings),
@@ -201,7 +212,7 @@ export default function AssignmentGroup({
                     </p>
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); markEjecutado(exp.id!, !exp.ejecutado) }}
+                      onClick={(e) => { e.stopPropagation(); toggleEjecutado(exp) }}
                       className="p-1 -m-1 flex-shrink-0 inline-flex"
                       title={exp.ejecutado ? 'Marcar pendiente' : 'Marcar ejecutado'}
                     >

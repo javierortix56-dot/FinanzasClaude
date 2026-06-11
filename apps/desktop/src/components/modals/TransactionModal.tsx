@@ -9,7 +9,7 @@ import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { addTransaction, updateTransaction, deleteTransaction } from '@finanzas/core/lib/transactions'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { Currency, Transaction, TransactionType, CategoryGroup } from '@finanzas/core/types'
-import { SHARED_USERS } from '@finanzas/core/lib/constants'
+import { SHARED_USERS, getTodayLocal } from '@finanzas/core/lib/constants'
 import { Trash2 } from 'lucide-react'
 
 interface Props {
@@ -70,7 +70,7 @@ function Form({
   const [descripcion, setDescripcion] = useState(editing?.descripcion ?? '')
   const [nota, setNota]             = useState(editing?.nota ?? '')
   const [fecha, setFecha]           = useState(
-    editing ? editing.fecha.toDate().toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+    editing ? editing.fecha.toDate().toISOString().slice(0, 10) : getTodayLocal(),
   )
   const [creadoPor, setCreadoPor]   = useState(editing?.creadoPor || SHARED_USERS[0].id)
   const [ejecutado, setEjecutado]   = useState(editing?.ejecutado ?? false)
@@ -114,7 +114,7 @@ function Form({
       onClose()
     } catch (err) {
       console.error(err)
-      showToast('Error al guardar', 'error')
+      showToast(err instanceof Error ? err.message : 'Error al guardar', 'error')
     } finally {
       setSaving(false)
     }
@@ -128,8 +128,8 @@ function Form({
       await deleteTransaction(editing.id)
       showToast('Movimiento eliminado')
       onClose()
-    } catch {
-      showToast('Error al eliminar', 'error')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Error al eliminar', 'error')
     } finally {
       setSaving(false)
     }

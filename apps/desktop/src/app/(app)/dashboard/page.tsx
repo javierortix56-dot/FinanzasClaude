@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { MoneyText } from '@/components/MoneyText'
 import { Donut } from '@/components/charts/Donut'
 import { toBase } from '@finanzas/core/lib/currency'
-import { formatAmount, getCatFromSettings, monthLabel, shiftMonth } from '@finanzas/core/lib/constants'
+import { getCatFromSettings, monthLabel, shiftMonth } from '@finanzas/core/lib/constants'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { fetchLastNMonths } from '@finanzas/core/lib/analytics'
 import { Currency, Transaction, Settings } from '@finanzas/core/types'
@@ -114,7 +114,7 @@ function StatCard({
 export default function DashboardPage() {
   const { monedaBase } = useAuthStore()
   const { settings } = useSettingsStore()
-  const { transactions, currentMonth } = useTransactionStore()
+  const { transactions, currentMonth, isLoading } = useTransactionStore()
   const { assets } = useAssetStore()
 
   const s = (settings ?? DEFAULT_SETTINGS) as Settings
@@ -172,6 +172,19 @@ export default function DashboardPage() {
     .sort((a, b) => b.total - a.total)
     .slice(0, 6)
 
+  // Evitar mostrar datos viejos del mes anterior mientras carga el nuevo
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <p className="text-sm text-muted capitalize">{monthLabel(currentMonth)}</p>
+          <h2 className="text-2xl font-semibold tracking-tight text-foreground">Resumen del mes</h2>
+        </div>
+        <div className="flex items-center justify-center py-24 text-sm text-muted">Cargando movimientos…</div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
@@ -215,7 +228,7 @@ export default function DashboardPage() {
         <StatCard
           label="Tasa de ahorro" tone="primary" icon={PiggyBank}
           value={<span>{tasaAhorro.toFixed(0)}<span className="text-lg text-muted">%</span></span>}
-          sub={`${formatAmount(balance, base)} ahorrado de ${formatAmount(totalIngresos, base)}`}
+          sub={<><MoneyText amount={balance} currency={base} /> ahorrado de <MoneyText amount={totalIngresos} currency={base} /></>}
         />
       </div>
 
@@ -227,7 +240,7 @@ export default function DashboardPage() {
           value={<MoneyText amount={totalEgresos} currency={base} />} delta={dEgr} invert />
         <StatCard label="Patrimonio neto" icon={Wallet} tone="neutral"
           value={<MoneyText amount={patrimonioUSD} currency="USD" />}
-          sub={`Activos ${formatAmount(activos, 'USD')} · Pasivos ${formatAmount(pasivos, 'USD')}`} />
+          sub={<>Activos <MoneyText amount={activos} currency="USD" /> · Pasivos <MoneyText amount={pasivos} currency="USD" /></>} />
       </div>
 
       {/* Movements + categories */}
@@ -276,7 +289,7 @@ export default function DashboardPage() {
                     size={180} thickness={26}
                     data={categorias.map((c) => ({ label: c.nombre, value: c.total, color: c.color }))}
                     centerLabel="Egresos"
-                    centerValue={formatAmount(totalEgresos, base)}
+                    centerValue={<MoneyText amount={totalEgresos} currency={base} />}
                   />
                 </div>
                 <div className="space-y-2">

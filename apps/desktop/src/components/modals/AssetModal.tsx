@@ -9,6 +9,7 @@ import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { addAsset, updateAsset, deleteAsset } from '@finanzas/core/lib/assets'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
+import { getTodayLocal } from '@finanzas/core/lib/constants'
 import { Asset, Currency } from '@finanzas/core/types'
 
 const CURRENCIES: Currency[] = ['ARS', 'COP', 'USD']
@@ -44,7 +45,7 @@ function Form({ editing, onClose }: { editing: Asset | null; onClose: () => void
   const [moneda, setMoneda]       = useState<Currency>(editing?.moneda ?? 'ARS')
   const [saldo, setSaldo]         = useState(editing ? String(editing.saldo) : '')
   const [fechaAlta, setFechaAlta] = useState(
-    editing ? editing.fechaAlta.toDate().toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+    editing ? editing.fechaAlta.toDate().toISOString().slice(0, 10) : getTodayLocal(),
   )
   const [meta, setMeta]           = useState(editing?.metaObjetivo ? String(editing.metaObjetivo) : '')
   const [metaMoneda, setMetaMoneda] = useState<Currency>((editing?.metaMoneda as Currency) ?? 'USD')

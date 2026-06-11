@@ -7,7 +7,8 @@ import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { fetchMonthTransactions } from '@finanzas/core/lib/analytics'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
-import { shiftMonth, formatAmount } from '@finanzas/core/lib/constants'
+import { shiftMonth } from '@finanzas/core/lib/constants'
+import Amount from '@/components/ui/Amount'
 import { toBase } from '@finanzas/core/lib/currency'
 import { Transaction, Currency } from '@finanzas/core/types'
 
@@ -39,7 +40,7 @@ function ProjectionCard({ label, projected, previous, currency, higherIsBetter =
     <div className="bg-gray-50 rounded-2xl p-4">
       <p className="text-xs text-gray-400 font-medium mb-2">{label}</p>
       <p className="text-xl font-bold text-gray-900 mb-1">
-        {formatAmount(projected, currency)}
+        <Amount value={projected} currency={currency} />
       </p>
       <div className="flex items-center gap-1">
         <Icon size={13} className={color} />
@@ -48,7 +49,7 @@ function ProjectionCard({ label, projected, previous, currency, higherIsBetter =
         </span>
       </div>
       <p className="text-[10px] text-gray-400 mt-1">
-        Mes anterior: {formatAmount(previous, currency)}
+        Mes anterior: <Amount value={previous} currency={currency} />
       </p>
     </div>
   )
@@ -65,7 +66,11 @@ export default function PilotoTab() {
 
   const prevMonth = shiftMonth(currentMonth, -1)
   useEffect(() => {
-    fetchMonthTransactions(prevMonth).then(setPrevTxs)
+    // Flag de cancelación: si el usuario cambia de mes rápido, un fetch viejo
+    // en vuelo no debe pisar los datos del mes nuevo.
+    let cancelled = false
+    fetchMonthTransactions(prevMonth).then((txs) => { if (!cancelled) setPrevTxs(txs) })
+    return () => { cancelled = true }
   }, [prevMonth])
 
   // Progress of current month

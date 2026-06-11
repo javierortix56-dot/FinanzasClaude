@@ -26,23 +26,31 @@ export default function HistoricoTab() {
   const base = monedaBase as Currency
 
   const [prevTxs,    setPrevTxs]    = useState<Transaction[]>([])
-  const [monthlyData, setMonthlyData] = useState<Record<string, Transaction[]>>({})
-  const [loadingChart, setLoadingChart] = useState(true)
+  // Guardamos los datos del chart junto con el mes al que pertenecen:
+  // "cargando" se DERIVA de la comparación con currentMonth (sin setState
+  // síncrono en el effect) y un fetch viejo nunca pisa al mes actual.
+  const [chartData, setChartData] = useState<{ month: string; data: Record<string, Transaction[]> } | null>(null)
 
   const prevMonth = shiftMonth(currentMonth, -1)
 
-  // Fetch previous month for comparison
+  // Fetch previous month for comparison (con flag de cancelación)
   useEffect(() => {
-    fetchMonthTransactions(prevMonth).then(setPrevTxs)
+    let cancelled = false
+    fetchMonthTransactions(prevMonth).then((txs) => { if (!cancelled) setPrevTxs(txs) })
+    return () => { cancelled = true }
   }, [prevMonth])
 
-  // Fetch last 6 months for line chart
+  // Fetch last 6 months for line chart (con flag de cancelación)
   useEffect(() => {
-    setLoadingChart(true)
-    fetchLastNMonths(6, currentMonth)
-      .then(setMonthlyData)
-      .finally(() => setLoadingChart(false))
+    let cancelled = false
+    fetchLastNMonths(6, currentMonth).then((data) => {
+      if (!cancelled) setChartData({ month: currentMonth, data })
+    })
+    return () => { cancelled = true }
   }, [currentMonth])
+
+  const loadingChart = chartData?.month !== currentMonth
+  const monthlyData  = loadingChart ? {} : chartData!.data
 
   // Subscribe to budgets for current month
   useEffect(() => {

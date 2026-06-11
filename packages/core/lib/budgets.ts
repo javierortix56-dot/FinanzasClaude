@@ -16,6 +16,11 @@ async function loadBudgets(mes: string): Promise<Budget[]> {
 }
 
 async function saveBudgets(all: Budget[]) {
+  // Se re-lee app_settings justo antes de escribir para preservar las claves
+  // ajenas (tipoCambio, ahorroLinks, etc.), igual que updateSettings.
+  // Riesgo residual: Supabase no ofrece transacciones desde el cliente, así
+  // que dos escrituras concurrentes (p. ej. dos dispositivos guardando a la
+  // vez) siguen siendo last-write-wins sobre la fila de configuracion.
   const { data: current } = await supabase
     .from('configuracion')
     .select('app_settings')

@@ -1,5 +1,15 @@
 import { supabase, SHARED_UUID } from './supabase'
+import { useSettingsStore } from '../store/useSettingsStore'
+import { monthLabel } from './constants'
 import { Transaction } from '../types'
+
+/** Meses cerrados son de solo lectura: toda mutación sobre ellos se rechaza. */
+function assertMonthOpen(month: string) {
+  const closed = useSettingsStore.getState().settings?.mesesCerrados ?? []
+  if (closed.includes(month)) {
+    throw new Error(`${monthLabel(month)} está cerrado (solo lectura). Reabrilo desde Ajustes para editarlo.`)
+  }
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function rowToTx(row: Record<string, any>): Transaction {
@@ -97,6 +107,7 @@ export function subscribeToTransactions(
 }
 
 export async function addTransaction(data: Omit<Transaction, 'id'>): Promise<string> {
+  assertMonthOpen(txToRow(data).date.slice(0, 7))
   const { data: row, error } = await supabase
     .from('movimientos')
     .insert(txToRow(data))
@@ -125,9 +136,13 @@ export async function updateTransaction(id: string, data: Partial<Omit<Transacti
   if (data.recurrente !== undefined) childrenFields.recurrente = data.recurrente
   if (data.ahorroAssetId !== undefined) childrenFields.ahorroAssetId = data.ahorroAssetId
 
+  const { data: current, error: curErr } = await supabase
+    .from('movimientos').select('date, children').eq('id', id).single()
+  if (curErr) throw curErr
+  assertMonthOpen((current.date as string).slice(0, 7))
+  if (partial.date !== undefined) assertMonthOpen((partial.date as string).slice(0, 7))
+
   if (Object.keys(childrenFields).length > 0) {
-    const { data: current } = await supabase
-      .from('movimientos').select('children').eq('id', id).single()
     partial.children = { ...(current?.children ?? {}), ...childrenFields }
   }
 
@@ -136,6 +151,10 @@ export async function updateTransaction(id: string, data: Partial<Omit<Transacti
 }
 
 export async function deleteTransaction(id: string) {
+  const { data: row, error: curErr } = await supabase
+    .from('movimientos').select('date').eq('id', id).single()
+  if (curErr) throw curErr
+  assertMonthOpen((row.date as string).slice(0, 7))
   // Soft delete to match existing data pattern
   const { error } = await supabase
     .from('movimientos')
@@ -145,11 +164,16 @@ export async function deleteTransaction(id: string) {
 }
 
 export async function markEjecutado(id: string, ejecutado: boolean) {
+  const { data: row, error: curErr } = await supabase
+    .from('movimientos').select('date').eq('id', id).single()
+  if (curErr) throw curErr
+  assertMonthOpen((row.date as string).slice(0, 7))
   const { error } = await supabase.from('movimientos').update({ executed: ejecutado }).eq('id', id)
   if (error) throw error
 }
 
 export async function deleteMonthTransactions(month: string): Promise<number> {
+  assertMonthOpen(month)
   const [year, mon] = month.split('-').map(Number)
   const start = `${year}-${String(mon).padStart(2, '0')}-01`
   const lastDay = new Date(year, mon, 0).getDate()
@@ -195,7 +219,23 @@ export async function countMonthTransactions(month: string): Promise<number> {
   return count ?? 0
 }
 
+/**
+ * Cuenta movimientos activos cuya categoría sea alguna de las dadas.
+ * Útil para bloquear el borrado de categorías en uso.
+ */
+export async function countTransactionsByCategories(categoryIds: string[]): Promise<number> {
+  if (categoryIds.length === 0) return 0
+  const { count, error } = await supabase
+    .from('movimientos')
+    .select('id', { count: 'exact', head: true })
+    .is('deleted_at', null)
+    .in('category', categoryIds)
+  if (error) throw error
+  return count ?? 0
+}
+
 export async function cloneMonthTransactions(fromMonth: string, toMonth: string): Promise<number> {
+  assertMonthOpen(toMonth)
   const [fy, fm] = fromMonth.split('-').map(Number)
   const [ty, tm] = toMonth.split('-').map(Number)
   const startF = `${fy}-${String(fm).padStart(2, '0')}-01`
@@ -225,6 +265,7 @@ export async function cloneMonthTransactions(fromMonth: string, toMonth: string)
 }
 
 export async function createRecurringTransactions(toMonth: string): Promise<number> {
+  assertMonthOpen(toMonth)
   const [ty, tm] = toMonth.split('-').map(Number)
   const prevDate = new Date(ty, tm - 2, 1)
   const fy = prevDate.getFullYear()
@@ -257,6 +298,7 @@ export async function createRecurringTransactions(toMonth: string): Promise<numb
 }
 
 export async function cloneTransactionToMonth(txId: string, toMonth: string): Promise<string> {
+  assertMonthOpen(toMonth)
   const { data: row, error } = await supabase.from('movimientos').select('*').eq('id', txId).single()
   if (error) throw error
   const [ty, tm] = toMonth.split('-').map(Number)
@@ -270,8 +312,10 @@ export async function cloneTransactionToMonth(txId: string, toMonth: string): Pr
 }
 
 export async function moveTransactionToMonth(txId: string, toMonth: string): Promise<void> {
+  assertMonthOpen(toMonth)
   const { data: row, error } = await supabase.from('movimientos').select('date').eq('id', txId).single()
   if (error) throw error
+  assertMonthOpen((row.date as string).slice(0, 7))
   const [ty, tm] = toMonth.split('-').map(Number)
   const origDate = new Date((row.date as string) + 'T12:00:00')
   const day = Math.min(origDate.getDate(), new Date(ty, tm, 0).getDate())

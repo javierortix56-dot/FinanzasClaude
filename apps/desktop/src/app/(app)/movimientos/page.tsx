@@ -19,7 +19,7 @@ import { Transaction, TransactionType } from '@finanzas/core/types'
 type Filter = 'todos' | 'ingreso' | 'egreso' | 'pendientes'
 
 export default function MovimientosPage() {
-  const { transactions } = useTransactionStore()
+  const { transactions, isLoading } = useTransactionStore()
   const settings = useSettingsStore((s) => s.settings) ?? DEFAULT_SETTINGS
   const showToast = useUIStore((s) => s.showToast)
 
@@ -77,8 +77,8 @@ export default function MovimientosPage() {
     try {
       await markEjecutado(t.id, !t.ejecutado)
       showToast(t.ejecutado ? 'Marcado como pendiente' : 'Marcado como ejecutado')
-    } catch {
-      showToast('Error', 'error')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Error', 'error')
     }
   }
 
@@ -88,8 +88,8 @@ export default function MovimientosPage() {
     try {
       await deleteTransaction(t.id)
       showToast('Movimiento eliminado')
-    } catch {
-      showToast('Error al eliminar', 'error')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Error al eliminar', 'error')
     }
   }
 
@@ -176,7 +176,13 @@ export default function MovimientosPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-14 text-center text-muted text-sm">
+                    Cargando movimientos…
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-6 py-14 text-center text-muted text-sm">
                     No hay movimientos que coincidan con los filtros.
