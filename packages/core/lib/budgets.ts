@@ -1,41 +1,22 @@
 import { supabase, SHARED_UUID } from './supabase'
-import { Settings, Budget } from '../types'
+import { Budget } from '../types'
 
-/** Budgets are stored in configuracion.app_settings.budgets as an array */
+/**
+ * Presupuestos por categoría y mes, en su propia tabla `presupuestos`.
+ * (Antes vivían en configuracion.app_settings.budgets, donde cualquier
+ * guardado de ajustes los pisaba por la escritura read-merge-write.)
+ */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function loadBudgets(mes: string): Promise<Budget[]> {
-  const { data } = await supabase
-    .from('configuracion')
-    .select('app_settings')
-    .eq('user_id', SHARED_UUID)
-    .maybeSingle()
-
-  const budgets: Budget[] = data?.app_settings?.budgets ?? []
-  return budgets.filter((b) => b.mes === mes)
-}
-
-async function saveBudgets(all: Budget[]) {
-  const { data: current } = await supabase
-    .from('configuracion')
-    .select('app_settings')
-    .eq('user_id', SHARED_UUID)
-    .maybeSingle()
-
-  const appSettings = { ...(current?.app_settings ?? {}), budgets: all }
-
-  await supabase
-    .from('configuracion')
-    .upsert({ user_id: SHARED_UUID, app_settings: appSettings }, { onConflict: 'user_id' })
-}
-
-async function getAllBudgets(): Promise<Budget[]> {
-  const { data } = await supabase
-    .from('configuracion')
-    .select('app_settings')
-    .eq('user_id', SHARED_UUID)
-    .maybeSingle()
-  return data?.app_settings?.budgets ?? []
+function rowToBudget(row: Record<string, any>): Budget {
+  return {
+    id: row.id as string,
+    userId: 'shared',
+    categoria: row.categoria as string,
+    mes: row.mes as string,
+    limite: Number(row.limite) || 0,
+    moneda: row.moneda as string,
+  }
 }
 
 export function subscribeToBudgets(
@@ -45,16 +26,26 @@ export function subscribeToBudgets(
   let active = true
 
   async function fetchAndNotify() {
-    const budgets = await loadBudgets(mes)
+    const { data, error } = await supabase
+      .from('presupuestos')
+      .select('*')
+      .eq('mes', mes)
+
     if (!active) return
-    callback(budgets)
+
+    if (error) {
+      console.error('[budgets] fetch error:', error)
+      callback([])
+      return
+    }
+    callback((data ?? []).map(rowToBudget))
   }
 
   fetchAndNotify()
 
   const channel = supabase
-    .channel(`budgets-${mes}-${crypto.randomUUID()}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'configuracion' }, fetchAndNotify)
+    .channel(`presupuestos-${mes}-${crypto.randomUUID()}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'presupuestos' }, fetchAndNotify)
     .subscribe()
 
   return () => { active = false; supabase.removeChannel(channel) }
@@ -67,28 +58,26 @@ export async function upsertBudget(
   moneda: string,
   existingId?: string
 ) {
-  const all = await getAllBudgets()
-
   if (existingId) {
-    const idx = all.findIndex((b) => b.id === existingId)
-    if (idx !== -1) {
-      all[idx] = { ...all[idx], categoria, mes, limite, moneda }
-    }
-  } else {
-    all.push({
-      id: crypto.randomUUID(),
-      userId: 'shared',
-      categoria,
-      mes,
-      limite,
-      moneda,
-    })
+    const { error } = await supabase
+      .from('presupuestos')
+      .update({ categoria, mes, limite, moneda })
+      .eq('id', existingId)
+    if (error) throw error
+    return
   }
-
-  await saveBudgets(all)
+  // La tabla tiene unique(categoria, mes): un upsert evita duplicados si
+  // ambos usuarios crean el mismo presupuesto a la vez.
+  const { error } = await supabase
+    .from('presupuestos')
+    .upsert(
+      { user_id: SHARED_UUID, categoria, mes, limite, moneda },
+      { onConflict: 'categoria,mes' }
+    )
+  if (error) throw error
 }
 
 export async function deleteBudget(id: string) {
-  const all = await getAllBudgets()
-  await saveBudgets(all.filter((b) => b.id !== id))
+  const { error } = await supabase.from('presupuestos').delete().eq('id', id)
+  if (error) throw error
 }

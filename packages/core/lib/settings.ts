@@ -3,6 +3,7 @@ import { Settings, CategoryGroup, Category } from '../types'
 import { DEFAULT_GASTO_CATEGORY_GROUPS, DEFAULT_INGRESO_CATEGORY_GROUPS } from './constants'
 
 export const DEFAULT_SETTINGS: Settings = {
+  monedaBase: 'ARS',
   tipoCambio: {
     ARS_USD: 1200,
     COP_USD: 4100,
@@ -46,7 +47,12 @@ function rowToSettings(row: Record<string, any>): Settings {
       ? { ARS_USD: latestRate.ARS_USD, COP_USD: latestRate.COP_USD }
       : DEFAULT_SETTINGS.tipoCambio
 
+  const monedaBase = ['ARS', 'COP', 'USD'].includes(appSettings.monedaBase)
+    ? appSettings.monedaBase
+    : 'ARS'
+
   return {
+    monedaBase,
     tipoCambio,
     historialTipoCambio: Array.isArray(row.monthly_rates)  ? row.monthly_rates : [],
     categoriasGasto:     migrateToGroups(row.transaction_cats, DEFAULT_GASTO_CATEGORY_GROUPS),
@@ -61,7 +67,11 @@ function rowToSettings(row: Record<string, any>): Settings {
 function settingsToRow(settings: Settings) {
   return {
     user_id:         SHARED_UUID,
-    app_settings:    { tipoCambio: settings.tipoCambio, ahorroLinks: settings.ahorroLinks ?? [] },
+    app_settings:    {
+      tipoCambio: settings.tipoCambio,
+      ahorroLinks: settings.ahorroLinks ?? [],
+      monedaBase: settings.monedaBase ?? 'ARS',
+    },
     monthly_rates:   settings.historialTipoCambio,
     transaction_cats: settings.categoriasGasto,
     categories:      settings.categoriasIngreso,

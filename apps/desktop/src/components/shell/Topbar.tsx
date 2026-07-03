@@ -1,8 +1,10 @@
 'use client'
 
-import { ChevronLeft, ChevronRight, Eye, EyeOff, Menu } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Eye, EyeOff, LogOut, Menu } from 'lucide-react'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
+import { useAuthStore } from '@finanzas/core/store/useAuthStore'
+import { signOut } from '@finanzas/core/lib/auth'
 import { monthLabel, getCurrentMonth } from '@finanzas/core/lib/constants'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
@@ -21,6 +23,7 @@ const titles: Record<string, string> = {
 export function Topbar() {
   const { currentMonth, prevMonth, nextMonth } = useTransactionStore()
   const { hideAmounts, toggleHideAmounts } = useSettingsStore()
+  const user = useAuthStore((s) => s.user)
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
 
@@ -71,6 +74,16 @@ export function Topbar() {
           title={hideAmounts ? 'Mostrar montos' : 'Ocultar montos'}
         >
           {hideAmounts ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </Button>
+
+        <Button
+          variant="secondary"
+          size="icon"
+          onClick={() => signOut()}
+          aria-label="Cerrar sesión"
+          title={user?.email ? `Cerrar sesión (${user.email})` : 'Cerrar sesión'}
+        >
+          <LogOut className="h-4 w-4" />
         </Button>
       </div>
 

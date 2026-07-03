@@ -6,7 +6,7 @@ import { X, Trash2 } from 'lucide-react'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { addAsset, updateAsset, deleteAsset } from '@finanzas/core/lib/assets'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
-import { SHARED_USER_ID } from '@finanzas/core/lib/constants'
+import { SHARED_USER_ID, toLocalDateString } from '@finanzas/core/lib/constants'
 import { Asset, Currency } from '@finanzas/core/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -31,7 +31,7 @@ export default function AssetModal({ open, onClose, editing }: Props) {
   const [tipo,         setTipo]         = useState(ACTIVO_TIPOS[0] as string)
   const [moneda,       setMoneda]       = useState<Currency>('ARS')
   const [saldo,        setSaldo]        = useState('')
-  const [fechaAlta,    setFechaAlta]    = useState(new Date().toISOString().split('T')[0])
+  const [fechaAlta,    setFechaAlta]    = useState(toLocalDateString())
   const [metaObjVal,   setMetaObjVal]   = useState('')
   const [metaMoneda,   setMetaMoneda]   = useState<Currency>('USD')
   const [saving,       setSaving]       = useState(false)
@@ -47,7 +47,7 @@ export default function AssetModal({ open, onClose, editing }: Props) {
       setTipo(editing.tipo)
       setMoneda(editing.moneda)
       setSaldo(String(editing.saldo))
-      setFechaAlta(editing.fechaAlta.toDate().toISOString().split('T')[0])
+      setFechaAlta(toLocalDateString(editing.fechaAlta.toDate()))
       setMetaObjVal(editing.metaObjetivo != null ? String(editing.metaObjetivo) : '')
       setMetaMoneda((editing.metaMoneda as Currency) ?? 'USD')
     } else {
@@ -56,7 +56,7 @@ export default function AssetModal({ open, onClose, editing }: Props) {
       setTipo(ACTIVO_TIPOS[0])
       setMoneda('ARS')
       setSaldo('')
-      setFechaAlta(new Date().toISOString().split('T')[0])
+      setFechaAlta(toLocalDateString())
       setMetaObjVal('')
       setMetaMoneda('USD')
     }

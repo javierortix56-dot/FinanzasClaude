@@ -13,6 +13,13 @@ export interface User {
   monedaBase: Currency
 }
 
+/** Usuario de la sesión de Supabase Auth */
+export interface SessionUser {
+  id: string
+  email: string
+  nombre: string
+}
+
 export interface Transaction {
   id?: string
   userId: string
@@ -82,6 +89,8 @@ export interface AhorroLink {
 }
 
 export interface Settings {
+  /** Moneda en la que se muestran los totales de la app */
+  monedaBase?: Currency
   tipoCambio: {
     ARS_USD: number
     COP_USD: number

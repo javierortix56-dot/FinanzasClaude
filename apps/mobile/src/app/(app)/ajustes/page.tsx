@@ -3,11 +3,13 @@
 import { useState, useRef } from 'react'
 import {
   ChevronRight, Plus, Pencil, ChevronDown, ChevronUp,
-  Copy, RotateCcw, Lock, Trash2, Check, Download, Upload, ChevronLeft,
+  Copy, RotateCcw, Lock, Trash2, Check, Download, Upload, ChevronLeft, LogOut,
 } from 'lucide-react'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useAssetStore } from '@finanzas/core/store/useAssetStore'
+import { useAuthStore } from '@finanzas/core/store/useAuthStore'
+import { signOut } from '@finanzas/core/lib/auth'
 import { updateSettings } from '@finanzas/core/lib/settings'
 import {
   deleteMonthTransactions,
@@ -18,11 +20,11 @@ import {
 import { exportBackup, downloadBackup, importBackup, parseBackupFile } from '@finanzas/core/lib/backup'
 import { monthLabel, SHARED_USER_ID } from '@finanzas/core/lib/constants'
 import dynamic from 'next/dynamic'
-import { Category, CategoryGroup, AhorroLink } from '@finanzas/core/types'
+import { Category, CategoryGroup, AhorroLink, Currency } from '@finanzas/core/types'
 
 const CategoryModal = dynamic(() => import('@/components/ajustes/CategoryModal'), { ssr: false })
 
-type Section = 'cambio' | 'categorias' | 'categorias_ing' | 'tipos' | 'ahorro_links' | 'mes' | 'datos' | null
+type Section = 'cuenta' | 'cambio' | 'categorias' | 'categorias_ing' | 'tipos' | 'ahorro_links' | 'mes' | 'datos' | null
 
 // ── Modal state types ─────────────────────────────────────────────────────────
 type GroupModalState = {
@@ -41,7 +43,12 @@ export default function AjustesPage() {
   const { settings, setSettings } = useSettingsStore()
   const { currentMonth } = useTransactionStore()
   const { assets } = useAssetStore()
+  const { user, monedaBase, setMonedaBase } = useAuthStore()
   const [openSection, setOpenSection] = useState<Section>(null)
+
+  // Cuenta / sesión
+  const [signingOut, setSigningOut] = useState(false)
+  const [savingMoneda, setSavingMoneda] = useState(false)
 
   // Tipos de cambio
   const [arsRate, setArsRate] = useState(String(settings?.tipoCambio.ARS_USD ?? 1200))
@@ -300,6 +307,34 @@ export default function AjustesPage() {
 
   const isClosed = s?.mesesCerrados?.includes(currentMonth)
 
+  // ── Cuenta / sesión ──────────────────────────────────────────────────────────
+  async function handleSignOut() {
+    setSigningOut(true)
+    try {
+      await signOut()
+      // AuthProvider desmonta la app y muestra el login al detectar el cambio
+    } catch (err) {
+      console.error('[ajustes] signOut error:', err)
+      setSigningOut(false)
+    }
+  }
+
+  async function handleMonedaBase(m: Currency) {
+    if (m === monedaBase || savingMoneda) return
+    setSavingMoneda(true)
+    const prev = monedaBase
+    setMonedaBase(m)  // la UI cambia al instante
+    try {
+      await updateSettings(SHARED_USER_ID, { monedaBase: m })
+      setSettings({ ...s, monedaBase: m })
+    } catch (err) {
+      console.error('[ajustes] monedaBase error:', err)
+      setMonedaBase(prev)
+    } finally {
+      setSavingMoneda(false)
+    }
+  }
+
   // ── Export/Import ────────────────────────────────────────────────────────────
   async function handleExport() {
     setBackupAction('exportando')
@@ -319,7 +354,7 @@ export default function AjustesPage() {
     try {
       const data   = await parseBackupFile(file)
       const result = await importBackup(SHARED_USER_ID, data)
-      setBackupResult(`Importados: ${result.transactions} movimientos, ${result.assets} activos.`)
+      setBackupResult(`Importados: ${result.transactions} movimientos, ${result.assets} activos, ${result.budgets} presupuestos.`)
     } catch (err) {
       setBackupResult('Error: ' + String(err))
     } finally {
@@ -427,12 +462,63 @@ export default function AjustesPage() {
       {/* Header */}
       <div className="bg-white px-4 pt-10 pb-4 shadow-sm">
         <h1 className="text-gray-800 font-bold text-xl">Ajustes</h1>
-        <p className="text-gray-400 text-xs mt-0.5">Javier &amp; Mary</p>
+        <p className="text-gray-400 text-xs mt-0.5">{user?.email ?? 'Javier & Mary'}</p>
       </div>
 
       {/* Card */}
       <div className="flex-1 bg-white overflow-y-auto">
         <div className="px-4 pt-4 pb-24 space-y-1">
+
+          {/* ── Cuenta ── */}
+          <Section
+            label="Cuenta"
+            open={openSection === 'cuenta'}
+            onToggle={() => toggle('cuenta')}
+          >
+            <div className="space-y-4 pt-2">
+              <div className="flex items-center gap-3 px-3 py-2.5 bg-gray-50 rounded-xl border border-gray-100">
+                <div className="w-8 h-8 rounded-full bg-[#534AB7] flex items-center justify-center flex-shrink-0">
+                  <span className="text-white font-bold text-[10px]">
+                    {(user?.nombre || user?.email || '?').charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  {user?.nombre && <p className="text-sm font-semibold text-gray-800 leading-tight">{user.nombre}</p>}
+                  <p className="text-xs text-gray-400 truncate">{user?.email}</p>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Moneda base</p>
+                <div className="flex gap-1.5">
+                  {(['ARS', 'COP', 'USD'] as Currency[]).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => handleMonedaBase(m)}
+                      disabled={savingMoneda}
+                      className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-colors ${
+                        monedaBase === m
+                          ? 'bg-[#534AB7] text-white border-[#534AB7]'
+                          : 'bg-white text-gray-500 border-gray-200'
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1.5">Los totales de la app se muestran en esta moneda</p>
+              </div>
+
+              <button
+                onClick={handleSignOut}
+                disabled={signingOut}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-red-200 bg-red-50 text-red-500 text-sm font-semibold disabled:opacity-50"
+              >
+                <LogOut size={14} />
+                {signingOut ? 'Cerrando sesión...' : 'Cerrar sesión'}
+              </button>
+            </div>
+          </Section>
 
           {/* ── Tipos de cambio ── */}
           <Section

@@ -115,6 +115,15 @@ export function getCurrentMonth(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
+/**
+ * Fecha en formato 'YYYY-MM-DD' usando la zona horaria LOCAL.
+ * No usar new Date().toISOString() para esto: toISOString() es UTC, y en
+ * Argentina (UTC-3) después de las 21:00 devuelve la fecha de mañana.
+ */
+export function toLocalDateString(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export function monthLabel(month: string): string {
   const [year, mon] = month.split('-').map(Number)
   const d = new Date(year, mon - 1, 1)

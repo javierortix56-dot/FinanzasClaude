@@ -1,23 +1,37 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
+import { initAuth } from '@finanzas/core/lib/auth'
 import { getOrInitSettings, subscribeToSettings } from '@finanzas/core/lib/settings'
-import { Currency } from '@finanzas/core/types'
+import { Settings } from '@finanzas/core/types'
+import LoginScreen from '@/components/auth/LoginScreen'
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { setMonedaBase } = useAuthStore()
+  const { user, authReady, setMonedaBase } = useAuthStore()
   const { setSettings } = useSettingsStore()
-  const settingsUnsubRef = useRef<(() => void) | null>(null)
 
+  // Sesión de Supabase Auth → store (resuelve también la sesión inicial)
+  useEffect(() => initAuth(), [])
+
+  // Settings solo se cargan con sesión activa (RLS bloquea el acceso anónimo)
   useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    let unsub: (() => void) | null = null
+
+    const apply = (s: Settings) => {
+      setSettings(s)
+      setMonedaBase(s.monedaBase ?? 'ARS')
+    }
+
     async function init() {
       try {
         const settings = await getOrInitSettings('shared')
-        setMonedaBase(((settings as unknown as Record<string, unknown>).monedaBase ?? 'ARS') as Currency)
-        settingsUnsubRef.current = subscribeToSettings('shared', setSettings)
-        setSettings(settings)
+        if (cancelled) return
+        apply(settings)
+        unsub = subscribeToSettings('shared', apply)
       } catch (err) {
         console.error('[AuthProvider] settings load failed:', err)
       }
@@ -26,12 +40,22 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     init()
 
     return () => {
-      settingsUnsubRef.current?.()
+      cancelled = true
+      unsub?.()
     }
-  }, [setMonedaBase, setSettings])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, setSettings, setMonedaBase])
 
-  // El shell se renderiza de inmediato, sin bloquear con un spinner a pantalla
-  // completa. El store de settings arranca con defaults válidos, así que las
-  // pantallas pintan al instante y se actualizan cuando llegan los datos reales.
+  // Splash mínimo mientras se resuelve la sesión persistida (evita flash de login)
+  if (!authReady) {
+    return (
+      <div className="flex items-center justify-center min-h-[100dvh] bg-gray-50">
+        <div className="w-7 h-7 border-2 border-[#534AB7] border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (!user) return <LoginScreen />
+
   return <>{children}</>
 }
