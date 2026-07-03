@@ -17,7 +17,7 @@ import LoginScreen from '@/components/auth/LoginScreen'
 export default function DataProvider({ children }: { children: React.ReactNode }) {
   const { user, authReady, setMonedaBase } = useAuthStore()
   const { setSettings } = useSettingsStore()
-  const { setTransactions } = useTransactionStore()
+  const { setMonthTransactions } = useTransactionStore()
   const { setAssets } = useAssetStore()
   const { setBudgets } = useBudgetStore()
   const currentMonth = useTransactionStore((s) => s.currentMonth)
@@ -63,7 +63,7 @@ export default function DataProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (!user) return
     txUnsub.current?.()
-    txUnsub.current = subscribeToTransactions(currentMonth, setTransactions)
+    txUnsub.current = subscribeToTransactions(currentMonth, (txs) => setMonthTransactions(currentMonth, txs))
     budgetsUnsub.current?.()
     budgetsUnsub.current = subscribeToBudgets(currentMonth, setBudgets)
     return () => {
@@ -71,7 +71,7 @@ export default function DataProvider({ children }: { children: React.ReactNode }
       budgetsUnsub.current?.()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, currentMonth, setTransactions, setBudgets])
+  }, [user?.id, currentMonth, setMonthTransactions, setBudgets])
 
   if (!authReady) {
     return (

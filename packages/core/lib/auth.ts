@@ -1,6 +1,8 @@
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import { useAuthStore } from '../store/useAuthStore'
+import { clearTransactionCache } from '../store/useTransactionStore'
+import { clearSettingsCache } from '../store/useSettingsStore'
 import { SessionUser } from '../types'
 
 function sessionToUser(session: Session | null): SessionUser | null {
@@ -44,5 +46,8 @@ export async function signIn(email: string, password: string): Promise<string | 
 }
 
 export async function signOut(): Promise<void> {
+  // Borrar los datos financieros persistidos en el dispositivo
+  clearTransactionCache()
+  clearSettingsCache()
   await supabase.auth.signOut()
 }

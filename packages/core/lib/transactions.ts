@@ -1,4 +1,5 @@
 import { supabase, SHARED_UUID } from './supabase'
+import { useTransactionStore } from '../store/useTransactionStore'
 import { Transaction } from '../types'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -79,8 +80,9 @@ export function subscribeToTransactions(
     if (!active) return
 
     if (error) {
+      // No pisar el caché local con una lista vacía por un error transitorio
+      // (p. ej. PWA sin conexión): se mantiene lo último conocido.
       console.error('[transactions] fetch error:', error)
-      callback([])
       return
     }
     callback((data ?? []).map(rowToTx))
@@ -104,7 +106,10 @@ export async function addTransaction(data: Omit<Transaction, 'id'>): Promise<str
     .single()
 
   if (error) throw error
-  return row.id as string
+  const id = row.id as string
+  // Optimista: reflejar el alta al instante; el realtime reconcilia después.
+  useTransactionStore.getState().upsertTransaction({ ...data, id })
+  return id
 }
 
 export async function updateTransaction(id: string, data: Partial<Omit<Transaction, 'id'>>) {
@@ -133,9 +138,14 @@ export async function updateTransaction(id: string, data: Partial<Omit<Transacti
 
   const { error } = await supabase.from('movimientos').update(partial).eq('id', id)
   if (error) throw error
+  // Optimista: mergear los cambios en el store (re-ubica de mes si cambió la fecha)
+  useTransactionStore.getState().patchTransaction(id, data)
 }
 
 export async function deleteTransaction(id: string) {
+  // Optimista: sacar del store antes del roundtrip; si falla, el realtime
+  // (o el catch del caller) lo repone al reconciliar.
+  useTransactionStore.getState().removeTransaction(id)
   // Soft delete to match existing data pattern
   const { error } = await supabase
     .from('movimientos')
@@ -145,6 +155,8 @@ export async function deleteTransaction(id: string) {
 }
 
 export async function markEjecutado(id: string, ejecutado: boolean) {
+  // Optimista: el check cambia al instante
+  useTransactionStore.getState().patchTransaction(id, { ejecutado })
   const { error } = await supabase.from('movimientos').update({ executed: ejecutado }).eq('id', id)
   if (error) throw error
 }
@@ -171,6 +183,7 @@ export async function deleteMonthTransactions(month: string): Promise<number> {
     .in('id', data.map((r) => r.id))
 
   if (delErr) throw delErr
+  useTransactionStore.getState().setMonthTransactions(month, [])
   return data.length
 }
 
@@ -266,7 +279,11 @@ export async function cloneTransactionToMonth(txId: string, toMonth: string): Pr
   const insert = { ...txToRow({ ...rowToTx(row), ejecutado: false }), date: newDate }
   const { data: inserted, error: insErr } = await supabase.from('movimientos').insert(insert).select('id').single()
   if (insErr) throw insErr
-  return inserted.id as string
+  const newId = inserted.id as string
+  useTransactionStore.getState().upsertTransaction(
+    rowToTx({ ...insert, id: newId, date: newDate })
+  )
+  return newId
 }
 
 export async function moveTransactionToMonth(txId: string, toMonth: string): Promise<void> {
@@ -278,4 +295,8 @@ export async function moveTransactionToMonth(txId: string, toMonth: string): Pro
   const newDate = `${ty}-${String(tm).padStart(2, '0')}-${String(day).padStart(2, '0')}`
   const { error: updErr } = await supabase.from('movimientos').update({ date: newDate }).eq('id', txId)
   if (updErr) throw updErr
+  // Optimista: re-ubicar el movimiento en su nuevo mes (desaparece del actual)
+  useTransactionStore.getState().patchTransaction(txId, {
+    fecha: { toDate: () => new Date(newDate + 'T12:00:00') },
+  })
 }

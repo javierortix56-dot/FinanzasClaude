@@ -6,7 +6,6 @@ import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
-import { useAssetStore } from '@finanzas/core/store/useAssetStore'
 import { updateTransaction, deleteTransaction } from '@finanzas/core/lib/transactions'
 import { adjustAssetSaldo } from '@finanzas/core/lib/assets'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
@@ -21,7 +20,6 @@ export default function AssignmentTab() {
   const { settings } = useSettingsStore()
   const { monedaBase } = useAuthStore()
   const { openEditModal } = useUIStore()
-  const { assets } = useAssetStore()
   const s = settings ?? DEFAULT_SETTINGS
   const base = monedaBase as Currency
 
@@ -178,7 +176,8 @@ export default function AssignmentTab() {
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
       const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return next
     })
   }
@@ -186,7 +185,8 @@ export default function AssignmentTab() {
   function toggleGroup(key: string) {
     setExpandedGroups((prev) => {
       const next = new Set(prev)
-      next.has(key) ? next.delete(key) : next.add(key)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
       return next
     })
   }

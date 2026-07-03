@@ -22,14 +22,14 @@ const NAV_ITEMS = [
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { openAddModal } = useUIStore()
   const pathname = usePathname()
-  const { currentMonth, setTransactions } = useTransactionStore()
+  const { currentMonth, setMonthTransactions } = useTransactionStore()
   const { setAssets } = useAssetStore()
 
   // Global subscriptions — available on all pages
   useEffect(() => {
-    const unsub = subscribeToTransactions(currentMonth, setTransactions)
+    const unsub = subscribeToTransactions(currentMonth, (txs) => setMonthTransactions(currentMonth, txs))
     return () => unsub()
-  }, [currentMonth, setTransactions])
+  }, [currentMonth, setMonthTransactions])
 
   useEffect(() => {
     const unsub = subscribeToAssets(setAssets)

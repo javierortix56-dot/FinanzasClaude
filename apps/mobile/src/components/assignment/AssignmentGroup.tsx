@@ -30,7 +30,6 @@ export default function AssignmentGroup({
   onDesassign,
   isExpanded,
   onToggleExpand,
-  userNames,
   settings,
   monedaBase,
 }: Props) {

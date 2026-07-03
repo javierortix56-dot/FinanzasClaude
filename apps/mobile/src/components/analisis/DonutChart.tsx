@@ -36,25 +36,25 @@ export default function DonutChart({ slices, total, centerLabel, centerSub, size
     )
   }
 
-  let accumulated = 0
-  const circles = slices.map((slice) => {
-    const portion = Math.max(0, (slice.amount / total) * CIRC - GAP)
-    const el = (
-      <circle
-        key={slice.id}
-        cx={CX} cy={CY} r={R}
-        fill="none"
-        stroke={slice.color}
-        strokeWidth={13}
-        strokeDasharray={`${portion} ${CIRC - portion}`}
-        strokeDashoffset={-accumulated}
-        opacity={slice.dimmed ? 0.15 : 1}
-        style={{ transition: 'opacity 0.2s' }}
-      />
-    )
-    accumulated += portion + GAP
-    return el
-  })
+  // Offsets precalculados sin mutar variables durante el render
+  const portions = slices.map((slice) => Math.max(0, (slice.amount / total) * CIRC - GAP))
+  const offsets = portions.reduce<number[]>(
+    (acc, portion, i) => (i === 0 ? [0] : [...acc, acc[i - 1] + portions[i - 1] + GAP]),
+    []
+  )
+  const circles = slices.map((slice, i) => (
+    <circle
+      key={slice.id}
+      cx={CX} cy={CY} r={R}
+      fill="none"
+      stroke={slice.color}
+      strokeWidth={13}
+      strokeDasharray={`${portions[i]} ${CIRC - portions[i]}`}
+      strokeDashoffset={-offsets[i]}
+      opacity={slice.dimmed ? 0.15 : 1}
+      style={{ transition: 'opacity 0.2s' }}
+    />
+  ))
 
   return (
     <svg

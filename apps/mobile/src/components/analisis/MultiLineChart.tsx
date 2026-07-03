@@ -56,7 +56,7 @@ function areaFill(pts: [number, number][], bottom: number): string {
 
 const GRID_ROWS = 3
 
-export default function MultiLineChart({ months, series, currency = '' }: Props) {
+export default function MultiLineChart({ months, series }: Props) {
   if (!months.length || !series.length) return null
 
   const allVals = series.flatMap((s) => s.values)

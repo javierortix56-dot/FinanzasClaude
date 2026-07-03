@@ -7,7 +7,6 @@ import { useBudgetStore } from '@finanzas/core/store/useBudgetStore'
 import { upsertBudget, deleteBudget } from '@finanzas/core/lib/budgets'
 import { getCategoryById } from '@finanzas/core/lib/constants'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 
 interface Props {
   open: boolean

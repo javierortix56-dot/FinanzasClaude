@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { X, Trash2 } from 'lucide-react'
 import { Category } from '@finanzas/core/types'
@@ -21,23 +21,35 @@ interface Props {
 }
 
 export default function CategoryModal({ open, category, onClose, onSave, onDelete, title }: Props) {
-  const [nombre, setNombre] = useState('')
-  const [color, setColor] = useState(PRESET_COLORS[0])
-  const [activa, setActiva] = useState(true)
-  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  return (
+    <Dialog.Root open={open} onOpenChange={(o) => { if (!o) onClose() }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 bg-black/50 z-50 backdrop-blur-[2px]" />
+        <Dialog.Content
+          className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-white rounded-t-3xl z-50 shadow-2xl outline-none"
+          aria-describedby={undefined}
+        >
+          {/* El contenido se monta al abrir: el estado se inicializa desde
+              props sin necesidad de sincronizarlo con un effect. */}
+          <ModalBody
+            key={category?.id ?? 'new'}
+            category={category}
+            onClose={onClose}
+            onSave={onSave}
+            onDelete={onDelete}
+            title={title}
+          />
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  )
+}
 
-  useEffect(() => {
-    if (!open) { setDeleteConfirm(false); return }
-    if (category) {
-      setNombre(category.nombre)
-      setColor(category.color)
-      setActiva(category.activa)
-    } else {
-      setNombre('')
-      setColor(PRESET_COLORS[0])
-      setActiva(true)
-    }
-  }, [open, category])
+function ModalBody({ category, onClose, onSave, onDelete, title }: Omit<Props, 'open'>) {
+  const [nombre, setNombre] = useState(category?.nombre ?? '')
+  const [color, setColor] = useState(category?.color ?? PRESET_COLORS[0])
+  const [activa, setActiva] = useState(category?.activa ?? true)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
 
   function handleSave() {
     if (!nombre.trim()) return
@@ -50,13 +62,7 @@ export default function CategoryModal({ open, category, onClose, onSave, onDelet
   }
 
   return (
-    <Dialog.Root open={open} onOpenChange={(o) => { if (!o) onClose() }}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/50 z-50 backdrop-blur-[2px]" />
-        <Dialog.Content
-          className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-white rounded-t-3xl z-50 shadow-2xl outline-none"
-          aria-describedby={undefined}
-        >
+    <>
           <div className="flex justify-center pt-3 pb-2">
             <div className="w-9 h-1 bg-gray-200 rounded-full" />
           </div>
@@ -159,8 +165,6 @@ export default function CategoryModal({ open, category, onClose, onSave, onDelet
               </p>
             )}
           </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    </>
   )
 }

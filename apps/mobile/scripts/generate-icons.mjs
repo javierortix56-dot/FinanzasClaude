@@ -127,9 +127,7 @@ function drawIcon(size, padding = 0) {
   // White bar chart (3 bars)
   const inner = size - p * 2
   const barW = Math.round(inner * 0.14)
-  const thick = Math.max(1, Math.round(size * 0.005))
   const baseY = Math.round(p + inner * 0.78)
-  const topY  = Math.round(p + inner * 0.20)
 
   // Bar positions (x center relative to icon)
   const bars = [
@@ -166,7 +164,6 @@ function drawIcon(size, padding = 0) {
 
   // Arrow head at last point
   const last = pts[pts.length - 1]
-  const arrowSize = Math.round(size * 0.06)
   c.circle(last.x, last.y, Math.floor(lw / 2) + 1, 255, 255, 255)
 
   return buildPNG(c.buf, size, size)
