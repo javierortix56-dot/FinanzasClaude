@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { memo, useMemo } from 'react'
 import { CheckCircle2, TrendingUp, TrendingDown } from 'lucide-react'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
@@ -17,19 +17,19 @@ interface TxRowProps {
   hideAmounts: boolean
   settings: Settings | null
   monedaBase: Currency
+  /** Etiqueta del ingreso al que está asignado el egreso (resuelta en el padre) */
+  linkedLabel: string | null
   onEdit: (tx: Transaction) => void
 }
 
-function TxRow({ tx, hideAmounts, settings, monedaBase, onEdit }: TxRowProps) {
-  const { transactions } = useTransactionStore()
+// memo + linkedLabel resuelto en el padre: cada fila ya no se suscribe al
+// store completo ni re-renderiza cuando cambia cualquier otro movimiento.
+const TxRow = memo(function TxRow({ tx, hideAmounts, settings, monedaBase, linkedLabel, onEdit }: TxRowProps) {
   const cat = getCatFromSettings(tx.categoria, settings)
   const isIngreso = tx.tipo === 'ingreso'
   const dateStr = tx.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
   const dotColor = cat?.color ?? (isIngreso ? '#22c55e' : '#f87171')
   const montoBase = toBase(tx.monto, tx.moneda, monedaBase, settings ?? DEFAULT_SETTINGS)
-  const linkedIngreso = tx.tipo === 'egreso' && tx.asignadoA
-    ? transactions.find((t) => t.id === tx.asignadoA)
-    : null
 
   return (
     <div
@@ -40,31 +40,31 @@ function TxRow({ tx, hideAmounts, settings, monedaBase, onEdit }: TxRowProps) {
       className={`w-full min-w-0 text-left px-2.5 py-2 border-b border-gray-50 hover:bg-gray-50 active:bg-gray-100 transition-colors overflow-hidden cursor-pointer ${tx.ejecutado ? 'opacity-50' : ''}`}
     >
       <div className="flex items-center justify-between gap-1 min-w-0">
-        <p className={`text-[11px] font-medium text-gray-900 truncate leading-tight flex-1 min-w-0 ${tx.ejecutado ? 'line-through' : ''}`}>
+        <p className={`text-xs font-medium text-gray-900 truncate leading-tight flex-1 min-w-0 ${tx.ejecutado ? 'line-through' : ''}`}>
           {tx.descripcion || cat?.nombre || '-'}
         </p>
         {tx.tipo === 'egreso' && (
-          linkedIngreso
-            ? <span className="text-[9px] font-semibold text-[#534AB7] shrink-0 truncate max-w-[45%]">{linkedIngreso.descripcion?.trim() || getCatFromSettings(linkedIngreso.categoria, settings)?.nombre || linkedIngreso.categoria}</span>
-            : <span className="text-[9px] font-semibold text-amber-400 shrink-0">Sin asignar</span>
+          linkedLabel
+            ? <span className="text-[10px] font-semibold text-primary shrink-0 truncate max-w-[45%]">{linkedLabel}</span>
+            : <span className="text-[10px] font-semibold text-amber-400 shrink-0">Sin asignar</span>
         )}
       </div>
       <div className="flex items-center justify-between mt-0.5 gap-1 min-w-0">
         <div className="flex items-center gap-1 min-w-0 shrink">
           <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: dotColor }} />
-          <span className="text-[10px] text-gray-400 truncate">{dateStr}</span>
+          <span className="text-[11px] text-gray-400 truncate">{dateStr}</span>
         </div>
         <div className="flex items-center gap-1 shrink-0 max-w-[55%]">
           <div className="flex flex-col items-end min-w-0">
             <span
-              className={`text-[11px] font-semibold tabular-nums truncate ${
+              className={`text-xs font-semibold tabular-nums truncate ${
                 isIngreso ? 'text-green-600' : 'text-red-400'
               } ${hideAmounts ? 'blur-sm' : ''} ${tx.ejecutado ? 'line-through' : ''}`}
             >
               {formatAmount(montoBase, monedaBase)}
             </span>
             {tx.moneda !== monedaBase && (
-              <span className={`text-[9px] text-gray-400 tabular-nums truncate leading-tight ${hideAmounts ? 'blur-sm' : ''} ${tx.ejecutado ? 'line-through' : ''}`}>
+              <span className={`text-[10px] text-gray-400 tabular-nums truncate leading-tight ${hideAmounts ? 'blur-sm' : ''} ${tx.ejecutado ? 'line-through' : ''}`}>
                 {formatAmount(tx.monto, tx.moneda)}
               </span>
             )}
@@ -84,6 +84,22 @@ function TxRow({ tx, hideAmounts, settings, monedaBase, onEdit }: TxRowProps) {
       </div>
     </div>
   )
+})
+
+function SkeletonRows() {
+  return (
+    <div className="px-2.5 py-2 space-y-3 animate-pulse">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="space-y-1.5">
+          <div className="h-2.5 bg-gray-100 rounded w-3/4" />
+          <div className="flex justify-between">
+            <div className="h-2 bg-gray-100 rounded w-1/4" />
+            <div className="h-2 bg-gray-100 rounded w-1/3" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function EmptyState({ tipo }: { tipo: 'ingreso' | 'egreso' }) {
@@ -101,7 +117,7 @@ function EmptyState({ tipo }: { tipo: 'ingreso' | 'egreso' }) {
       <p className="text-xs font-medium text-gray-400">
         Sin {isIngreso ? 'ingresos' : 'egresos'}
       </p>
-      <p className="text-[10px] text-gray-300 mt-0.5">Tocá + para agregar</p>
+      <p className="text-[11px] text-gray-300 mt-0.5">Tocá + para agregar</p>
     </div>
   )
 }
@@ -149,23 +165,32 @@ export default function TAccountView({ search = '' }: Props) {
     [egresos, base, s],
   )
 
+  // Etiqueta del ingreso asignado por id, resuelta una sola vez por render
+  const linkedLabels = useMemo(() => {
+    const byId = new Map(transactions.map((t) => [t.id, t]))
+    const labels = new Map<string, string>()
+    for (const t of transactions) {
+      if (t.tipo !== 'egreso' || !t.asignadoA) continue
+      const ing = byId.get(t.asignadoA)
+      if (!ing) continue
+      labels.set(
+        t.id!,
+        ing.descripcion?.trim() || getCatFromSettings(ing.categoria, settings)?.nombre || ing.categoria,
+      )
+    }
+    return labels
+  }, [transactions, settings])
+
   const pctGastado = totalIngresos > 0 ? Math.min((totalEgresos / totalIngresos) * 100, 100) : 0
   const pctColor = pctGastado >= 90 ? 'bg-red-400' : pctGastado >= 70 ? 'bg-amber-400' : 'bg-green-500'
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-14">
-        <div className="w-6 h-6 border-2 border-[#534AB7] border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
 
   return (
     <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* ── Columna Ingresos ── */}
       <div className="flex-1 min-w-0 min-h-0 flex flex-col border-r-2 border-gray-200 overflow-hidden">
         <div className="px-3 py-2.5 bg-green-50 border-b border-green-100 flex-shrink-0">
-          <p className="text-[10px] font-bold text-green-700 uppercase tracking-wider">
+          <p className="text-[11px] font-bold text-green-700 uppercase tracking-wider">
             Ingresos <span className="font-normal opacity-60">({ingresos.length})</span>
           </p>
           <p className={`text-sm font-bold text-green-700 tabular-nums mt-0.5 ${hideAmounts ? 'blur-sm' : ''}`}>
@@ -173,11 +198,13 @@ export default function TAccountView({ search = '' }: Props) {
           </p>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto">
-          {ingresos.length === 0
-            ? <EmptyState tipo="ingreso" />
-            : ingresos.map((tx) => (
-                <TxRow key={tx.id} tx={tx} hideAmounts={hideAmounts} settings={settings} monedaBase={base} onEdit={openEditModal} />
-              ))
+          {isLoading
+            ? <SkeletonRows />
+            : ingresos.length === 0
+              ? <EmptyState tipo="ingreso" />
+              : ingresos.map((tx) => (
+                  <TxRow key={tx.id} tx={tx} hideAmounts={hideAmounts} settings={settings} monedaBase={base} linkedLabel={null} onEdit={openEditModal} />
+                ))
           }
         </div>
       </div>
@@ -185,7 +212,7 @@ export default function TAccountView({ search = '' }: Props) {
       {/* ── Columna Egresos ── */}
       <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
         <div className="px-3 py-2.5 bg-red-50 border-b border-red-100 flex-shrink-0">
-          <p className="text-[10px] font-bold text-red-400 uppercase tracking-wider">
+          <p className="text-[11px] font-bold text-red-400 uppercase tracking-wider">
             Egresos <span className="font-normal opacity-60">({egresos.length})</span>
           </p>
           <p className={`text-sm font-bold text-red-400 tabular-nums mt-0.5 ${hideAmounts ? 'blur-sm' : ''}`}>
@@ -200,18 +227,20 @@ export default function TAccountView({ search = '' }: Props) {
                   style={{ width: `${pctGastado}%` }}
                 />
               </div>
-              <p className={`text-[9px] text-red-400 mt-0.5 ${hideAmounts ? 'blur-sm' : ''}`}>
+              <p className={`text-[10px] text-red-400 mt-0.5 ${hideAmounts ? 'blur-sm' : ''}`}>
                 {Math.round(pctGastado)}% del ingreso
               </p>
             </div>
           )}
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto">
-          {egresos.length === 0
-            ? <EmptyState tipo="egreso" />
-            : egresos.map((tx) => (
-                <TxRow key={tx.id} tx={tx} hideAmounts={hideAmounts} settings={settings} monedaBase={base} onEdit={openEditModal} />
-              ))
+          {isLoading
+            ? <SkeletonRows />
+            : egresos.length === 0
+              ? <EmptyState tipo="egreso" />
+              : egresos.map((tx) => (
+                  <TxRow key={tx.id} tx={tx} hideAmounts={hideAmounts} settings={settings} monedaBase={base} linkedLabel={linkedLabels.get(tx.id!) ?? null} onEdit={openEditModal} />
+                ))
           }
         </div>
       </div>

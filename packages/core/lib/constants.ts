@@ -83,18 +83,35 @@ export function getCategoryById(id: string): Category | undefined {
   return ALL_DEFAULT_CATEGORIES.find((c) => c.id === id)
 }
 
+// Índice id → categoría memoizado por objeto settings: getCatFromSettings se
+// llama por fila en cada render, y el scan lineal de grupos se notaba.
+const catIndexCache = new WeakMap<object, Map<string, Category>>()
+const DEFAULT_INDEX_KEY = {}
+
+function getCatIndex(settings: Settings | null): Map<string, Category> {
+  const key: object = settings ?? DEFAULT_INDEX_KEY
+  let index = catIndexCache.get(key)
+  if (!index) {
+    index = new Map()
+    const allGroups = [
+      ...(settings?.categoriasGasto   ?? DEFAULT_GASTO_CATEGORY_GROUPS),
+      ...(settings?.categoriasIngreso ?? DEFAULT_INGRESO_CATEGORY_GROUPS),
+    ]
+    // Mismo orden de precedencia que el scan original: grupo, luego sus subs
+    for (const g of allGroups) {
+      if (!index.has(g.id)) index.set(g.id, { id: g.id, nombre: g.nombre, color: g.color, activa: g.activa })
+      for (const sub of g.subcategorias) {
+        if (!index.has(sub.id)) index.set(sub.id, sub)
+      }
+    }
+    catIndexCache.set(key, index)
+  }
+  return index
+}
+
 /** Busca en settings (incluye custom) con fallback a defaults. */
 export function getCatFromSettings(id: string, settings: Settings | null): Category | undefined {
-  const allGroups = [
-    ...(settings?.categoriasGasto   ?? DEFAULT_GASTO_CATEGORY_GROUPS),
-    ...(settings?.categoriasIngreso ?? DEFAULT_INGRESO_CATEGORY_GROUPS),
-  ]
-  for (const g of allGroups) {
-    if (g.id === id) return { id: g.id, nombre: g.nombre, color: g.color, activa: g.activa }
-    const sub = g.subcategorias.find((s) => s.id === id)
-    if (sub) return sub
-  }
-  return getCategoryById(id)
+  return getCatIndex(settings).get(id) ?? getCategoryById(id)
 }
 
 /** Dado un ID de subcategoría, retorna el grupo padre (buscando en settings). */
@@ -113,6 +130,15 @@ export function formatAmount(monto: number, moneda: string): string {
 export function getCurrentMonth(): string {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
+/**
+ * Fecha en formato 'YYYY-MM-DD' usando la zona horaria LOCAL.
+ * No usar new Date().toISOString() para esto: toISOString() es UTC, y en
+ * Argentina (UTC-3) después de las 21:00 devuelve la fecha de mañana.
+ */
+export function toLocalDateString(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 export function monthLabel(month: string): string {

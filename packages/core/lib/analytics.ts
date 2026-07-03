@@ -27,7 +27,18 @@ function rowToTx(row: Record<string, unknown>): Transaction {
   }
 }
 
+// ── Caché en memoria con TTL corto ────────────────────────────────────────────
+// Evita refetchear los mismos meses históricos cada vez que se entra a
+// Análisis o se navega de mes. Los meses pasados casi no cambian; el mes
+// actual siempre viene en vivo del store, no de acá.
+const TTL_MS = 2 * 60 * 1000
+const monthCache = new Map<string, { at: number; data: Transaction[] }>()
+const lastNCache = new Map<string, { at: number; data: Record<string, Transaction[]> }>()
+
 export async function fetchMonthTransactions(month: string): Promise<Transaction[]> {
+  const hit = monthCache.get(month)
+  if (hit && Date.now() - hit.at < TTL_MS) return hit.data
+
   const [year, mon] = month.split('-').map(Number)
   const start = `${year}-${String(mon).padStart(2, '0')}-01`
   const lastDay = new Date(year, mon, 0).getDate()
@@ -46,7 +57,9 @@ export async function fetchMonthTransactions(month: string): Promise<Transaction
     return []
   }
 
-  return (data ?? []).map(rowToTx)
+  const txs = (data ?? []).map(rowToTx)
+  monthCache.set(month, { at: Date.now(), data: txs })
+  return txs
 }
 
 /** Returns a map month → transactions for the last `n` months up to `upToMonth`. */
@@ -54,6 +67,10 @@ export async function fetchLastNMonths(
   n: number,
   upToMonth: string
 ): Promise<Record<string, Transaction[]>> {
+  const cacheKey = `${n}:${upToMonth}`
+  const hit = lastNCache.get(cacheKey)
+  if (hit && Date.now() - hit.at < TTL_MS) return hit.data
+
   const months: string[] = []
   for (let i = n - 1; i >= 0; i--) months.push(shiftMonth(upToMonth, -i))
 
@@ -87,5 +104,6 @@ export async function fetchLastNMonths(
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
     if (grouped[key]) grouped[key].push(tx)
   })
+  lastNCache.set(cacheKey, { at: Date.now(), data: grouped })
   return grouped
 }

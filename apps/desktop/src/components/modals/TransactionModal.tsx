@@ -9,7 +9,7 @@ import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { addTransaction, updateTransaction, deleteTransaction } from '@finanzas/core/lib/transactions'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { Currency, Transaction, TransactionType, CategoryGroup } from '@finanzas/core/types'
-import { SHARED_USERS } from '@finanzas/core/lib/constants'
+import { SHARED_USERS, toLocalDateString } from '@finanzas/core/lib/constants'
 import { Trash2 } from 'lucide-react'
 
 interface Props {
@@ -70,7 +70,7 @@ function Form({
   const [descripcion, setDescripcion] = useState(editing?.descripcion ?? '')
   const [nota, setNota]             = useState(editing?.nota ?? '')
   const [fecha, setFecha]           = useState(
-    editing ? editing.fecha.toDate().toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+    editing ? toLocalDateString(editing.fecha.toDate()) : toLocalDateString(),
   )
   const [creadoPor, setCreadoPor]   = useState(editing?.creadoPor || SHARED_USERS[0].id)
   const [ejecutado, setEjecutado]   = useState(editing?.ejecutado ?? false)

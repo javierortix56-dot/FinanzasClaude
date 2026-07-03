@@ -27,21 +27,29 @@ export default function HistoricoTab() {
 
   const [prevTxs,    setPrevTxs]    = useState<Transaction[]>([])
   const [monthlyData, setMonthlyData] = useState<Record<string, Transaction[]>>({})
-  const [loadingChart, setLoadingChart] = useState(true)
+  // Derivado en vez de setState síncrono en el effect: cargando = todavía no
+  // llegaron los datos del mes que se está mostrando.
+  const [loadedMonth, setLoadedMonth] = useState<string | null>(null)
+  const loadingChart = loadedMonth !== currentMonth
 
   const prevMonth = shiftMonth(currentMonth, -1)
 
   // Fetch previous month for comparison
   useEffect(() => {
-    fetchMonthTransactions(prevMonth).then(setPrevTxs)
+    let cancelled = false
+    fetchMonthTransactions(prevMonth).then((txs) => { if (!cancelled) setPrevTxs(txs) })
+    return () => { cancelled = true }
   }, [prevMonth])
 
-  // Fetch last 6 months for line chart
+  // Fetch last 6 months for line chart (cacheado en analytics)
   useEffect(() => {
-    setLoadingChart(true)
-    fetchLastNMonths(6, currentMonth)
-      .then(setMonthlyData)
-      .finally(() => setLoadingChart(false))
+    let cancelled = false
+    fetchLastNMonths(6, currentMonth).then((data) => {
+      if (cancelled) return
+      setMonthlyData(data)
+      setLoadedMonth(currentMonth)
+    })
+    return () => { cancelled = true }
   }, [currentMonth])
 
   // Subscribe to budgets for current month
@@ -83,7 +91,7 @@ export default function HistoricoTab() {
     <div className="h-full overflow-y-auto pb-8">
       {/* Section 1: Comparison */}
       <div className="border-b border-gray-50">
-        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-4 pt-3 pb-0.5">
+        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-4 pt-3 pb-0.5">
           Resumen — vs {monthLabel(prevMonth)}
         </p>
         <SummaryComparison
@@ -96,7 +104,7 @@ export default function HistoricoTab() {
 
       {/* Section 2: Donut by category */}
       <div className="border-b border-gray-50">
-        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-4 pt-3 pb-0">
+        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-4 pt-3 pb-0">
           Por categoría
         </p>
         <CategoryDonut
@@ -109,12 +117,12 @@ export default function HistoricoTab() {
 
       {/* Section 3: Line chart */}
       <div className="pb-2">
-        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-4 pt-3 pb-1">
+        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-4 pt-3 pb-1">
           Evolución 6 meses
         </p>
         {loadingChart ? (
           <div className="flex justify-center py-6">
-            <div className="w-5 h-5 border-2 border-[#534AB7] border-t-transparent rounded-full animate-spin" />
+            <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
         ) : (
           <MultiLineChart months={chartMonths} series={lineSeries} currency={base} />

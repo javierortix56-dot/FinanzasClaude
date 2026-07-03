@@ -126,31 +126,31 @@ export default function PatrimonioPage() {
     <div className="flex flex-col h-full bg-gray-50">
 
       {/* ── Header ── */}
-      <div className="bg-white px-4 pt-10 pb-2 shadow-sm">
+      <div className="bg-surface px-4 pt-10 pb-2 shadow-sm">
         <div className="flex items-center justify-between mb-2">
           <h1 className="text-gray-800 font-bold text-xl">Patrimonio</h1>
           <button
             onClick={openAdd}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#534AB7]/10 hover:bg-[#534AB7]/20 transition-colors"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 hover:bg-primary/20 transition-colors"
           >
-            <Plus size={13} className="text-[#534AB7]" />
-            <span className="text-[#534AB7] text-xs font-semibold">Cuenta</span>
+            <Plus size={13} className="text-primary" />
+            <span className="text-primary text-xs font-semibold">Cuenta</span>
           </button>
         </div>
 
         {/* Summary cards — compact single row */}
         <div className="grid grid-cols-3 gap-1.5">
           <div className="bg-green-50 rounded-lg px-2 py-1.5 text-center">
-            <p className="text-gray-400 text-[9px] mb-0.5">Activos</p>
+            <p className="text-gray-400 text-[10px] mb-0.5">Activos</p>
             <p className="text-green-700 text-xs font-bold">{formatAmount(totalActivosUSD, 'USD')}</p>
           </div>
           <div className="bg-red-50 rounded-lg px-2 py-1.5 text-center">
-            <p className="text-gray-400 text-[9px] mb-0.5">Pasivos</p>
+            <p className="text-gray-400 text-[10px] mb-0.5">Pasivos</p>
             <p className="text-red-400 text-xs font-bold">{formatAmount(totalPasivosUSD, 'USD')}</p>
           </div>
-          <div className="bg-[#534AB7]/10 rounded-lg px-2 py-1.5 text-center border border-[#534AB7]/20">
-            <p className="text-gray-400 text-[9px] mb-0.5">Neto</p>
-            <p className={`text-xs font-bold ${netoUSD >= 0 ? 'text-[#534AB7]' : 'text-red-400'}`}>
+          <div className="bg-primary/10 rounded-lg px-2 py-1.5 text-center border border-primary/20">
+            <p className="text-gray-400 text-[10px] mb-0.5">Neto</p>
+            <p className={`text-xs font-bold ${netoUSD >= 0 ? 'text-primary' : 'text-red-400'}`}>
               {formatAmount(netoUSD, 'USD')}
             </p>
           </div>
@@ -158,7 +158,7 @@ export default function PatrimonioPage() {
       </div>
 
       {/* ── Main card ── */}
-      <div className="flex-1 min-h-0 bg-white overflow-hidden flex flex-col">
+      <div className="flex-1 min-h-0 bg-surface overflow-hidden flex flex-col">
 
         {/* Chart */}
         {assets.length > 0 && (
@@ -175,7 +175,7 @@ export default function PatrimonioPage() {
               onClick={() => setTab(t)}
               className={`flex-1 py-3 text-sm font-semibold transition-colors ${
                 tab === t
-                  ? 'text-[#534AB7] border-b-2 border-[#534AB7]'
+                  ? 'text-primary border-b-2 border-primary'
                   : 'text-gray-400'
               }`}
             >
@@ -188,7 +188,7 @@ export default function PatrimonioPage() {
         <div className="flex-1 overflow-y-auto pb-24">
           {isLoading ? (
             <div className="flex items-center justify-center py-14">
-              <div className="w-6 h-6 border-2 border-[#534AB7] border-t-transparent rounded-full animate-spin" />
+              <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
             </div>
           ) : listed.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-14 text-center px-6">
@@ -197,7 +197,7 @@ export default function PatrimonioPage() {
               </p>
               <button
                 onClick={openAdd}
-                className="mt-3 px-4 py-2 rounded-full bg-[#534AB7]/10 text-[#534AB7] text-sm font-semibold"
+                className="mt-3 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-semibold"
               >
                 + Agregar cuenta
               </button>

@@ -56,7 +56,7 @@ function areaFill(pts: [number, number][], bottom: number): string {
 
 const GRID_ROWS = 3
 
-export default function MultiLineChart({ months, series, currency = '' }: Props) {
+export default function MultiLineChart({ months, series }: Props) {
   if (!months.length || !series.length) return null
 
   const allVals = series.flatMap((s) => s.values)
@@ -76,7 +76,7 @@ export default function MultiLineChart({ months, series, currency = '' }: Props)
               className="inline-block w-2 h-2 rounded-full"
               style={{ backgroundColor: s.color, opacity: s.dashed ? 0.7 : 1 }}
             />
-            <span className="text-[9px] font-medium text-gray-400">{s.label}</span>
+            <span className="text-[10px] font-medium text-gray-400">{s.label}</span>
           </div>
         ))}
       </div>
@@ -99,11 +99,11 @@ export default function MultiLineChart({ months, series, currency = '' }: Props)
             <g key={i}>
               <line
                 x1={PAD_L} y1={y} x2={W} y2={y}
-                stroke="#f3f4f6" strokeWidth="1"
+                stroke="var(--color-gray-100)" strokeWidth="1"
               />
               <text
                 x={PAD_L - 3} y={y + 3}
-                textAnchor="end" fontSize="6.5" fill="#d1d5db"
+                textAnchor="end" fontSize="6.5" fill="var(--color-gray-400)"
                 fontFamily="system-ui"
               >
                 {fmt(v)}
@@ -116,7 +116,7 @@ export default function MultiLineChart({ months, series, currency = '' }: Props)
         {minVal < 0 && (
           <line
             x1={PAD_L} y1={zeroY} x2={W} y2={zeroY}
-            stroke="#e5e7eb" strokeWidth="1" strokeDasharray="3 2"
+            stroke="var(--color-gray-200)" strokeWidth="1" strokeDasharray="3 2"
           />
         )}
 
@@ -169,7 +169,7 @@ export default function MultiLineChart({ months, series, currency = '' }: Props)
             y={H - 5}
             textAnchor="middle"
             fontSize="7"
-            fill={i === n - 1 ? '#534AB7' : '#c4c4c4'}
+            fill={i === n - 1 ? 'var(--color-primary)' : 'var(--color-gray-400)'}
             fontWeight={i === n - 1 ? '700' : '400'}
             fontFamily="system-ui"
           >

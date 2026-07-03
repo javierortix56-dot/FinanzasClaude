@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { X, Trash2 } from 'lucide-react'
 import { Category } from '@finanzas/core/types'
@@ -21,23 +21,35 @@ interface Props {
 }
 
 export default function CategoryModal({ open, category, onClose, onSave, onDelete, title }: Props) {
-  const [nombre, setNombre] = useState('')
-  const [color, setColor] = useState(PRESET_COLORS[0])
-  const [activa, setActiva] = useState(true)
-  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  return (
+    <Dialog.Root open={open} onOpenChange={(o) => { if (!o) onClose() }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 bg-black/50 z-50 backdrop-blur-[2px]" />
+        <Dialog.Content
+          className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-surface rounded-t-3xl z-50 shadow-2xl outline-none"
+          aria-describedby={undefined}
+        >
+          {/* El contenido se monta al abrir: el estado se inicializa desde
+              props sin necesidad de sincronizarlo con un effect. */}
+          <ModalBody
+            key={category?.id ?? 'new'}
+            category={category}
+            onClose={onClose}
+            onSave={onSave}
+            onDelete={onDelete}
+            title={title}
+          />
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  )
+}
 
-  useEffect(() => {
-    if (!open) { setDeleteConfirm(false); return }
-    if (category) {
-      setNombre(category.nombre)
-      setColor(category.color)
-      setActiva(category.activa)
-    } else {
-      setNombre('')
-      setColor(PRESET_COLORS[0])
-      setActiva(true)
-    }
-  }, [open, category])
+function ModalBody({ category, onClose, onSave, onDelete, title }: Omit<Props, 'open'>) {
+  const [nombre, setNombre] = useState(category?.nombre ?? '')
+  const [color, setColor] = useState(category?.color ?? PRESET_COLORS[0])
+  const [activa, setActiva] = useState(category?.activa ?? true)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
 
   function handleSave() {
     if (!nombre.trim()) return
@@ -50,13 +62,7 @@ export default function CategoryModal({ open, category, onClose, onSave, onDelet
   }
 
   return (
-    <Dialog.Root open={open} onOpenChange={(o) => { if (!o) onClose() }}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/50 z-50 backdrop-blur-[2px]" />
-        <Dialog.Content
-          className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-white rounded-t-3xl z-50 shadow-2xl outline-none"
-          aria-describedby={undefined}
-        >
+    <>
           <div className="flex justify-center pt-3 pb-2">
             <div className="w-9 h-1 bg-gray-200 rounded-full" />
           </div>
@@ -76,19 +82,19 @@ export default function CategoryModal({ open, category, onClose, onSave, onDelet
           <div className="px-5 pb-8 space-y-5">
             {/* Nombre */}
             <div>
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Nombre</label>
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Nombre</label>
               <input
                 type="text"
                 placeholder="Nombre de la categoría"
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
-                className="mt-2 w-full bg-gray-50 rounded-xl px-3.5 py-3 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-[#534AB7]/30 focus:bg-white transition-all placeholder:text-gray-300"
+                className="mt-2 w-full bg-gray-50 rounded-xl px-3.5 py-3 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-primary/30 focus:bg-surface transition-all placeholder:text-gray-300"
               />
             </div>
 
             {/* Color */}
             <div>
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Color</label>
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Color</label>
               <div className="flex flex-wrap gap-2.5 mt-2.5">
                 {PRESET_COLORS.map((c) => (
                   <button
@@ -119,14 +125,14 @@ export default function CategoryModal({ open, category, onClose, onSave, onDelet
               type="button"
               onClick={() => setActiva((v) => !v)}
               className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl border-2 transition-all ${
-                activa ? 'border-[#534AB7] bg-[#534AB7]/5' : 'border-gray-200 bg-gray-50'
+                activa ? 'border-primary bg-primary/5' : 'border-gray-200 bg-gray-50'
               }`}
             >
-              <span className={`text-sm font-semibold ${activa ? 'text-[#534AB7]' : 'text-gray-400'}`}>
+              <span className={`text-sm font-semibold ${activa ? 'text-primary' : 'text-gray-400'}`}>
                 Categoría activa
               </span>
-              <div className={`w-11 h-6 rounded-full transition-colors flex-shrink-0 ${activa ? 'bg-[#534AB7]' : 'bg-gray-200'}`}>
-                <div className={`w-4 h-4 bg-white rounded-full mt-1 transition-transform shadow ${activa ? 'translate-x-6' : 'translate-x-1'}`} />
+              <div className={`w-11 h-6 rounded-full transition-colors flex-shrink-0 ${activa ? 'bg-primary' : 'bg-gray-200'}`}>
+                <div className={`w-4 h-4 bg-surface rounded-full mt-1 transition-transform shadow ${activa ? 'translate-x-6' : 'translate-x-1'}`} />
               </div>
             </button>
 
@@ -148,19 +154,17 @@ export default function CategoryModal({ open, category, onClose, onSave, onDelet
               <button
                 onClick={handleSave}
                 disabled={!nombre.trim()}
-                className="flex-1 h-12 rounded-2xl bg-[#534AB7] text-white text-sm font-bold disabled:opacity-40 transition-all hover:bg-[#4238a8] active:scale-[0.98]"
+                className="flex-1 h-12 rounded-2xl bg-primary text-white text-sm font-bold disabled:opacity-40 transition-all hover:bg-[#4238a8] active:scale-[0.98]"
               >
                 {category ? 'Guardar cambios' : 'Crear categoría'}
               </button>
             </div>
             {deleteConfirm && (
-              <p className="text-[11px] text-red-400 text-center -mt-2">
+              <p className="text-xs text-red-400 text-center -mt-2">
                 Tocá el ícono rojo de nuevo para confirmar
               </p>
             )}
           </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    </>
   )
 }

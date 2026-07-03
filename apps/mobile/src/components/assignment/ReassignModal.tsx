@@ -34,7 +34,7 @@ export default function ReassignModal({
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/40 z-50" />
         <Dialog.Content
-          className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-white rounded-t-2xl z-50 shadow-2xl outline-none"
+          className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-surface rounded-t-2xl z-50 shadow-2xl outline-none"
           aria-describedby={undefined}
         >
           {/* Handle */}
@@ -75,7 +75,7 @@ export default function ReassignModal({
                     <button
                       key={inc.id}
                       onClick={() => onReassign(inc.id!)}
-                      className="w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-[#534AB7]/40 hover:bg-[#534AB7]/5 transition-colors text-left"
+                      className="w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-primary/40 hover:bg-primary/5 transition-colors text-left"
                     >
                       <div className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
                       <div className="flex-1 min-w-0">

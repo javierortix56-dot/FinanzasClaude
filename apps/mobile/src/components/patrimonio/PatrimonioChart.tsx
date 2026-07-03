@@ -49,10 +49,10 @@ export default function PatrimonioChart({ data, currency }: Props) {
     <div className="px-4 pt-2 pb-2">
       {/* Título + leyenda en una sola fila */}
       <div className="flex items-center justify-between mb-1.5">
-        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">
+        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">
           Evolución del neto ({currency})
         </p>
-        <div className="flex items-center gap-2 text-[9px]">
+        <div className="flex items-center gap-2 text-[10px]">
           <span className="flex items-center gap-0.5">
             <span className="w-1.5 h-1.5 rounded-sm inline-block" style={{ backgroundColor: COLOR_APORTES }} />
             <span className="text-gray-400">Aportes</span>
@@ -84,10 +84,10 @@ export default function PatrimonioChart({ data, currency }: Props) {
                   )}
                 </div>
               </div>
-              <p className={`text-[9px] font-semibold tabular-nums ${d.neto >= 0 ? 'text-[#534AB7]' : 'text-red-400'}`}>
+              <p className={`text-[10px] font-semibold tabular-nums ${d.neto >= 0 ? 'text-primary' : 'text-red-400'}`}>
                 {fmt(d.neto)}
               </p>
-              <p className={`text-[9px] ${d.current ? 'text-gray-700 font-semibold' : 'text-gray-400'}`}>
+              <p className={`text-[10px] ${d.current ? 'text-gray-700 font-semibold' : 'text-gray-400'}`}>
                 {d.label}
               </p>
             </div>
@@ -97,7 +97,7 @@ export default function PatrimonioChart({ data, currency }: Props) {
 
       {/* Resumen delta del último mes */}
       {data.length > 1 && (last.deltaAportes !== 0 || last.deltaReval !== 0) && (
-        <div className="mt-1.5 flex items-center justify-around text-[9px] bg-gray-50 rounded-lg py-1.5 px-3">
+        <div className="mt-1.5 flex items-center justify-around text-[10px] bg-gray-50 rounded-lg py-1.5 px-3">
           <div className="text-center">
             <p className="text-gray-400">Aportes este mes</p>
             <p className="font-bold tabular-nums" style={{ color: COLOR_APORTES }}>

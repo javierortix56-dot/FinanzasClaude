@@ -37,7 +37,7 @@ function Metric({ label, value, prev, curr, currency = '', higherIsBetter = true
 
   return (
     <div className="bg-gray-50 rounded-xl px-3 py-2.5">
-      <p className="text-[9px] text-gray-400 font-medium uppercase tracking-wide mb-1">{label}</p>
+      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide mb-1">{label}</p>
       <p className="text-sm font-bold text-gray-900 leading-tight tabular-nums">
         {typeof value === 'string' ? value : formatAmount(value, currency)}
       </p>
@@ -45,7 +45,7 @@ function Metric({ label, value, prev, curr, currency = '', higherIsBetter = true
         {diff !== 0 && (
           <>
             {arrow}
-            <span className={`text-[9px] font-semibold ${improved ? 'text-green-500' : 'text-red-400'}`}>
+            <span className={`text-[10px] font-semibold ${improved ? 'text-green-500' : 'text-red-400'}`}>
               {Math.abs(diff).toFixed(0)}%
             </span>
           </>

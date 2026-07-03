@@ -28,6 +28,38 @@
   --shadow-lg: 0 12px 32px -8px rgb(15 23 42 / 0.12), 0 4px 8px -4px rgb(15 23 42 / 0.06);
 }
 
+/* ── Modo oscuro (sigue la preferencia del sistema) ────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0f1117;
+    --surface: #181b24;
+    --surface-2: #1f232e;
+    --foreground: #eef1f7;
+    --muted: #98a1b3;
+    --muted-2: #6b7385;
+    --border: #262b37;
+    --border-strong: #333949;
+
+    /* Púrpura un punto más claro para que el texto primary sea legible */
+    --primary: #7269d4;
+    --primary-hover: #837be0;
+    --primary-foreground: #ffffff;
+
+    --income: #34c979;
+    --income-soft: #12291c;
+    --expense: #ef6a6a;
+    --expense-soft: #2c1519;
+    --unassigned: #f0883e;
+    --unassigned-soft: #2d1d10;
+
+    --ring: #7269d4;
+
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.35), 0 1px 3px 0 rgb(0 0 0 / 0.3);
+    --shadow-md: 0 2px 4px -1px rgb(0 0 0 / 0.4), 0 6px 16px -4px rgb(0 0 0 / 0.45);
+    --shadow-lg: 0 12px 32px -8px rgb(0 0 0 / 0.55), 0 4px 8px -4px rgb(0 0 0 / 0.4);
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-surface: var(--surface);
@@ -56,7 +88,7 @@
 html, body {
   background: var(--background);
   color: var(--foreground);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -78,6 +110,14 @@ body { min-height: 100vh; }
   background:
     radial-gradient(120% 140% at 100% 0%, rgb(83 74 183 / 0.10) 0%, transparent 55%),
     linear-gradient(180deg, #ffffff 0%, #fbfbfe 100%);
+}
+
+@media (prefers-color-scheme: dark) {
+  .hero-gradient {
+    background:
+      radial-gradient(120% 140% at 100% 0%, rgb(114 105 212 / 0.16) 0%, transparent 55%),
+      linear-gradient(180deg, #1b1e28 0%, #171a23 100%);
+  }
 }
 
 /* Subtle numeric typography */

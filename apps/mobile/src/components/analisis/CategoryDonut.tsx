@@ -201,7 +201,7 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
               if (selectedSub) setSelectedSub(null)
               else setSelectedGroup(null)
             }}
-            className="flex items-center gap-1 text-xs font-semibold text-[#534AB7]"
+            className="flex items-center gap-1 text-xs font-semibold text-primary"
           >
             <ChevronLeft size={14} />
             {selectedSub ? `Volver a ${breadcrumb}` : 'Volver a categorías'}
@@ -274,7 +274,7 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
                       <span className="flex-1 text-xs font-medium text-gray-700 text-left truncate">
                         {slice.nombre}
                       </span>
-                      <span className="text-[10px] text-gray-400 tabular-nums w-7 text-right">
+                      <span className="text-[11px] text-gray-400 tabular-nums w-7 text-right">
                         {slice.percent.toFixed(0)}%
                       </span>
                       <span className="text-xs font-semibold text-gray-800 tabular-nums w-12 text-right">
@@ -282,7 +282,7 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
                       </span>
                       {tipoTab === 'egreso' && !budget && (
                         <button
-                          className="text-gray-300 hover:text-[#534AB7] transition-colors ml-0.5"
+                          className="text-gray-300 hover:text-primary transition-colors ml-0.5"
                           onClick={(e) => { e.stopPropagation(); setBudgetCat(slice.id) }}
                           title="Agregar presupuesto"
                         >
@@ -294,7 +294,7 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
                     {/* Budget bar (only when budget exists) */}
                     {budget && (
                       <div className="ml-4 mb-0.5">
-                        <div className="flex justify-between text-[9px] text-gray-400 mb-0.5">
+                        <div className="flex justify-between text-[10px] text-gray-400 mb-0.5">
                           <span>{budget.moneda} {fmtShort(spentInBudgetMoneda)} / {fmtShort(budget.limite)}</span>
                           <span className={`font-semibold ${
                             budgetPct >= 100 ? 'text-red-400' : budgetPct >= 80 ? 'text-orange-400' : 'text-green-600'

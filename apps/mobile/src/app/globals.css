@@ -1,8 +1,9 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
+  --background: #f9fafb;
   --foreground: #171717;
+  --surface: #ffffff;
   --primary: #534AB7;
   --primary-foreground: #ffffff;
   --income: #22c55e;
@@ -13,6 +14,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-income: var(--income);
@@ -22,10 +24,51 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* ── Modo oscuro (sigue la preferencia del sistema) ─────────────────────────
+   La app usa la paleta gray/white de Tailwind v4, cuyas utilidades compilan a
+   var(--color-*). Redefinir esas variables acá invierte toda la UI sin tocar
+   clases. text-white y los tonos 400-700 saturados no se tocan: siguen
+   legibles sobre fondos oscuros. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #101218;
+    --foreground: #f2f4f8;
+    --surface: #1a1d26;
+
+    /* Rampa de grises invertida (50 = fondos, 900 = texto principal) */
+    --color-gray-50:  #151823;
+    --color-gray-100: #232734;
+    --color-gray-200: #2f3444;
+    --color-gray-300: #434a5e;
+    --color-gray-400: #8f97ab;
+    --color-gray-500: #a6adc0;
+    --color-gray-600: #bac1d2;
+    --color-gray-700: #cfd4e2;
+    --color-gray-800: #e3e7f0;
+    --color-gray-900: #f2f4f8;
+
+    /* Tintes suaves (solo tonos 50-200 usados como fondos/bordes) */
+    --color-green-50:  #122a1c;
+    --color-green-100: #1a3d28;
+    --color-green-200: #245538;
+    --color-red-50:    #2c1519;
+    --color-red-100:   #401e24;
+    --color-red-200:   #57282f;
+    --color-amber-50:  #2c2312;
+    --color-blue-50:   #14203a;
+    --color-blue-200:  #274572;
+    --color-orange-50: #2d1d10;
+  }
+}
+
+html {
+  background: var(--background);
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   max-width: 390px;
   margin: 0 auto;
   overflow-x: hidden;

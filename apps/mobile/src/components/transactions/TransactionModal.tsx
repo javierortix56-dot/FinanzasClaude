@@ -9,7 +9,7 @@ import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useAssetStore } from '@finanzas/core/store/useAssetStore'
 import { addTransaction, updateTransaction, deleteTransaction, cloneTransactionToMonth, moveTransactionToMonth } from '@finanzas/core/lib/transactions'
-import { SHARED_USER_ID, SHARED_USERS, formatAmount, getParentGroup, getCatFromSettings, DEFAULT_GASTO_CATEGORY_GROUPS, DEFAULT_INGRESO_CATEGORY_GROUPS } from '@finanzas/core/lib/constants'
+import { SHARED_USER_ID, SHARED_USERS, formatAmount, getParentGroup, getCatFromSettings, toLocalDateString, DEFAULT_GASTO_CATEGORY_GROUPS, DEFAULT_INGRESO_CATEGORY_GROUPS } from '@finanzas/core/lib/constants'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { adjustAssetSaldo } from '@finanzas/core/lib/assets'
 import { toBase } from '@finanzas/core/lib/currency'
@@ -32,7 +32,7 @@ export default function TransactionModal() {
   const [selectedGroup, setSelectedGroup] = useState('')
   const [selectedSub, setSelectedSub] = useState('')
   const [descripcion, setDescripcion] = useState('')
-  const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
+  const [fecha, setFecha] = useState(toLocalDateString())
   const [creadoPor, setCreadoPor] = useState(SHARED_USERS[0].id)
   const [ejecutado, setEjecutado] = useState(false)
   const [asignadoA, setAsignadoA] = useState<string | null>(null)
@@ -58,7 +58,7 @@ export default function TransactionModal() {
       setMoneda(editingTransaction.moneda)
       setDescripcion(editingTransaction.descripcion)
       const d = editingTransaction.fecha.toDate()
-      setFecha(d.toISOString().split('T')[0])
+      setFecha(toLocalDateString(d))
       setCreadoPor(editingTransaction.creadoPor || SHARED_USERS[0].id)
       setEjecutado(editingTransaction.ejecutado)
       setAsignadoA(editingTransaction.asignadoA ?? null)
@@ -74,7 +74,7 @@ export default function TransactionModal() {
     } else {
       setTipo('egreso'); setMonto(''); setMoneda('ARS')
       setSelectedGroup(''); setSelectedSub(''); setDescripcion('')
-      setFecha(new Date().toISOString().split('T')[0])
+      setFecha(toLocalDateString())
       setCreadoPor(SHARED_USERS[0].id); setEjecutado(false); setAsignadoA(null); setRecurrente(false); setAhorroAssetId('')
     }
   }, [isTransactionModalOpen, editingTransaction, settings])
@@ -252,7 +252,7 @@ export default function TransactionModal() {
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/50 z-50 backdrop-blur-[2px]" />
         <Dialog.Content
-          className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-white rounded-t-3xl z-50 shadow-2xl outline-none"
+          className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-surface rounded-t-3xl z-50 shadow-2xl outline-none"
           aria-describedby={undefined}
         >
           {/* Handle */}
@@ -322,7 +322,7 @@ export default function TransactionModal() {
                       className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
                         moneda === c
                           ? 'text-white shadow-sm'
-                          : 'bg-white/60 text-gray-500'
+                          : 'bg-surface/60 text-gray-500'
                       }`}
                       style={moneda === c ? { backgroundColor: accentColor } : {}}
                     >
@@ -331,7 +331,7 @@ export default function TransactionModal() {
                   ))}
                 </div>
                 {montoInvalid && (
-                  <p className="text-[10px] text-red-400 mt-1.5">Ingresá un monto mayor a 0</p>
+                  <p className="text-[11px] text-red-400 mt-1.5">Ingresá un monto mayor a 0</p>
                 )}
               </div>
             </div>
@@ -340,7 +340,7 @@ export default function TransactionModal() {
 
             {/* ── Descripción ── */}
             <div className="px-5 py-4">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
                 Descripción
                 {montoValido && !descripcion.trim() && (
                   <span className="ml-1.5 text-amber-400 font-semibold normal-case tracking-normal">· recomendado</span>
@@ -354,7 +354,7 @@ export default function TransactionModal() {
                 className={`mt-2 w-full bg-gray-50 rounded-xl px-3.5 py-3 text-sm text-gray-900 outline-none focus:ring-2 transition-all placeholder:text-gray-300 ${
                   montoValido && !descripcion.trim()
                     ? 'ring-1 ring-amber-200 focus:ring-amber-300'
-                    : 'focus:ring-[#534AB7]/30 focus:bg-white'
+                    : 'focus:ring-primary/30 focus:bg-surface'
                 }`}
               />
               {/* Sugerencias */}
@@ -365,7 +365,7 @@ export default function TransactionModal() {
                       key={sg}
                       type="button"
                       onClick={() => setDescripcion(sg)}
-                      className="px-2.5 py-1 bg-gray-100 rounded-full text-xs text-gray-500 hover:bg-[#534AB7]/10 hover:text-[#534AB7] transition-colors"
+                      className="px-2.5 py-1 bg-gray-100 rounded-full text-xs text-gray-500 hover:bg-primary/10 hover:text-primary transition-colors"
                     >
                       {sg}
                     </button>
@@ -378,7 +378,7 @@ export default function TransactionModal() {
 
             {/* ── Categoría ── */}
             <div className="px-5 py-4">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
                 Categoría
                 {montoValido && !categoria && (
                   <span className="ml-1.5 text-amber-400 font-semibold normal-case tracking-normal">· recomendado</span>
@@ -431,14 +431,14 @@ export default function TransactionModal() {
               <>
                 <div className="h-px bg-gray-100 mx-5" />
                 <div className="px-5 py-4">
-                  <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
                     Destino de ahorro
                     <span className="ml-1 font-normal normal-case tracking-normal text-gray-300">— opcional</span>
                   </label>
                   <select
                     value={ahorroAssetId}
                     onChange={(e) => setAhorroAssetId(e.target.value)}
-                    className="mt-2 w-full h-11 rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#534AB7]/30 focus:bg-white"
+                    className="mt-2 w-full h-11 rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-surface"
                   >
                     <option value="">Sin destino de ahorro</option>
                     {assets.filter((a) => a.clase === 'activo').map((a) => (
@@ -446,7 +446,7 @@ export default function TransactionModal() {
                     ))}
                   </select>
                   {ahorroAssetId && (
-                    <p className="text-[10px] text-[#534AB7] mt-1.5">El saldo de esta cuenta se actualizará al guardar</p>
+                    <p className="text-[11px] text-primary mt-1.5">El saldo de esta cuenta se actualizará al guardar</p>
                   )}
                 </div>
               </>
@@ -457,14 +457,14 @@ export default function TransactionModal() {
               <>
                 <div className="h-px bg-gray-100 mx-5" />
                 <div className="px-5 py-4">
-                  <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
                     Asignar a Ingreso
                     <span className="ml-1 font-normal normal-case tracking-normal text-gray-300">— opcional</span>
                   </label>
                   <select
                     value={asignadoA ?? ''}
                     onChange={(e) => setAsignadoA(e.target.value || null)}
-                    className="mt-2 w-full h-11 rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#534AB7]/30 focus:bg-white"
+                    className="mt-2 w-full h-11 rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-surface"
                   >
                     <option value="">Sin asignar</option>
                     {ingresoOptions.map(({ ing, remaining, wouldExceed }) => {
@@ -480,7 +480,7 @@ export default function TransactionModal() {
                     })}
                   </select>
                   {asignadoA && ingresoOptions.find((o) => o.ing.id === asignadoA)?.wouldExceed && (
-                    <p className="text-[10px] text-red-400 mt-1.5">Excede la capacidad del ingreso seleccionado</p>
+                    <p className="text-[11px] text-red-400 mt-1.5">Excede la capacidad del ingreso seleccionado</p>
                   )}
                 </div>
               </>
@@ -491,16 +491,16 @@ export default function TransactionModal() {
             {/* ── Fecha + Estado (grid 2 cols, sin superposición) ── */}
             <div className="px-5 py-4 grid grid-cols-2 gap-3">
               <div>
-                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Fecha</label>
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Fecha</label>
                 <input
                   type="date"
                   value={fecha}
                   onChange={(e) => setFecha(e.target.value)}
-                  className="mt-2 w-full h-11 bg-gray-50 rounded-xl px-3 text-sm text-gray-700 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#534AB7]/30 focus:bg-white"
+                  className="mt-2 w-full h-11 bg-gray-50 rounded-xl px-3 text-sm text-gray-700 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-surface"
                 />
               </div>
               <div>
-                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Estado</label>
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Estado</label>
                 <button
                   type="button"
                   onClick={() => setEjecutado((v) => !v)}
@@ -523,7 +523,7 @@ export default function TransactionModal() {
                 onClick={() => setRecurrente((v) => !v)}
                 className={`w-full h-11 flex items-center justify-center gap-2 rounded-xl border-2 text-sm font-semibold transition-all ${
                   recurrente
-                    ? 'bg-[#534AB7]/10 border-[#534AB7] text-[#534AB7]'
+                    ? 'bg-primary/10 border-primary text-primary'
                     : 'bg-gray-50 border-gray-200 text-gray-400'
                 }`}
               >
@@ -541,7 +541,7 @@ export default function TransactionModal() {
                     onClick={() => setCloneAction(cloneAction === 'clone' ? null : 'clone')}
                     className={`flex-1 h-10 flex items-center justify-center gap-1.5 rounded-xl border text-xs font-semibold transition-all ${
                       cloneAction === 'clone'
-                        ? 'bg-[#534AB7]/10 border-[#534AB7] text-[#534AB7]'
+                        ? 'bg-primary/10 border-primary text-primary'
                         : 'bg-gray-50 border-gray-200 text-gray-400'
                     }`}
                   >
@@ -565,13 +565,13 @@ export default function TransactionModal() {
                       type="month"
                       value={cloneMonth}
                       onChange={(e) => setCloneMonth(e.target.value)}
-                      className="flex-1 h-10 bg-gray-50 rounded-xl px-3 text-sm text-gray-700 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#534AB7]/30"
+                      className="flex-1 h-10 bg-gray-50 rounded-xl px-3 text-sm text-gray-700 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/30"
                     />
                     <button
                       type="button"
                       onClick={handleCloneMove}
                       disabled={!cloneMonth || saving}
-                      className={`px-4 h-10 rounded-xl text-xs font-bold text-white disabled:opacity-40 ${cloneAction === 'move' ? 'bg-amber-400' : 'bg-[#534AB7]'}`}
+                      className={`px-4 h-10 rounded-xl text-xs font-bold text-white disabled:opacity-40 ${cloneAction === 'move' ? 'bg-amber-400' : 'bg-primary'}`}
                     >
                       {saving ? '…' : cloneAction === 'move' ? 'Mover' : 'Clonar'}
                     </button>
@@ -620,7 +620,7 @@ export default function TransactionModal() {
             </div>
 
             {deleteConfirm && (
-              <p className="text-[11px] text-red-400 text-center pb-3 -mt-1">
+              <p className="text-xs text-red-400 text-center pb-3 -mt-1">
                 Tocá el ícono rojo de nuevo para confirmar
               </p>
             )}

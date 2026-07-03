@@ -1,5 +1,6 @@
-import { supabase } from './supabase'
+import { supabase, SHARED_UUID } from './supabase'
 import { Transaction, Asset, Settings, Budget } from '../types'
+import { toLocalDateString } from './constants'
 
 export interface BackupData {
   version: number
@@ -41,8 +42,18 @@ export async function exportBackup(userId: string): Promise<BackupData> {
     .select('*')
     .maybeSingle()
 
-  const appSettings = configData?.app_settings ?? {}
-  const budgets: Budget[] = appSettings.budgets ?? []
+  const { data: budgetData } = await supabase
+    .from('presupuestos')
+    .select('*')
+
+  const budgets: Budget[] = (budgetData ?? []).map((row) => ({
+    id: row.id,
+    userId: 'shared',
+    categoria: row.categoria,
+    mes: row.mes,
+    limite: Number(row.limite) || 0,
+    moneda: row.moneda,
+  }))
 
   const transactions = (txData ?? []).map((row) => {
     const dateStr = row.date as string
@@ -117,15 +128,16 @@ export function downloadBackup(data: BackupData) {
 export async function importBackup(
   _userId: string,
   data: BackupData
-): Promise<{ transactions: number; assets: number }> {
+): Promise<{ transactions: number; assets: number; budgets: number }> {
   let txCount = 0
   let assetCount = 0
+  let budgetCount = 0
 
   if (Array.isArray(data.transactions) && data.transactions.length > 0) {
     const rows = data.transactions.map((raw) => {
       const r = raw as Record<string, unknown>
       const isoDate = r.fecha as string
-      const date = isoDate ? isoDate.slice(0, 10) : new Date().toISOString().slice(0, 10)
+      const date = isoDate ? isoDate.slice(0, 10) : toLocalDateString()
       return {
         user_id: '00000000-0000-0000-0000-000000000000',
         type: r.tipo as string,
@@ -160,7 +172,7 @@ export async function importBackup(
         type: r.clase as string,
         currency: r.moneda as string,
         init_bal: r.saldo as number,
-        date_created: isoDate ? isoDate.slice(0, 10) : new Date().toISOString().slice(0, 10),
+        date_created: isoDate ? isoDate.slice(0, 10) : toLocalDateString(),
         meta_objetivo: r.metaObjetivo ?? null,
         meta_moneda: r.metaMoneda ?? null,
       }
@@ -170,7 +182,29 @@ export async function importBackup(
     assetCount = rows.length
   }
 
-  return { transactions: txCount, assets: assetCount }
+  if (Array.isArray(data.budgets) && data.budgets.length > 0) {
+    const rows = data.budgets
+      .map((raw) => {
+        const r = raw as Record<string, unknown>
+        return {
+          user_id: SHARED_UUID,
+          categoria: r.categoria as string,
+          mes: r.mes as string,
+          limite: Number(r.limite) || 0,
+          moneda: (r.moneda as string) || 'ARS',
+        }
+      })
+      .filter((r) => r.categoria && /^\d{4}-\d{2}$/.test(r.mes))
+    if (rows.length > 0) {
+      const { error } = await supabase
+        .from('presupuestos')
+        .upsert(rows, { onConflict: 'categoria,mes' })
+      if (error) throw error
+      budgetCount = rows.length
+    }
+  }
+
+  return { transactions: txCount, assets: assetCount, budgets: budgetCount }
 }
 
 export function parseBackupFile(file: File): Promise<BackupData> {
