@@ -7,7 +7,8 @@ import { getCurrentMonth, shiftMonth, toLocalDateString } from '../lib/constants
 // fetch de fondo reconcilia), y la PWA arranca con los datos de la última
 // sesión en vez de un spinner.
 
-const CACHE_KEY = 'finanzas-tx-cache-v1'
+// v2: Transaction.asignadoA → asignaciones[] (el caché viejo se descarta)
+const CACHE_KEY = 'finanzas-tx-cache-v2'
 const MAX_CACHED_MONTHS = 8
 
 type SerializedTx = Omit<Transaction, 'fecha'> & { fecha: string }

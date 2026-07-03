@@ -1,15 +1,23 @@
 'use client'
 
-import { ChevronDown, ChevronRight, Unlink, CheckCircle2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, Unlink, CheckCircle2, Split } from 'lucide-react'
 import { Transaction, Settings, Currency } from '@finanzas/core/types'
 import { getCatFromSettings, formatAmount } from '@finanzas/core/lib/constants'
 import { toBase } from '@finanzas/core/lib/currency'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { markEjecutado } from '@finanzas/core/lib/transactions'
 
+/** Un egreso dentro de un grupo: si está dividido, montoAsignado < exp.monto */
+export interface GroupItem {
+  exp: Transaction
+  /** Parte asignada a ESTE ingreso, en la moneda del egreso */
+  montoAsignado: number
+  esParcial: boolean
+}
+
 interface Props {
   income: Transaction | null
-  expenses: Transaction[]
+  items: GroupItem[]
   selectedIds: Set<string>
   onToggleSelect: (id: string) => void
   onEdit: (tx: Transaction) => void
@@ -23,7 +31,7 @@ interface Props {
 
 export default function AssignmentGroup({
   income,
-  expenses,
+  items,
   selectedIds,
   onToggleSelect,
   onEdit,
@@ -36,8 +44,8 @@ export default function AssignmentGroup({
   const { hideAmounts } = useSettingsStore()
   const isUnassigned = income === null
 
-  const totalGastado = expenses.reduce(
-    (sum, e) => sum + toBase(e.monto, e.moneda, monedaBase, settings),
+  const totalGastado = items.reduce(
+    (sum, { exp, montoAsignado }) => sum + toBase(montoAsignado, exp.moneda, monedaBase, settings),
     0
   )
   const incomeBase = income ? toBase(income.monto, income.moneda, monedaBase, settings) : 0
@@ -97,12 +105,12 @@ export default function AssignmentGroup({
               </p>
             ) : null}
             <p className="text-[11px] text-gray-400">
-              {expenses.length} egreso{expenses.length !== 1 ? 's' : ''}
+              {items.length} egreso{items.length !== 1 ? 's' : ''}
             </p>
           </div>
 
           {/* Desasignar grupo */}
-          {!isUnassigned && expenses.length > 0 && (
+          {!isUnassigned && items.length > 0 && (
             <button
               onClick={(e) => { e.stopPropagation(); onDesassign() }}
               className="flex-shrink-0 ml-1 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
@@ -147,12 +155,12 @@ export default function AssignmentGroup({
       {/* ── Expense list ── */}
       {isExpanded && (
         <div className="bg-surface divide-y divide-gray-50">
-          {expenses.length === 0 ? (
+          {items.length === 0 ? (
             <p className="text-xs text-gray-400 px-4 py-3 italic">
               Ningún egreso asignado aún
             </p>
           ) : (
-            expenses.map((exp) => {
+            items.map(({ exp, montoAsignado, esParcial }) => {
               const cat = getCatFromSettings(exp.categoria, settings)
               const isSelected = selectedIds.has(exp.id!)
               const dateStr = exp.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
@@ -188,16 +196,28 @@ export default function AssignmentGroup({
                     <p className={`text-xs font-medium text-gray-900 truncate ${exp.ejecutado ? 'line-through' : ''}`}>
                       {exp.descripcion || cat?.nombre || exp.categoria}
                     </p>
-                    <p className="text-[11px] text-gray-400 mt-px">
+                    <p className="text-[11px] text-gray-400 mt-px flex items-center gap-1">
                       {dateStr}{cat ? ` · ${cat.nombre}` : ''}
+                      {esParcial && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-px rounded-full bg-primary/10 text-primary font-semibold">
+                          <Split size={9} /> dividido
+                        </span>
+                      )}
                     </p>
                   </button>
 
                   {/* Amount + status */}
                   <div className="flex-shrink-0 flex items-center gap-1.5">
-                    <p className={`text-xs font-semibold text-red-400 ${hideAmounts ? 'blur-sm' : ''} ${exp.ejecutado ? 'line-through' : ''}`}>
-                      -{formatAmount(toBase(exp.monto, exp.moneda, monedaBase, settings), monedaBase)}
-                    </p>
+                    <div className="text-right">
+                      <p className={`text-xs font-semibold text-red-400 ${hideAmounts ? 'blur-sm' : ''} ${exp.ejecutado ? 'line-through' : ''}`}>
+                        -{formatAmount(toBase(montoAsignado, exp.moneda, monedaBase, settings), monedaBase)}
+                      </p>
+                      {esParcial && (
+                        <p className={`text-[10px] text-gray-400 tabular-nums leading-tight ${hideAmounts ? 'blur-sm' : ''}`}>
+                          de {formatAmount(toBase(exp.monto, exp.moneda, monedaBase, settings), monedaBase)}
+                        </p>
+                      )}
+                    </div>
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); markEjecutado(exp.id!, !exp.ejecutado) }}

@@ -1,9 +1,30 @@
 import { supabase, SHARED_UUID } from './supabase'
 import { useTransactionStore } from '../store/useTransactionStore'
-import { Transaction } from '../types'
+import { Asignacion, Transaction } from '../types'
+
+/**
+ * Lee las asignaciones de un egreso desde children.
+ * Formato nuevo: children.asignaciones = [{ ingresoId, monto }].
+ * Formato viejo: children.asignadoA = id único → una asignación por el
+ * monto completo del movimiento.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function readAsignaciones(extra: Record<string, any>, monto: number): Asignacion[] {
+  if (Array.isArray(extra.asignaciones)) {
+    return extra.asignaciones
+      .filter((a: unknown): a is Asignacion =>
+        !!a && typeof (a as Asignacion).ingresoId === 'string' && Number((a as Asignacion).monto) > 0
+      )
+      .map((a: Asignacion) => ({ ingresoId: a.ingresoId, monto: Number(a.monto) }))
+  }
+  if (typeof extra.asignadoA === 'string' && extra.asignadoA) {
+    return [{ ingresoId: extra.asignadoA, monto }]
+  }
+  return []
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function rowToTx(row: Record<string, any>): Transaction {
+export function rowToTx(row: Record<string, any>): Transaction {
   const dateStr = row.date as string
   const extra = row.children ?? {}
   // DB may store 'inc'/'exp' (old app) or 'ingreso'/'egreso' (new)
@@ -26,7 +47,7 @@ function rowToTx(row: Record<string, any>): Transaction {
     tags: extra.tags ?? [],
     fecha: { toDate: () => new Date(dateStr + 'T12:00:00') },
     ejecutado: (row.executed as boolean) ?? false,
-    asignadoA: extra.asignadoA ?? null,
+    asignaciones: readAsignaciones(extra, amount),
     creadoPor: extra.creadoPor ?? 'shared',
     recurrente: extra.recurrente ?? false,
     ahorroAssetId: extra.ahorroAssetId ?? null,
@@ -47,7 +68,9 @@ function txToRow(tx: Omit<Transaction, 'id'>) {
     children: {
       nota: tx.nota,
       tags: tx.tags,
-      asignadoA: tx.asignadoA,
+      asignaciones: tx.asignaciones,
+      // Espejo legacy para clientes/backups viejos que solo leen asignadoA
+      asignadoA: tx.asignaciones[0]?.ingresoId ?? null,
       creadoPor: tx.creadoPor,
       recurrente: tx.recurrente ?? false,
       ahorroAssetId: tx.ahorroAssetId ?? null,
@@ -125,7 +148,10 @@ export async function updateTransaction(id: string, data: Partial<Omit<Transacti
   const childrenFields: Record<string, unknown> = {}
   if (data.nota !== undefined) childrenFields.nota = data.nota
   if (data.tags !== undefined) childrenFields.tags = data.tags
-  if (data.asignadoA !== undefined) childrenFields.asignadoA = data.asignadoA
+  if (data.asignaciones !== undefined) {
+    childrenFields.asignaciones = data.asignaciones
+    childrenFields.asignadoA = data.asignaciones[0]?.ingresoId ?? null
+  }
   if (data.creadoPor !== undefined) childrenFields.creadoPor = data.creadoPor
   if (data.recurrente !== undefined) childrenFields.recurrente = data.recurrente
   if (data.ahorroAssetId !== undefined) childrenFields.ahorroAssetId = data.ahorroAssetId
@@ -229,7 +255,7 @@ export async function cloneMonthTransactions(fromMonth: string, toMonth: string)
     const origDate = new Date(row.date + 'T12:00:00')
     const day = Math.min(origDate.getDate(), new Date(ty, tm, 0).getDate())
     const newDate = `${ty}-${String(tm).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-    return { ...txToRow({ ...rowToTx(row), ejecutado: false, asignadoA: null }), date: newDate }
+    return { ...txToRow({ ...rowToTx(row), ejecutado: false, asignaciones: [] }), date: newDate }
   })
 
   const { error: insErr } = await supabase.from('movimientos').insert(inserts)
@@ -261,7 +287,7 @@ export async function createRecurringTransactions(toMonth: string): Promise<numb
     const origDate = new Date(row.date + 'T12:00:00')
     const day = Math.min(origDate.getDate(), new Date(ty, tm, 0).getDate())
     const newDate = `${ty}-${String(tm).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-    return { ...txToRow({ ...rowToTx(row), ejecutado: false, asignadoA: null }), date: newDate }
+    return { ...txToRow({ ...rowToTx(row), ejecutado: false, asignaciones: [] }), date: newDate }
   })
 
   const { error: insErr } = await supabase.from('movimientos').insert(inserts)
