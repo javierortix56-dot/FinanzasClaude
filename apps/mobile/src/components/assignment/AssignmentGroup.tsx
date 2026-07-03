@@ -81,7 +81,7 @@ export default function AssignmentGroup({
                 <p className="text-xs font-medium text-gray-900 truncate leading-tight">
                   {income!.descripcion || getCatFromSettings(income!.categoria, settings)?.nombre || income!.categoria}
                 </p>
-                <p className="text-[10px] text-gray-400 mt-0.5">
+                <p className="text-[11px] text-gray-400 mt-0.5">
                   {incomeDate}
                 </p>
               </>
@@ -96,7 +96,7 @@ export default function AssignmentGroup({
                 -{formatAmount(totalGastado, monedaBase)}
               </p>
             ) : null}
-            <p className="text-[10px] text-gray-400">
+            <p className="text-[11px] text-gray-400">
               {expenses.length} egreso{expenses.length !== 1 ? 's' : ''}
             </p>
           </div>
@@ -117,13 +117,13 @@ export default function AssignmentGroup({
         {!isUnassigned && incomeBase > 0 && (
           <div className="mt-1.5">
             <div className="flex justify-between items-baseline mb-0.5">
-              <span className="text-[10px] text-gray-400">
+              <span className="text-[11px] text-gray-400">
                 Ingreso:{' '}
                 <span className={`font-semibold text-green-600 ${hideAmounts ? 'blur-sm' : ''}`}>
                   +{formatAmount(incomeBase, monedaBase)}
                 </span>
               </span>
-              <span className={`text-[10px] font-semibold ${isOver ? 'text-red-400' : 'text-gray-500'}`}>
+              <span className={`text-[11px] font-semibold ${isOver ? 'text-red-400' : 'text-gray-500'}`}>
                 <span className={hideAmounts ? 'blur-sm' : ''}>
                   {isOver ? 'Excedido' : 'Disponible'}: {formatAmount(Math.abs(disponible), monedaBase)}
                 </span>
@@ -136,7 +136,7 @@ export default function AssignmentGroup({
               />
             </div>
             <div className="flex justify-end mt-0.5">
-              <span className="text-[9px] font-semibold" style={{ color: barColor }}>
+              <span className="text-[10px] font-semibold" style={{ color: barColor }}>
                 {Math.round(usedPercent)}% usado
               </span>
             </div>
@@ -146,7 +146,7 @@ export default function AssignmentGroup({
 
       {/* ── Expense list ── */}
       {isExpanded && (
-        <div className="bg-white divide-y divide-gray-50">
+        <div className="bg-surface divide-y divide-gray-50">
           {expenses.length === 0 ? (
             <p className="text-xs text-gray-400 px-4 py-3 italic">
               Ningún egreso asignado aún
@@ -161,7 +161,7 @@ export default function AssignmentGroup({
                 <div
                   key={exp.id}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 transition-colors ${
-                    isSelected ? 'bg-[#534AB7]/5' : 'hover:bg-gray-50'
+                    isSelected ? 'bg-primary/5' : 'hover:bg-gray-50'
                   } ${exp.ejecutado ? 'opacity-50' : ''}`}
                 >
                   {/* Checkbox — solo selección */}
@@ -169,7 +169,7 @@ export default function AssignmentGroup({
                     type="button"
                     onClick={() => onToggleSelect(exp.id!)}
                     className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${
-                      isSelected ? 'bg-[#534AB7] border-[#534AB7]' : 'border-gray-200'
+                      isSelected ? 'bg-primary border-primary' : 'border-gray-200'
                     }`}
                   >
                     {isSelected && (
@@ -188,7 +188,7 @@ export default function AssignmentGroup({
                     <p className={`text-xs font-medium text-gray-900 truncate ${exp.ejecutado ? 'line-through' : ''}`}>
                       {exp.descripcion || cat?.nombre || exp.categoria}
                     </p>
-                    <p className="text-[10px] text-gray-400 mt-px">
+                    <p className="text-[11px] text-gray-400 mt-px">
                       {dateStr}{cat ? ` · ${cat.nombre}` : ''}
                     </p>
                   </button>

@@ -207,9 +207,9 @@ export default function AssignmentTab() {
     <div className="flex-1 flex flex-col overflow-hidden bg-gray-50/60">
 
       {/* ── Header — hero card ── */}
-      <div className="px-3 pt-2 pb-2 bg-white">
-        <div className="relative rounded-xl overflow-hidden px-3 py-2.5 bg-gradient-to-r from-[#534AB7] to-[#8b5cf6] shadow-sm">
-          <div className="absolute -top-6 -right-6 w-20 h-20 bg-white/10 rounded-full blur-xl" />
+      <div className="px-3 pt-2 pb-2 bg-surface">
+        <div className="relative rounded-xl overflow-hidden px-3 py-2.5 bg-gradient-to-r from-primary to-[#8b5cf6] shadow-sm">
+          <div className="absolute -top-6 -right-6 w-20 h-20 bg-surface/10 rounded-full blur-xl" />
 
           {/* Fila 1: número · badge · spacer · botón auto-asignar */}
           <div className="relative flex items-center gap-2 mb-2">
@@ -221,12 +221,12 @@ export default function AssignmentTab() {
             {allAssigned ? (
               <div className="flex items-center gap-1">
                 <CheckCircle2 size={10} className="text-emerald-300 flex-shrink-0" />
-                <span className="text-[10px] text-emerald-200 font-semibold whitespace-nowrap">Todo asignado</span>
+                <span className="text-[11px] text-emerald-200 font-semibold whitespace-nowrap">Todo asignado</span>
               </div>
             ) : unassignedExpenses.length > 0 ? (
               <div className="flex items-center gap-1">
                 <AlertCircle size={10} className="text-amber-300 flex-shrink-0" />
-                <span className="text-[10px] text-amber-200 font-semibold whitespace-nowrap">{unassignedExpenses.length} sin asignar</span>
+                <span className="text-[11px] text-amber-200 font-semibold whitespace-nowrap">{unassignedExpenses.length} sin asignar</span>
               </div>
             ) : null}
 
@@ -235,7 +235,7 @@ export default function AssignmentTab() {
             <button
               onClick={autoAssign}
               disabled={autoLoading || unassignedExpenses.length === 0 || ingresos.length === 0}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white text-[#534AB7] text-[10px] font-bold shadow-sm disabled:opacity-40 active:scale-95 transition-all whitespace-nowrap flex-shrink-0"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface text-primary text-[11px] font-bold shadow-sm disabled:opacity-40 active:scale-95 transition-all whitespace-nowrap flex-shrink-0"
             >
               {autoLoading
                 ? <><Sparkles size={10} className="animate-pulse" /> Asignando…</>
@@ -247,22 +247,22 @@ export default function AssignmentTab() {
           {/* Fila 2: barra de progreso · % · desasignar */}
           <div className="relative flex items-center gap-2">
             <div className="flex-1 min-w-0">
-              <div className="h-1 bg-white/20 rounded-full overflow-hidden">
+              <div className="h-1 bg-surface/20 rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-700"
                   style={{ width: `${progressPercent}%`, background: barGradient }}
                 />
               </div>
             </div>
-            <span className="text-[10px] text-white/70 font-semibold tabular-nums flex-shrink-0">
+            <span className="text-[11px] text-white/70 font-semibold tabular-nums flex-shrink-0">
               {Math.round(progressPercent)}%
             </span>
             {assignedCount > 0 && (
               <button
                 onClick={desassignAll}
                 disabled={unassignLoading}
-                className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold transition-all active:scale-95 flex-shrink-0 whitespace-nowrap ${
-                  unassignConfirm ? 'bg-red-400 text-white' : 'bg-white/15 text-white/90'
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-semibold transition-all active:scale-95 flex-shrink-0 whitespace-nowrap ${
+                  unassignConfirm ? 'bg-red-400 text-white' : 'bg-surface/15 text-white/90'
                 }`}
               >
                 <Unlink2 size={9} />
@@ -304,7 +304,7 @@ export default function AssignmentTab() {
 
       {/* ── Multi-select action bar ── */}
       {selectedIds.size > 0 && (
-        <div className="fixed bottom-[72px] left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-white border-t border-gray-100 shadow-lg z-30 px-4 py-3 flex items-center gap-2">
+        <div className="fixed bottom-[72px] left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-surface border-t border-gray-100 shadow-lg z-30 px-4 py-3 flex items-center gap-2">
           <button onClick={() => { setSelectedIds(new Set()); setDeleteConfirm(false) }} className="p-2 rounded-full hover:bg-gray-100">
             <X size={18} className="text-gray-500" />
           </button>
@@ -323,7 +323,7 @@ export default function AssignmentTab() {
           </button>
           <button
             onClick={() => setReassignOpen(true)}
-            className="px-4 py-2 rounded-xl bg-[#534AB7] text-white text-sm font-semibold active:scale-95 transition-transform"
+            className="px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold active:scale-95 transition-transform"
           >
             Reasignar
           </button>

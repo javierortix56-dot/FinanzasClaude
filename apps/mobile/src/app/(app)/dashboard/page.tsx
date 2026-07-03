@@ -42,12 +42,12 @@ export default function DashboardPage() {
     <div className="flex flex-col h-full bg-gray-50">
 
       {/* ── HEADER compacto ── */}
-      <div className="bg-white px-4 pt-10 pb-2 shadow-sm">
+      <div className="bg-surface px-4 pt-10 pb-2 shadow-sm">
 
         {/* Fila única: avatar · mes · nav · ojo · rates */}
         <div className="flex items-center gap-2 mb-2">
-          <div className="w-7 h-7 rounded-full bg-[#534AB7] flex items-center justify-center flex-shrink-0">
-            <span className="text-white font-bold text-[9px]">J&M</span>
+          <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+            <span className="text-white font-bold text-[10px]">J&M</span>
           </div>
           <div className="flex items-center gap-1 min-w-0">
             <button onClick={prevMonth} className="p-1 rounded-full hover:bg-gray-100 transition-colors">
@@ -61,10 +61,10 @@ export default function DashboardPage() {
             </button>
           </div>
           <div className="flex-1" />
-          <span className="bg-gray-100 text-gray-400 text-[9px] font-medium px-1.5 py-0.5 rounded-full">
+          <span className="bg-gray-100 text-gray-400 text-[10px] font-medium px-1.5 py-0.5 rounded-full">
             ARS {s.tipoCambio.ARS_USD.toLocaleString('es-AR')}
           </span>
-          <span className="bg-gray-100 text-gray-400 text-[9px] font-medium px-1.5 py-0.5 rounded-full">
+          <span className="bg-gray-100 text-gray-400 text-[10px] font-medium px-1.5 py-0.5 rounded-full">
             COP {s.tipoCambio.COP_USD.toLocaleString('es-AR')}
           </span>
           <button
@@ -85,22 +85,22 @@ export default function DashboardPage() {
               </p>
             </div>
             <div className={`flex items-center gap-2 mt-1 ${blur}`}>
-              <span className="flex items-center gap-0.5 text-[11px] text-green-600 font-semibold">
-                <span className="text-[9px]">▲</span>{formatAmount(totalIngresos, base)}
+              <span className="flex items-center gap-0.5 text-xs text-green-600 font-semibold">
+                <span className="text-[10px]">▲</span>{formatAmount(totalIngresos, base)}
               </span>
               <span className="text-gray-200 text-xs">|</span>
-              <span className="flex items-center gap-0.5 text-[11px] text-red-400 font-semibold">
-                <span className="text-[9px]">▼</span>{formatAmount(totalEgresos, base)}
+              <span className="flex items-center gap-0.5 text-xs text-red-400 font-semibold">
+                <span className="text-[10px]">▼</span>{formatAmount(totalEgresos, base)}
               </span>
               <span className="text-gray-200 text-xs">|</span>
-              <span className="text-[11px] text-gray-400">{formatAmount(balanceUSD, 'USD')}</span>
+              <span className="text-xs text-gray-400">{formatAmount(balanceUSD, 'USD')}</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* ── CONTENT CARD ── */}
-      <div className="flex-1 min-h-0 bg-white mt-2 overflow-hidden flex flex-col">
+      <div className="flex-1 min-h-0 bg-surface mt-2 overflow-hidden flex flex-col">
 
         {/* Main tabs */}
         <div className="flex border-b border-gray-100 px-4 pt-3">
@@ -110,7 +110,7 @@ export default function DashboardPage() {
               onClick={() => setMainTab(t)}
               className={`flex-1 pb-2.5 text-sm font-semibold transition-colors ${
                 mainTab === t
-                  ? 'text-[#534AB7] border-b-2 border-[#534AB7]'
+                  ? 'text-primary border-b-2 border-primary'
                   : 'text-gray-400'
               }`}
             >

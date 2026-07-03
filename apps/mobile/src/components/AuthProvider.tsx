@@ -50,7 +50,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   if (!authReady) {
     return (
       <div className="flex items-center justify-center min-h-[100dvh] bg-gray-50">
-        <div className="w-7 h-7 border-2 border-[#534AB7] border-t-transparent rounded-full animate-spin" />
+        <div className="w-7 h-7 border-2 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }

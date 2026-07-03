@@ -114,7 +114,7 @@ export default function SnapshotModal({ open, onClose, asset }: Props) {
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/40 z-50" />
         <Dialog.Content
-          className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-white rounded-t-2xl z-50 shadow-2xl outline-none"
+          className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-surface rounded-t-2xl z-50 shadow-2xl outline-none"
           aria-describedby={undefined}
         >
           <div className="flex justify-center pt-3 pb-1">
@@ -142,7 +142,7 @@ export default function SnapshotModal({ open, onClose, asset }: Props) {
               <select
                 value={month}
                 onChange={(e) => setMonth(e.target.value)}
-                className="w-full h-11 px-3 bg-gray-50 rounded-xl border border-gray-200 text-gray-700 outline-none focus:ring-2 focus:ring-[#534AB7]/30 capitalize"
+                className="w-full h-11 px-3 bg-gray-50 rounded-xl border border-gray-200 text-gray-700 outline-none focus:ring-2 focus:ring-primary/30 capitalize"
               >
                 {monthOptions.map((m) => (
                   <option key={m} value={m}>{monthLabel(m)}</option>
@@ -161,9 +161,9 @@ export default function SnapshotModal({ open, onClose, asset }: Props) {
                 placeholder="0"
                 value={aporte}
                 onChange={(e) => setAporte(e.target.value)}
-                className="w-full text-2xl font-bold text-gray-900 bg-gray-50 rounded-xl px-4 py-3 border-0 outline-none focus:ring-2 focus:ring-[#534AB7]"
+                className="w-full text-2xl font-bold text-gray-900 bg-gray-50 rounded-xl px-4 py-3 border-0 outline-none focus:ring-2 focus:ring-primary"
               />
-              <p className="text-[11px] text-gray-400">
+              <p className="text-xs text-gray-400">
                 Positivo si compraste / depositaste, negativo si vendiste / retiraste
               </p>
             </div>
@@ -179,17 +179,17 @@ export default function SnapshotModal({ open, onClose, asset }: Props) {
                 placeholder="0"
                 value={saldo}
                 onChange={(e) => setSaldo(e.target.value)}
-                className="w-full text-2xl font-bold text-gray-900 bg-gray-50 rounded-xl px-4 py-3 border-0 outline-none focus:ring-2 focus:ring-[#534AB7]"
+                className="w-full text-2xl font-bold text-gray-900 bg-gray-50 rounded-xl px-4 py-3 border-0 outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
 
             {/* Resumen calculado */}
-            <div className="rounded-xl bg-[#534AB7]/5 border border-[#534AB7]/10 p-3 space-y-1.5">
-              <div className="flex justify-between text-[11px] text-gray-500">
+            <div className="rounded-xl bg-primary/5 border border-primary/10 p-3 space-y-1.5">
+              <div className="flex justify-between text-xs text-gray-500">
                 <span>Saldo previo</span>
                 <span className="tabular-nums">{formatAmount(saldoPrev, asset.moneda)}</span>
               </div>
-              <div className="flex justify-between text-[11px] text-gray-500">
+              <div className="flex justify-between text-xs text-gray-500">
                 <span>Aporte / retiro</span>
                 <span className="tabular-nums">
                   {aporteNum >= 0 ? '+' : ''}{formatAmount(aporteNum, asset.moneda)}

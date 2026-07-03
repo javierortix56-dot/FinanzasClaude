@@ -29,7 +29,7 @@ export default function DonutChart({ slices, total, centerLabel, centerSub, size
           className="rounded-full flex items-center justify-center"
           style={{
             width: size, height: size,
-            border: '13px solid #f3f4f6',
+            border: '13px solid var(--color-gray-100)',
           }}
         />
       </div>
@@ -64,7 +64,7 @@ export default function DonutChart({ slices, total, centerLabel, centerSub, size
       style={{ overflow: 'visible' }}
     >
       {/* Shadow ring */}
-      <circle cx={CX} cy={CY} r={R} fill="none" stroke="#f1f5f9" strokeWidth={13} />
+      <circle cx={CX} cy={CY} r={R} fill="none" stroke="var(--color-gray-100)" strokeWidth={13} />
 
       {/* Slices */}
       <g transform={`rotate(-90 ${CX} ${CY})`}>{circles}</g>
@@ -74,7 +74,7 @@ export default function DonutChart({ slices, total, centerLabel, centerSub, size
         x={CX} y={CY - 6}
         textAnchor="middle"
         fontSize="7"
-        fill="#9ca3af"
+        fill="var(--color-gray-400)"
         fontFamily="system-ui"
         letterSpacing="0.3"
       >
@@ -86,7 +86,7 @@ export default function DonutChart({ slices, total, centerLabel, centerSub, size
         textAnchor="middle"
         fontSize="11"
         fontWeight="800"
-        fill="#111827"
+        fill="var(--color-gray-900)"
         fontFamily="system-ui"
       >
         {centerLabel}

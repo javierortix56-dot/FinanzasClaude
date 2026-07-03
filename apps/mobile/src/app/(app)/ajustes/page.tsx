@@ -99,12 +99,12 @@ export default function AjustesPage() {
   if (!settings) {
     return (
       <div className="flex flex-col h-full bg-gray-50">
-        <div className="bg-white px-4 pt-10 pb-4 shadow-sm">
+        <div className="bg-surface px-4 pt-10 pb-4 shadow-sm">
           <h1 className="text-gray-800 font-bold text-xl">Ajustes</h1>
           <p className="text-gray-400 text-xs mt-0.5">Javier &amp; Mary</p>
         </div>
         <div className="flex items-center justify-center flex-1">
-          <div className="w-6 h-6 border-2 border-[#534AB7] border-t-transparent rounded-full animate-spin" />
+          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
       </div>
     )
@@ -372,7 +372,7 @@ export default function AjustesPage() {
         {/* Botón nuevo grupo */}
         <button
           onClick={() => setGroupModal({ open: true, tipo, group: null })}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-[#534AB7]/30 text-[#534AB7] text-xs font-semibold hover:bg-[#534AB7]/5 transition-colors"
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-primary/30 text-primary text-xs font-semibold hover:bg-primary/5 transition-colors"
         >
           <Plus size={13} /> Nueva categoría padre
         </button>
@@ -382,7 +382,7 @@ export default function AjustesPage() {
           return (
             <div key={group.id} className="rounded-xl border border-gray-100 overflow-hidden">
               {/* Header del grupo */}
-              <div className="flex items-center gap-2 px-3 py-2.5 bg-white">
+              <div className="flex items-center gap-2 px-3 py-2.5 bg-surface">
                 <button
                   onClick={() => toggleGroup(group.id)}
                   className="flex items-center gap-2 flex-1 min-w-0 text-left"
@@ -391,7 +391,7 @@ export default function AjustesPage() {
                   <span className={`text-sm font-semibold truncate ${!group.activa ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
                     {group.nombre}
                   </span>
-                  <span className="text-[10px] text-gray-400 ml-1">({group.subcategorias.length})</span>
+                  <span className="text-[11px] text-gray-400 ml-1">({group.subcategorias.length})</span>
                   {isOpen
                     ? <ChevronDown size={13} className="text-gray-400 flex-shrink-0 ml-auto" />
                     : <ChevronLeft size={13} className="text-gray-400 flex-shrink-0 ml-auto rotate-180" />
@@ -401,7 +401,7 @@ export default function AjustesPage() {
                 {/* Acciones grupo */}
                 <button
                   onClick={() => setSubModal({ open: true, tipo, groupId: group.id, category: null })}
-                  className="p-1.5 rounded-lg hover:bg-gray-100 text-[#534AB7] flex-shrink-0"
+                  className="p-1.5 rounded-lg hover:bg-gray-100 text-primary flex-shrink-0"
                   title="Nueva subcategoría"
                 >
                   <Plus size={13} />
@@ -461,13 +461,13 @@ export default function AjustesPage() {
   return (
     <div className="flex flex-col h-full bg-gray-50">
       {/* Header */}
-      <div className="bg-white px-4 pt-10 pb-4 shadow-sm">
+      <div className="bg-surface px-4 pt-10 pb-4 shadow-sm">
         <h1 className="text-gray-800 font-bold text-xl">Ajustes</h1>
         <p className="text-gray-400 text-xs mt-0.5">{user?.email ?? 'Javier & Mary'}</p>
       </div>
 
       {/* Card */}
-      <div className="flex-1 bg-white overflow-y-auto">
+      <div className="flex-1 bg-surface overflow-y-auto">
         <div className="px-4 pt-4 pb-24 space-y-1">
 
           {/* ── Cuenta ── */}
@@ -478,8 +478,8 @@ export default function AjustesPage() {
           >
             <div className="space-y-4 pt-2">
               <div className="flex items-center gap-3 px-3 py-2.5 bg-gray-50 rounded-xl border border-gray-100">
-                <div className="w-8 h-8 rounded-full bg-[#534AB7] flex items-center justify-center flex-shrink-0">
-                  <span className="text-white font-bold text-[10px]">
+                <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+                  <span className="text-white font-bold text-[11px]">
                     {(user?.nombre || user?.email || '?').charAt(0).toUpperCase()}
                   </span>
                 </div>
@@ -499,15 +499,15 @@ export default function AjustesPage() {
                       disabled={savingMoneda}
                       className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-colors ${
                         monedaBase === m
-                          ? 'bg-[#534AB7] text-white border-[#534AB7]'
-                          : 'bg-white text-gray-500 border-gray-200'
+                          ? 'bg-primary text-white border-primary'
+                          : 'bg-surface text-gray-500 border-gray-200'
                       }`}
                     >
                       {m}
                     </button>
                   ))}
                 </div>
-                <p className="text-[10px] text-gray-400 mt-1.5">Los totales de la app se muestran en esta moneda</p>
+                <p className="text-[11px] text-gray-400 mt-1.5">Los totales de la app se muestran en esta moneda</p>
               </div>
 
               <button
@@ -534,7 +534,7 @@ export default function AjustesPage() {
                 onClick={saveRates}
                 disabled={savingRate}
                 className={`w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all ${
-                  rateSaved ? 'bg-green-500 text-white' : 'bg-[#534AB7] text-white'
+                  rateSaved ? 'bg-green-500 text-white' : 'bg-primary text-white'
                 }`}
               >
                 {rateSaved ? <><Check size={14} /> Guardado</> : savingRate ? 'Guardando...' : 'Actualizar tipo de cambio'}
@@ -546,7 +546,7 @@ export default function AjustesPage() {
               )}
               {(s?.historialTipoCambio ?? []).length > 0 && (
                 <div className="space-y-1">
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Historial</p>
+                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Historial</p>
                   {[...(s?.historialTipoCambio ?? [])].reverse().slice(0, 6).map((h) => (
                     <div key={h.mes} className="flex justify-between text-xs text-gray-500 py-1 border-b border-gray-50">
                       <span className="capitalize">{monthLabel(h.mes)}</span>
@@ -588,8 +588,8 @@ export default function AjustesPage() {
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Activos</p>
                   {editingTipoActivo
-                    ? <button onClick={saveTiposActivo} className="text-xs text-[#534AB7] font-semibold">Guardar</button>
-                    : <button onClick={() => setEditingTipoActivo(true)} className="text-xs text-[#534AB7] font-semibold flex items-center gap-1"><Pencil size={11} /> Editar</button>
+                    ? <button onClick={saveTiposActivo} className="text-xs text-primary font-semibold">Guardar</button>
+                    : <button onClick={() => setEditingTipoActivo(true)} className="text-xs text-primary font-semibold flex items-center gap-1"><Pencil size={11} /> Editar</button>
                   }
                 </div>
                 {editingTipoActivo ? (
@@ -605,7 +605,7 @@ export default function AjustesPage() {
                       <input value={newTipoActivo} onChange={(e) => setNewTipoActivo(e.target.value)} placeholder="Nuevo tipo..."
                         className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-1.5 text-sm"
                         onKeyDown={(e) => { if (e.key === 'Enter' && newTipoActivo.trim()) { setTiposActivo((p) => [...p, newTipoActivo.trim()]); setNewTipoActivo('') } }} />
-                      <button onClick={() => { if (newTipoActivo.trim()) { setTiposActivo((p) => [...p, newTipoActivo.trim()]); setNewTipoActivo('') } }} className="px-3 text-[#534AB7] font-semibold text-sm"><Plus size={14} /></button>
+                      <button onClick={() => { if (newTipoActivo.trim()) { setTiposActivo((p) => [...p, newTipoActivo.trim()]); setNewTipoActivo('') } }} className="px-3 text-primary font-semibold text-sm"><Plus size={14} /></button>
                     </div>
                   </div>
                 ) : (
@@ -619,8 +619,8 @@ export default function AjustesPage() {
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Pasivos</p>
                   {editingTipoPasivo
-                    ? <button onClick={saveTiposPasivo} className="text-xs text-[#534AB7] font-semibold">Guardar</button>
-                    : <button onClick={() => setEditingTipoPasivo(true)} className="text-xs text-[#534AB7] font-semibold flex items-center gap-1"><Pencil size={11} /> Editar</button>
+                    ? <button onClick={saveTiposPasivo} className="text-xs text-primary font-semibold">Guardar</button>
+                    : <button onClick={() => setEditingTipoPasivo(true)} className="text-xs text-primary font-semibold flex items-center gap-1"><Pencil size={11} /> Editar</button>
                   }
                 </div>
                 {editingTipoPasivo ? (
@@ -636,7 +636,7 @@ export default function AjustesPage() {
                       <input value={newTipoPasivo} onChange={(e) => setNewTipoPasivo(e.target.value)} placeholder="Nuevo tipo..."
                         className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-1.5 text-sm"
                         onKeyDown={(e) => { if (e.key === 'Enter' && newTipoPasivo.trim()) { setTiposPasivo((p) => [...p, newTipoPasivo.trim()]); setNewTipoPasivo('') } }} />
-                      <button onClick={() => { if (newTipoPasivo.trim()) { setTiposPasivo((p) => [...p, newTipoPasivo.trim()]); setNewTipoPasivo('') } }} className="px-3 text-[#534AB7] font-semibold text-sm"><Plus size={14} /></button>
+                      <button onClick={() => { if (newTipoPasivo.trim()) { setTiposPasivo((p) => [...p, newTipoPasivo.trim()]); setNewTipoPasivo('') } }} className="px-3 text-primary font-semibold text-sm"><Plus size={14} /></button>
                     </div>
                   </div>
                 ) : (
@@ -714,7 +714,7 @@ export default function AjustesPage() {
                     <select
                       value={newLinkCatId}
                       onChange={(e) => setNewLinkCatId(e.target.value)}
-                      className="flex-1 min-w-0 h-9 rounded-xl border border-gray-200 bg-gray-50 px-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#534AB7]/30"
+                      className="flex-1 min-w-0 h-9 rounded-xl border border-gray-200 bg-gray-50 px-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
                     >
                       <option value="">Categoría...</option>
                       {flatCats.map((c) => (
@@ -724,7 +724,7 @@ export default function AjustesPage() {
                     <select
                       value={newLinkAssetId}
                       onChange={(e) => setNewLinkAssetId(e.target.value)}
-                      className="flex-1 min-w-0 h-9 rounded-xl border border-gray-200 bg-gray-50 px-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#534AB7]/30"
+                      className="flex-1 min-w-0 h-9 rounded-xl border border-gray-200 bg-gray-50 px-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
                     >
                       <option value="">Activo...</option>
                       {activoAssets.map((a) => (
@@ -734,7 +734,7 @@ export default function AjustesPage() {
                     <button
                       onClick={addLink}
                       disabled={!newLinkCatId || !newLinkAssetId}
-                      className="h-9 px-3 rounded-xl bg-[#534AB7] text-white text-xs font-semibold disabled:opacity-40 flex items-center gap-1"
+                      className="h-9 px-3 rounded-xl bg-primary text-white text-xs font-semibold disabled:opacity-40 flex items-center gap-1"
                     >
                       <Plus size={13} /> Agregar
                     </button>
@@ -814,7 +814,7 @@ export default function AjustesPage() {
                 <Upload size={14} className="flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold leading-tight">{backupAction === 'importando' ? 'Importando...' : 'Importar backup'}</p>
-                  <p className="text-[10px] opacity-70 mt-0.5">Restaura desde un archivo JSON exportado</p>
+                  <p className="text-[11px] opacity-70 mt-0.5">Restaura desde un archivo JSON exportado</p>
                 </div>
                 <ChevronRight size={13} className="opacity-40 flex-shrink-0" />
               </button>
@@ -858,11 +858,11 @@ export default function AjustesPage() {
 function Section({ label, open, onToggle, children }: { label: string; open: boolean; onToggle: () => void; children: React.ReactNode }) {
   return (
     <div className="border border-gray-100 rounded-2xl overflow-hidden">
-      <button onClick={onToggle} className="w-full flex items-center justify-between px-4 py-4 bg-white text-left">
+      <button onClick={onToggle} className="w-full flex items-center justify-between px-4 py-4 bg-surface text-left">
         <span className="text-sm font-semibold text-gray-800">{label}</span>
         {open ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
       </button>
-      {open && <div className="px-4 pb-4 bg-white border-t border-gray-50">{children}</div>}
+      {open && <div className="px-4 pb-4 bg-surface border-t border-gray-50">{children}</div>}
     </div>
   )
 }
@@ -872,7 +872,7 @@ function RateInput({ label, value, onChange }: { label: string; value: string; o
     <div className="flex items-center justify-between gap-3">
       <label className="text-sm text-gray-600 flex-1">{label}</label>
       <input type="text" inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)}
-        className="w-28 border border-gray-200 rounded-lg px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-[#534AB7]" />
+        className="w-28 border border-gray-200 rounded-lg px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary" />
     </div>
   )
 }
@@ -881,7 +881,7 @@ function ActionButton({ icon, label, sublabel, onClick, loading, color, danger }
   icon: React.ReactNode; label: string; sublabel: string; onClick: () => void; loading: boolean; color: 'purple' | 'blue' | 'green' | 'red'; danger?: boolean
 }) {
   const colorMap = {
-    purple: 'text-[#534AB7] bg-[#534AB7]/5 border-[#534AB7]/20',
+    purple: 'text-primary bg-primary/5 border-primary/20',
     blue: 'text-blue-600 bg-blue-50 border-blue-200',
     green: 'text-green-600 bg-green-50 border-green-200',
     red: 'text-red-400 bg-red-50 border-red-200',
@@ -892,7 +892,7 @@ function ActionButton({ icon, label, sublabel, onClick, loading, color, danger }
       <span className="flex-shrink-0">{icon}</span>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold leading-tight">{loading ? 'Procesando...' : label}</p>
-        <p className="text-[10px] opacity-70 mt-0.5 leading-tight">{sublabel}</p>
+        <p className="text-[11px] opacity-70 mt-0.5 leading-tight">{sublabel}</p>
       </div>
       <ChevronRight size={13} className="opacity-40 flex-shrink-0" />
     </button>

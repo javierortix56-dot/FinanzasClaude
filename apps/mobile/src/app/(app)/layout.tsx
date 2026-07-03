@@ -44,7 +44,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <main className="flex-1 min-h-0 pb-20 overflow-x-hidden">{children}</main>
 
       {/* Bottom nav */}
-      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-white border-t border-gray-100 shadow-lg z-40">
+      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-surface border-t border-gray-100 shadow-lg z-40">
         <div className="flex items-end justify-around px-2 py-2 relative">
           {leftNav.map(({ href, icon: Icon, label }) => {
             const active = pathname.startsWith(href)
@@ -53,11 +53,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 key={href}
                 href={href}
                 className={`flex flex-col items-center gap-0.5 px-4 py-1 rounded-xl transition-colors ${
-                  active ? 'text-[#534AB7]' : 'text-gray-400 hover:text-gray-600'
+                  active ? 'text-primary' : 'text-gray-400 hover:text-gray-600'
                 }`}
               >
                 <Icon size={22} strokeWidth={active ? 2.2 : 1.8} />
-                <span className="text-[10px] font-medium">{label}</span>
+                <span className="text-[11px] font-medium">{label}</span>
               </Link>
             )
           })}
@@ -65,7 +65,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {/* FAB */}
           <button
             onClick={openAddModal}
-            className="relative -top-4 w-14 h-14 rounded-full bg-[#534AB7] flex items-center justify-center shadow-xl shadow-[#534AB7]/40 active:scale-95 transition-transform z-50"
+            className="relative -top-4 w-14 h-14 rounded-full bg-primary flex items-center justify-center shadow-xl shadow-primary/40 active:scale-95 transition-transform z-50"
             aria-label="Agregar movimiento"
           >
             <Plus size={26} color="white" strokeWidth={2.5} />
@@ -78,11 +78,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 key={href}
                 href={href}
                 className={`flex flex-col items-center gap-0.5 px-4 py-1 rounded-xl transition-colors ${
-                  active ? 'text-[#534AB7]' : 'text-gray-400 hover:text-gray-600'
+                  active ? 'text-primary' : 'text-gray-400 hover:text-gray-600'
                 }`}
               >
                 <Icon size={22} strokeWidth={active ? 2.2 : 1.8} />
-                <span className="text-[10px] font-medium">{label}</span>
+                <span className="text-[11px] font-medium">{label}</span>
               </Link>
             )
           })}

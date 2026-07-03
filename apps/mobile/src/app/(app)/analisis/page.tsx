@@ -17,7 +17,7 @@ export default function AnalisisPage() {
     <div className="flex flex-col h-full bg-gray-50">
 
       {/* ── Header ── */}
-      <div className="bg-white px-4 pt-10 pb-3 shadow-sm">
+      <div className="bg-surface px-4 pt-10 pb-3 shadow-sm">
         <div className="flex items-center justify-between">
           <h1 className="text-gray-800 font-bold text-xl">Análisis</h1>
           <div className="flex items-center gap-1">
@@ -35,7 +35,7 @@ export default function AnalisisPage() {
       </div>
 
       {/* ── Main card ── */}
-      <div className="flex-1 min-h-0 bg-white overflow-hidden flex flex-col">
+      <div className="flex-1 min-h-0 bg-surface overflow-hidden flex flex-col">
 
         {/* Tabs */}
         <div className="flex border-b border-gray-100 px-4 pt-1">
@@ -45,7 +45,7 @@ export default function AnalisisPage() {
               onClick={() => setTab(t)}
               className={`flex-1 py-3 text-sm font-semibold transition-colors ${
                 tab === t
-                  ? 'text-[#534AB7] border-b-2 border-[#534AB7]'
+                  ? 'text-primary border-b-2 border-primary'
                   : 'text-gray-400'
               }`}
             >

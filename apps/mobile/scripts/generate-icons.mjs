@@ -3,7 +3,7 @@
  * No external dependencies — uses only Node.js built-ins (zlib, fs).
  *
  * Produces:
- *   public/icon-192.png   (192x192, solid #10b981 + white $ sign)
+ *   public/icon-192.png   (192x192, solid #534AB7 + white $ sign)
  *   public/icon-512.png   (512x512, same design)
  *   public/icon-maskable.png (512x512, with safe-zone padding for maskable)
  */
@@ -122,7 +122,7 @@ function drawIcon(size, padding = 0) {
   // Background: #10b981 rounded rect
   const rad = Math.round(size * 0.22)
   const p = padding
-  c.roundRect(p, p, size - p, size - p, rad, 16, 185, 129)
+  c.roundRect(p, p, size - p, size - p, rad, 83, 74, 183)
 
   // White bar chart (3 bars)
   const inner = size - p * 2

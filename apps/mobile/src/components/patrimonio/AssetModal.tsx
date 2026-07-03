@@ -119,7 +119,7 @@ export default function AssetModal({ open, onClose, editing }: Props) {
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/40 z-50" />
         <Dialog.Content
-          className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-white rounded-t-2xl z-50 shadow-2xl outline-none"
+          className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-surface rounded-t-2xl z-50 shadow-2xl outline-none"
           aria-describedby={undefined}
         >
           <div className="flex justify-center pt-3 pb-1">
@@ -143,7 +143,7 @@ export default function AssetModal({ open, onClose, editing }: Props) {
                   key={c}
                   onClick={() => setClase(c)}
                   className={`flex-1 py-2.5 rounded-lg text-sm font-semibold capitalize transition-all ${
-                    clase === c ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                    clase === c ? 'bg-surface text-gray-900 shadow-sm' : 'text-gray-500'
                   }`}
                 >
                   {c === 'activo' ? 'Activo' : 'Pasivo'}
@@ -175,8 +175,8 @@ export default function AssetModal({ open, onClose, editing }: Props) {
                     onClick={() => setTipo(t)}
                     className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all capitalize ${
                       tipo === t
-                        ? 'bg-[#534AB7] text-white border-[#534AB7]'
-                        : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                        ? 'bg-primary text-white border-primary'
+                        : 'bg-surface border-gray-200 text-gray-600 hover:border-gray-300'
                     }`}
                   >
                     {t}
@@ -197,7 +197,7 @@ export default function AssetModal({ open, onClose, editing }: Props) {
                   placeholder="0"
                   value={saldo}
                   onChange={(e) => setSaldo(e.target.value)}
-                  className="flex-1 text-2xl font-bold text-gray-900 bg-gray-50 rounded-xl px-4 py-3 border-0 outline-none focus:ring-2 focus:ring-[#534AB7]"
+                  className="flex-1 text-2xl font-bold text-gray-900 bg-gray-50 rounded-xl px-4 py-3 border-0 outline-none focus:ring-2 focus:ring-primary"
                 />
                 <div className="flex flex-col gap-1">
                   {CURRENCIES.map((c) => (
@@ -205,7 +205,7 @@ export default function AssetModal({ open, onClose, editing }: Props) {
                       key={c}
                       onClick={() => setMoneda(c)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                        moneda === c ? 'bg-[#534AB7] text-white' : 'bg-gray-100 text-gray-500'
+                        moneda === c ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500'
                       }`}
                     >
                       {c}
@@ -225,8 +225,8 @@ export default function AssetModal({ open, onClose, editing }: Props) {
 
             {/* Meta de ahorro (solo activos) */}
             {clase === 'activo' && (
-              <div className="space-y-2 p-4 bg-[#534AB7]/5 rounded-xl border border-[#534AB7]/10">
-                <label className="text-xs font-semibold text-[#534AB7] uppercase tracking-wide">
+              <div className="space-y-2 p-4 bg-primary/5 rounded-xl border border-primary/10">
+                <label className="text-xs font-semibold text-primary uppercase tracking-wide">
                   Meta de ahorro (opcional)
                 </label>
                 <div className="flex items-center gap-2">
@@ -237,7 +237,7 @@ export default function AssetModal({ open, onClose, editing }: Props) {
                     placeholder="0"
                     value={metaObjVal}
                     onChange={(e) => setMetaObjVal(e.target.value)}
-                    className="flex-1 text-lg font-bold text-gray-900 bg-white rounded-xl px-3 py-2.5 border border-gray-200 outline-none focus:ring-2 focus:ring-[#534AB7]"
+                    className="flex-1 text-lg font-bold text-gray-900 bg-surface rounded-xl px-3 py-2.5 border border-gray-200 outline-none focus:ring-2 focus:ring-primary"
                   />
                   <div className="flex gap-1">
                     {CURRENCIES.map((c) => (
@@ -245,7 +245,7 @@ export default function AssetModal({ open, onClose, editing }: Props) {
                         key={c}
                         onClick={() => setMetaMoneda(c)}
                         className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                          metaMoneda === c ? 'bg-[#534AB7] text-white' : 'bg-gray-100 text-gray-500'
+                          metaMoneda === c ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500'
                         }`}
                       >
                         {c}
@@ -254,7 +254,7 @@ export default function AssetModal({ open, onClose, editing }: Props) {
                   </div>
                 </div>
                 {metaObjVal && (
-                  <p className="text-xs text-[#534AB7]/70">
+                  <p className="text-xs text-primary/70">
                     La meta se mostrará como barra de progreso en la cuenta
                   </p>
                 )}

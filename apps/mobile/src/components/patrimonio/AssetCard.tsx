@@ -80,13 +80,13 @@ export default function AssetCard({ asset, settings, onClick, onUpdateSnapshot }
         {/* Meta progress */}
         {asset.metaObjetivo != null && (
           <div className="mt-2">
-            <div className="flex justify-between text-[10px] text-gray-400 mb-1">
+            <div className="flex justify-between text-[11px] text-gray-400 mb-1">
               <span>Meta: {metaLabel}</span>
-              <span className="font-medium text-[#534AB7]">{Math.round(metaPercent)}%</span>
+              <span className="font-medium text-primary">{Math.round(metaPercent)}%</span>
             </div>
             <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
               <div
-                className="h-full bg-[#534AB7] rounded-full transition-all"
+                className="h-full bg-primary rounded-full transition-all"
                 style={{ width: `${metaPercent}%` }}
               />
             </div>
@@ -96,7 +96,7 @@ export default function AssetCard({ asset, settings, onClick, onUpdateSnapshot }
         {/* Snapshot status + button */}
         {onUpdateSnapshot && isActivo && (
           <div className="mt-2 flex items-center justify-between">
-            <span className="text-[10px] text-gray-400">
+            <span className="text-[11px] text-gray-400">
               {currentSnap
                 ? <>Actualizado este mes</>
                 : lastSnap
@@ -106,10 +106,10 @@ export default function AssetCard({ asset, settings, onClick, onUpdateSnapshot }
             </span>
             <button
               onClick={(e) => { e.stopPropagation(); onUpdateSnapshot() }}
-              className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold transition-colors ${
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold transition-colors ${
                 currentSnap
                   ? 'bg-green-50 text-green-600 hover:bg-green-100'
-                  : 'bg-[#534AB7]/10 text-[#534AB7] hover:bg-[#534AB7]/20'
+                  : 'bg-primary/10 text-primary hover:bg-primary/20'
               }`}
               title="Actualizar snapshot del mes"
             >

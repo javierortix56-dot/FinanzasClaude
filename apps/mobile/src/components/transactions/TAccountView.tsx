@@ -40,31 +40,31 @@ const TxRow = memo(function TxRow({ tx, hideAmounts, settings, monedaBase, linke
       className={`w-full min-w-0 text-left px-2.5 py-2 border-b border-gray-50 hover:bg-gray-50 active:bg-gray-100 transition-colors overflow-hidden cursor-pointer ${tx.ejecutado ? 'opacity-50' : ''}`}
     >
       <div className="flex items-center justify-between gap-1 min-w-0">
-        <p className={`text-[11px] font-medium text-gray-900 truncate leading-tight flex-1 min-w-0 ${tx.ejecutado ? 'line-through' : ''}`}>
+        <p className={`text-xs font-medium text-gray-900 truncate leading-tight flex-1 min-w-0 ${tx.ejecutado ? 'line-through' : ''}`}>
           {tx.descripcion || cat?.nombre || '-'}
         </p>
         {tx.tipo === 'egreso' && (
           linkedLabel
-            ? <span className="text-[9px] font-semibold text-[#534AB7] shrink-0 truncate max-w-[45%]">{linkedLabel}</span>
-            : <span className="text-[9px] font-semibold text-amber-400 shrink-0">Sin asignar</span>
+            ? <span className="text-[10px] font-semibold text-primary shrink-0 truncate max-w-[45%]">{linkedLabel}</span>
+            : <span className="text-[10px] font-semibold text-amber-400 shrink-0">Sin asignar</span>
         )}
       </div>
       <div className="flex items-center justify-between mt-0.5 gap-1 min-w-0">
         <div className="flex items-center gap-1 min-w-0 shrink">
           <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: dotColor }} />
-          <span className="text-[10px] text-gray-400 truncate">{dateStr}</span>
+          <span className="text-[11px] text-gray-400 truncate">{dateStr}</span>
         </div>
         <div className="flex items-center gap-1 shrink-0 max-w-[55%]">
           <div className="flex flex-col items-end min-w-0">
             <span
-              className={`text-[11px] font-semibold tabular-nums truncate ${
+              className={`text-xs font-semibold tabular-nums truncate ${
                 isIngreso ? 'text-green-600' : 'text-red-400'
               } ${hideAmounts ? 'blur-sm' : ''} ${tx.ejecutado ? 'line-through' : ''}`}
             >
               {formatAmount(montoBase, monedaBase)}
             </span>
             {tx.moneda !== monedaBase && (
-              <span className={`text-[9px] text-gray-400 tabular-nums truncate leading-tight ${hideAmounts ? 'blur-sm' : ''} ${tx.ejecutado ? 'line-through' : ''}`}>
+              <span className={`text-[10px] text-gray-400 tabular-nums truncate leading-tight ${hideAmounts ? 'blur-sm' : ''} ${tx.ejecutado ? 'line-through' : ''}`}>
                 {formatAmount(tx.monto, tx.moneda)}
               </span>
             )}
@@ -117,7 +117,7 @@ function EmptyState({ tipo }: { tipo: 'ingreso' | 'egreso' }) {
       <p className="text-xs font-medium text-gray-400">
         Sin {isIngreso ? 'ingresos' : 'egresos'}
       </p>
-      <p className="text-[10px] text-gray-300 mt-0.5">Tocá + para agregar</p>
+      <p className="text-[11px] text-gray-300 mt-0.5">Tocá + para agregar</p>
     </div>
   )
 }
@@ -190,7 +190,7 @@ export default function TAccountView({ search = '' }: Props) {
       {/* ── Columna Ingresos ── */}
       <div className="flex-1 min-w-0 min-h-0 flex flex-col border-r-2 border-gray-200 overflow-hidden">
         <div className="px-3 py-2.5 bg-green-50 border-b border-green-100 flex-shrink-0">
-          <p className="text-[10px] font-bold text-green-700 uppercase tracking-wider">
+          <p className="text-[11px] font-bold text-green-700 uppercase tracking-wider">
             Ingresos <span className="font-normal opacity-60">({ingresos.length})</span>
           </p>
           <p className={`text-sm font-bold text-green-700 tabular-nums mt-0.5 ${hideAmounts ? 'blur-sm' : ''}`}>
@@ -212,7 +212,7 @@ export default function TAccountView({ search = '' }: Props) {
       {/* ── Columna Egresos ── */}
       <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
         <div className="px-3 py-2.5 bg-red-50 border-b border-red-100 flex-shrink-0">
-          <p className="text-[10px] font-bold text-red-400 uppercase tracking-wider">
+          <p className="text-[11px] font-bold text-red-400 uppercase tracking-wider">
             Egresos <span className="font-normal opacity-60">({egresos.length})</span>
           </p>
           <p className={`text-sm font-bold text-red-400 tabular-nums mt-0.5 ${hideAmounts ? 'blur-sm' : ''}`}>
@@ -227,7 +227,7 @@ export default function TAccountView({ search = '' }: Props) {
                   style={{ width: `${pctGastado}%` }}
                 />
               </div>
-              <p className={`text-[9px] text-red-400 mt-0.5 ${hideAmounts ? 'blur-sm' : ''}`}>
+              <p className={`text-[10px] text-red-400 mt-0.5 ${hideAmounts ? 'blur-sm' : ''}`}>
                 {Math.round(pctGastado)}% del ingreso
               </p>
             </div>

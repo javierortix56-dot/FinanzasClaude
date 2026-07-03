@@ -47,7 +47,7 @@ function ProjectionCard({ label, projected, previous, currency, higherIsBetter =
           {diff === 0 ? 'Sin cambio' : `${Math.abs(diff).toFixed(0)}% vs mes anterior`}
         </span>
       </div>
-      <p className="text-[10px] text-gray-400 mt-1">
+      <p className="text-[11px] text-gray-400 mt-1">
         Mes anterior: {formatAmount(previous, currency)}
       </p>
     </div>
@@ -98,20 +98,20 @@ export default function PilotoTab() {
     <div className="h-full overflow-y-auto px-4 pt-4 pb-8">
       {/* Progress indicator */}
       {isCurrentMonth && (
-        <div className="mb-5 bg-[#534AB7]/5 rounded-2xl px-4 py-3 border border-[#534AB7]/10">
+        <div className="mb-5 bg-primary/5 rounded-2xl px-4 py-3 border border-primary/10">
           <div className="flex justify-between mb-1.5">
-            <p className="text-xs font-semibold text-[#534AB7]">Avance del mes</p>
-            <p className="text-xs font-bold text-[#534AB7]">
+            <p className="text-xs font-semibold text-primary">Avance del mes</p>
+            <p className="text-xs font-bold text-primary">
               Día {daysPassed} de {totalDays} ({Math.round(completionPct * 100)}%)
             </p>
           </div>
-          <div className="h-2 bg-[#534AB7]/20 rounded-full overflow-hidden">
+          <div className="h-2 bg-primary/20 rounded-full overflow-hidden">
             <div
-              className="h-full bg-[#534AB7] rounded-full"
+              className="h-full bg-primary rounded-full"
               style={{ width: `${completionPct * 100}%` }}
             />
           </div>
-          <p className="text-[10px] text-[#534AB7]/60 mt-1.5">
+          <p className="text-[11px] text-primary/60 mt-1.5">
             Proyección basada en el ritmo de gasto actual
           </p>
         </div>

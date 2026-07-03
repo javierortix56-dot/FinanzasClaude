@@ -58,7 +58,7 @@ export default function BudgetModal({ open, onClose, categoria, mes }: Props) {
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/40 z-[60]" />
         <Dialog.Content
-          className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-white rounded-t-2xl z-[60] shadow-2xl outline-none"
+          className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-surface rounded-t-2xl z-[60] shadow-2xl outline-none"
           aria-describedby={undefined}
         >
           <div className="flex justify-center pt-3 pb-1">
@@ -92,7 +92,7 @@ export default function BudgetModal({ open, onClose, categoria, mes }: Props) {
                   placeholder="0"
                   value={limite}
                   onChange={(e) => setLimite(e.target.value)}
-                  className="flex-1 text-2xl font-bold text-gray-900 bg-gray-50 rounded-xl px-4 py-3 border-0 outline-none focus:ring-2 focus:ring-[#534AB7]"
+                  className="flex-1 text-2xl font-bold text-gray-900 bg-gray-50 rounded-xl px-4 py-3 border-0 outline-none focus:ring-2 focus:ring-primary"
                 />
                 <div className="flex flex-col gap-1">
                   {CURRENCIES.map((c) => (
@@ -100,7 +100,7 @@ export default function BudgetModal({ open, onClose, categoria, mes }: Props) {
                       key={c}
                       onClick={() => setMoneda(c)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                        moneda === c ? 'bg-[#534AB7] text-white' : 'bg-gray-100 text-gray-500'
+                        moneda === c ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500'
                       }`}
                     >
                       {c}
