@@ -6,8 +6,15 @@ import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { monthLabel } from '@finanzas/core/lib/constants'
 import HistoricoTab from '@/components/analisis/HistoricoTab'
 import PilotoTab    from '@/components/analisis/PilotoTab'
+import CuotasTab    from '@/components/cuotas/CuotasTab'
 
-type Tab = 'historico' | 'piloto'
+type Tab = 'historico' | 'cuotas' | 'piloto'
+
+const TAB_LABELS: Record<Tab, string> = {
+  historico: 'Histórico',
+  cuotas:    'Cuotas',
+  piloto:    'Piloto',
+}
 
 export default function AnalisisPage() {
   const { currentMonth, prevMonth, nextMonth } = useTransactionStore()
@@ -39,7 +46,7 @@ export default function AnalisisPage() {
 
         {/* Tabs */}
         <div className="flex border-b border-gray-100 px-4 pt-1">
-          {(['historico', 'piloto'] as Tab[]).map((t) => (
+          {(['historico', 'cuotas', 'piloto'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -49,13 +56,13 @@ export default function AnalisisPage() {
                   : 'text-gray-400'
               }`}
             >
-              {t === 'historico' ? 'Histórico' : 'Piloto'}
+              {TAB_LABELS[t]}
             </button>
           ))}
         </div>
 
         <div className="flex-1 overflow-hidden">
-          {tab === 'historico' ? <HistoricoTab /> : <PilotoTab />}
+          {tab === 'historico' ? <HistoricoTab /> : tab === 'cuotas' ? <CuotasTab /> : <PilotoTab />}
         </div>
       </div>
     </div>

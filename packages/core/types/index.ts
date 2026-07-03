@@ -117,6 +117,21 @@ export interface Settings {
   ahorroLinks?: AhorroLink[]
 }
 
+/** Compra en cuotas con tarjeta de crédito */
+export interface CompraCuotas {
+  id?: string
+  descripcion: string
+  /** Nombre libre de la tarjeta (Visa Galicia, Master Bancolombia, …) */
+  tarjeta: string
+  moneda: Currency
+  /** Monto de CADA cuota, en la moneda de la compra */
+  montoCuota: number
+  totalCuotas: number
+  /** Mes en que vence la primera cuota, formato 'YYYY-MM' */
+  primerMes: string
+  creadoPor: string
+}
+
 export interface Budget {
   id?: string
   userId: string
