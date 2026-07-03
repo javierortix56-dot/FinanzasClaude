@@ -33,20 +33,24 @@ export default function AsignacionesPage() {
   const egresos = useMemo(() => transactions.filter((t) => t.tipo === 'egreso'), [transactions])
 
   const totalEgresosUSD   = egresos.reduce((s, t) => s + toBase(t.monto, t.moneda, 'USD', settings), 0)
-  const asignadosUSD      = egresos.filter((e) => e.asignadoA).reduce((s, t) => s + toBase(t.monto, t.moneda, 'USD', settings), 0)
+  const asignadosUSD      = egresos.filter((e) => e.asignaciones.length > 0).reduce((s, t) => s + toBase(t.monto, t.moneda, 'USD', settings), 0)
   const sinAsignarUSD     = totalEgresosUSD - asignadosUSD
   const pctAsignado = totalEgresosUSD > 0 ? (asignadosUSD / totalEgresosUSD) * 100 : 0
 
+  // Un egreso dividido aparece bajo cada ingreso; el total del grupo suma
+  // solo la parte asignada a ese ingreso.
   const grupos = useMemo(() => {
     return ingresos.map((ing) => {
-      const asignados = egresos.filter((e) => e.asignadoA === ing.id)
-      const totalUSD = asignados.reduce((s, t) => s + toBase(t.monto, t.moneda, 'USD', settings), 0)
+      const asignados = egresos.filter((e) => e.asignaciones.some((a) => a.ingresoId === ing.id))
+      const totalUSD = egresos.reduce((s, e) => s + e.asignaciones
+        .filter((a) => a.ingresoId === ing.id)
+        .reduce((x, a) => x + toBase(a.monto, e.moneda, 'USD', settings), 0), 0)
       const ingresoUSD = toBase(ing.monto, ing.moneda, 'USD', settings)
       return { ingreso: ing, asignados, totalUSD, ingresoUSD, restante: ingresoUSD - totalUSD }
     })
   }, [ingresos, egresos, settings])
 
-  const sinAsignar = egresos.filter((e) => !e.asignadoA)
+  const sinAsignar = egresos.filter((e) => e.asignaciones.length === 0)
 
   function toggle(id: string) {
     setExpanded((e) => ({ ...e, [id]: !e[id] }))
@@ -75,7 +79,7 @@ export default function AsignacionesPage() {
         if (d < bestDiff) { best = ing; bestDiff = d }
       }
       if (e.id && best.id) {
-        await updateTransaction(e.id, { asignadoA: best.id })
+        await updateTransaction(e.id, { asignaciones: [{ ingresoId: best.id, monto: e.monto }] })
         count++
       }
     }
@@ -83,9 +87,14 @@ export default function AsignacionesPage() {
   }
 
   async function reasignar(toIngresoId: string | null) {
+    const byId = new Map(egresos.map((e) => [e.id!, e]))
     let count = 0
     for (const id of selected) {
-      await updateTransaction(id, { asignadoA: toIngresoId })
+      const exp = byId.get(id)
+      if (!exp) continue
+      await updateTransaction(id, {
+        asignaciones: toIngresoId ? [{ ingresoId: toIngresoId, monto: exp.monto }] : [],
+      })
       count++
     }
     setSelected(new Set())

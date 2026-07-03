@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { X, Trash2, Repeat, Copy, ArrowRight } from 'lucide-react'
+import { X, Trash2, Repeat, Copy, ArrowRight, Check, CheckCircle2 } from 'lucide-react'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
@@ -13,9 +13,24 @@ import { SHARED_USER_ID, SHARED_USERS, formatAmount, getParentGroup, getCatFromS
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { adjustAssetSaldo } from '@finanzas/core/lib/assets'
 import { toBase } from '@finanzas/core/lib/currency'
-import { Transaction, Currency, TransactionType, CategoryGroup } from '@finanzas/core/types'
+import { Transaction, Currency, TransactionType, CategoryGroup, Asignacion } from '@finanzas/core/types'
 
 const CURRENCIES: Currency[] = ['ARS', 'COP', 'USD']
+
+/** Borrador de asignación mientras se edita (monto como string del input) */
+interface AsigDraft {
+  ingresoId: string
+  monto: string
+}
+
+function num(v: string): number {
+  const n = parseFloat(v.replace(',', '.'))
+  return Number.isFinite(n) ? n : 0
+}
+
+function toInputStr(v: number): string {
+  return String(Math.round(v * 100) / 100)
+}
 
 export default function TransactionModal() {
   const { isTransactionModalOpen, editingTransaction, closeTransactionModal, showToast } = useUIStore()
@@ -35,7 +50,7 @@ export default function TransactionModal() {
   const [fecha, setFecha] = useState(toLocalDateString())
   const [creadoPor, setCreadoPor] = useState(SHARED_USERS[0].id)
   const [ejecutado, setEjecutado] = useState(false)
-  const [asignadoA, setAsignadoA] = useState<string | null>(null)
+  const [asigs, setAsigs] = useState<AsigDraft[]>([])
   const [recurrente, setRecurrente] = useState(false)
   const [ahorroAssetId, setAhorroAssetId] = useState('')
   const [saving, setSaving] = useState(false)
@@ -61,7 +76,7 @@ export default function TransactionModal() {
       setFecha(toLocalDateString(d))
       setCreadoPor(editingTransaction.creadoPor || SHARED_USERS[0].id)
       setEjecutado(editingTransaction.ejecutado)
-      setAsignadoA(editingTransaction.asignadoA ?? null)
+      setAsigs(editingTransaction.asignaciones.map((a) => ({ ingresoId: a.ingresoId, monto: toInputStr(a.monto) })))
       setRecurrente(editingTransaction.recurrente ?? false)
       setAhorroAssetId(editingTransaction.ahorroAssetId ?? '')
       const catId = editingTransaction.categoria
@@ -75,7 +90,7 @@ export default function TransactionModal() {
       setTipo('egreso'); setMonto(''); setMoneda('ARS')
       setSelectedGroup(''); setSelectedSub(''); setDescripcion('')
       setFecha(toLocalDateString())
-      setCreadoPor(SHARED_USERS[0].id); setEjecutado(false); setAsignadoA(null); setRecurrente(false); setAhorroAssetId('')
+      setCreadoPor(SHARED_USERS[0].id); setEjecutado(false); setAsigs([]); setRecurrente(false); setAhorroAssetId('')
     }
   }, [isTransactionModalOpen, editingTransaction, settings])
 
@@ -87,6 +102,30 @@ export default function TransactionModal() {
     if (link) setAhorroAssetId(link.assetId)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSub, selectedGroup])
+
+  const parsedMonto  = num(monto)
+  const montoValido  = parsedMonto > 0
+  const montoInvalid = !!monto.trim() && !montoValido
+
+  // Mantener las asignaciones en sync cuando cambia el monto total:
+  // 1 seleccionada → asignación completa; 2 → la segunda absorbe el resto.
+  useEffect(() => {
+    if (!isTransactionModalOpen || !montoValido) return
+    setAsigs((prev) => {
+      if (prev.length === 1) {
+        if (num(prev[0].monto) === parsedMonto) return prev
+        return [{ ...prev[0], monto: toInputStr(parsedMonto) }]
+      }
+      if (prev.length === 2) {
+        const first = num(prev[0].monto)
+        const resto = Math.max(parsedMonto - first, 0)
+        if (num(prev[1].monto) === resto) return prev
+        return [prev[0], { ...prev[1], monto: toInputStr(resto) }]
+      }
+      return prev
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parsedMonto, isTransactionModalOpen])
 
   const categoryGroups: CategoryGroup[] = tipo === 'egreso'
     ? (s.categoriasGasto.length > 0 ? s.categoriasGasto : DEFAULT_GASTO_CATEGORY_GROUPS)
@@ -108,42 +147,77 @@ export default function TransactionModal() {
     )].slice(0, 5)
   }, [transactions, selectedSub, selectedGroup, descripcion])
 
+  // Ingresos del mes con su disponible (excluyendo lo asignado por ESTE movimiento)
   const ingresoOptions = useMemo(() => {
-    const montoExp = parseFloat(monto.replace(',', '.')) || 0
-    const expBase = toBase(montoExp, moneda, base, s)
     return transactions
       .filter((t) => t.tipo === 'ingreso')
       .sort((a, b) => b.fecha.toDate().getTime() - a.fecha.toDate().getTime())
       .map((ing) => {
         const incBase = toBase(ing.monto, ing.moneda, base, s)
         const usedBase = transactions
-          .filter((t) => t.tipo === 'egreso' && t.asignadoA === ing.id && t.id !== editingTransaction?.id)
-          .reduce((sum, t) => sum + toBase(t.monto, t.moneda, base, s), 0)
-        const remaining = incBase - usedBase
-        const wouldExceed = expBase > 0 && expBase > remaining
-        return { ing, remaining, wouldExceed }
+          .filter((t) => t.tipo === 'egreso' && t.id !== editingTransaction?.id)
+          .reduce((sum, t) => sum + t.asignaciones
+            .filter((a) => a.ingresoId === ing.id)
+            .reduce((x, a) => x + toBase(a.monto, t.moneda, base, s), 0), 0)
+        return { ing, remaining: incBase - usedBase }
       })
-  }, [transactions, monto, moneda, base, s, editingTransaction])
+  }, [transactions, base, s, editingTransaction])
 
-  const parsedMonto  = parseFloat(monto.replace(',', '.'))
-  const montoValido  = Number.isFinite(parsedMonto) && parsedMonto > 0
-  const montoInvalid = !!monto.trim() && !montoValido
-  const canSave      = montoValido
+  // ── Lógica de asignación dividida ────────────────────────────────────────────
+  const isSplit  = asigs.length >= 2
+  const asigSum  = asigs.reduce((sum, a) => sum + num(a.monto), 0)
+  const asigOk   = asigs.length === 0 ||
+    (asigs.every((a) => num(a.monto) > 0) && Math.abs(asigSum - parsedMonto) < 0.01)
 
-  const accentColor  = tipo === 'egreso' ? '#f87171' : '#22c55e'
-  const accentBg     = tipo === 'egreso' ? 'bg-red-400' : 'bg-green-500'
+  function toggleIngreso(id: string) {
+    setAsigs((prev) => {
+      const exists = prev.some((a) => a.ingresoId === id)
+      if (exists) {
+        const next = prev.filter((a) => a.ingresoId !== id)
+        // Si queda una sola, vuelve a ser asignación completa
+        return next.length === 1 ? [{ ...next[0], monto: toInputStr(parsedMonto) }] : next
+      }
+      if (prev.length === 0) return [{ ingresoId: id, monto: toInputStr(parsedMonto) }]
+      // División: el nuevo ingreso absorbe lo que falta cubrir
+      const usado = prev.reduce((sum, a) => sum + num(a.monto), 0)
+      const resto = Math.max(parsedMonto - usado, 0)
+      return [...prev, { ingresoId: id, monto: toInputStr(resto) }]
+    })
+  }
+
+  function setAsigMonto(id: string, value: string) {
+    setAsigs((prev) => {
+      const next = prev.map((a) => (a.ingresoId === id ? { ...a, monto: value } : a))
+      // Con exactamente 2 ingresos, el otro absorbe el resto automáticamente
+      if (next.length === 2) {
+        const otherIdx = next.findIndex((a) => a.ingresoId !== id)
+        const resto = Math.max(parsedMonto - num(value), 0)
+        next[otherIdx] = { ...next[otherIdx], monto: toInputStr(resto) }
+      }
+      return next
+    })
+  }
+
+  const canSave = montoValido && (tipo === 'ingreso' || asigOk)
+
+  const accentColor = tipo === 'egreso' ? '#f87171' : '#22c55e'
+  const accentBg    = tipo === 'egreso' ? 'bg-red-400' : 'bg-green-500'
 
   async function handleSave() {
-    if (!montoValido) return
+    if (!canSave) return
     setSaving(true)
     setSaveError(null)
     try {
+      const asignaciones: Asignacion[] = tipo === 'egreso'
+        ? asigs.map((a) => ({ ingresoId: a.ingresoId, monto: num(a.monto) }))
+        : []
       const data: Omit<Transaction, 'id'> = {
         userId: SHARED_USER_ID, tipo, monto: parsedMonto, moneda, categoria,
         descripcion: descripcion.trim(),
         nota: editingTransaction?.nota ?? '', tags: editingTransaction?.tags ?? [],
         fecha: { toDate: () => new Date(fecha + 'T12:00:00') },
-        ejecutado, asignadoA: tipo === 'egreso' ? (asignadoA || null) : null,
+        ejecutado,
+        asignaciones,
         creadoPor: creadoPor || SHARED_USER_ID,
         recurrente,
       }
@@ -252,112 +326,97 @@ export default function TransactionModal() {
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/50 z-50 backdrop-blur-[2px]" />
         <Dialog.Content
-          className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-surface rounded-t-3xl z-50 shadow-2xl outline-none"
+          className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-surface rounded-t-3xl z-50 shadow-2xl outline-none flex flex-col max-h-[92dvh]"
           aria-describedby={undefined}
         >
-          {/* Handle */}
-          <div className="flex justify-center pt-3 pb-2">
-            <div className="w-9 h-1 bg-gray-200 rounded-full" />
-          </div>
-
-          {/* Header */}
-          <div className="flex items-center justify-between px-5 pb-3">
-            <Dialog.Title className="text-lg font-bold text-gray-900">
-              {editingTransaction ? 'Editar movimiento' : 'Nuevo movimiento'}
-            </Dialog.Title>
-            <button
-              onClick={closeTransactionModal}
-              className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
-            >
-              <X size={15} className="text-gray-600" />
-            </button>
-          </div>
-
-          {/* Scrollable body */}
-          <div className="overflow-y-auto max-h-[80vh] pb-8">
-
-            {/* ── Tipo + Monto (bloque con accent color) ── */}
-            <div className="px-5 pb-4">
-              {/* Tipo toggle */}
-              {!editingTransaction && (
-                <div className="flex rounded-2xl bg-gray-100 p-1 gap-1 mb-4">
-                  {(['egreso', 'ingreso'] as TransactionType[]).map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => { setTipo(t); setSelectedGroup(''); setSelectedSub(''); setAsignadoA(null) }}
-                      className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${
-                        tipo === t
-                          ? t === 'egreso' ? 'bg-red-400 text-white shadow' : 'bg-green-500 text-white shadow'
-                          : 'text-gray-400'
-                      }`}
-                    >
-                      {t === 'egreso' ? '↓ Egreso' : '↑ Ingreso'}
-                    </button>
-                  ))}
-                </div>
+          {/* ── Header fijo: handle + tipo/título + cerrar ── */}
+          <div className="flex-shrink-0 px-4 pt-3 pb-2.5">
+            <div className="flex justify-center pb-2.5">
+              <div className="w-9 h-1 bg-gray-200 rounded-full" />
+            </div>
+            <div className="flex items-center gap-2">
+              {editingTransaction ? (
+                <Dialog.Title className="flex-1 text-base font-bold text-gray-900 pl-1">
+                  Editar {tipo === 'egreso' ? 'egreso' : 'ingreso'}
+                </Dialog.Title>
+              ) : (
+                <>
+                  <Dialog.Title className="sr-only">Nuevo movimiento</Dialog.Title>
+                  <div className="flex-1 flex rounded-xl bg-gray-100 p-0.5 gap-0.5">
+                    {(['egreso', 'ingreso'] as TransactionType[]).map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => { setTipo(t); setSelectedGroup(''); setSelectedSub(''); setAsigs([]) }}
+                        className={`flex-1 py-2 rounded-[10px] text-sm font-bold transition-all ${
+                          tipo === t
+                            ? t === 'egreso' ? 'bg-red-400 text-white shadow-sm' : 'bg-green-500 text-white shadow-sm'
+                            : 'text-gray-400'
+                        }`}
+                      >
+                        {t === 'egreso' ? '↓ Egreso' : '↑ Ingreso'}
+                      </button>
+                    ))}
+                  </div>
+                </>
               )}
-
-              {/* Monto grande */}
-              <div
-                className="rounded-2xl px-4 pt-3 pb-4"
-                style={{ backgroundColor: accentColor + '10' }}
+              <button
+                onClick={closeTransactionModal}
+                className="w-9 h-9 flex-shrink-0 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
               >
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="0"
-                  value={monto}
-                  onChange={(e) => setMonto(e.target.value)}
-                  className={`w-full text-4xl font-bold bg-transparent border-0 outline-none placeholder:text-gray-300 ${
-                    montoInvalid ? 'text-red-400' : 'text-gray-900'
-                  }`}
-                  style={{ caretColor: accentColor }}
-                />
-                {/* Selector de moneda — horizontal pill */}
-                <div className="flex gap-1.5 mt-3">
-                  {CURRENCIES.map((c) => (
-                    <button
-                      key={c}
-                      onClick={() => setMoneda(c)}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                        moneda === c
-                          ? 'text-white shadow-sm'
-                          : 'bg-surface/60 text-gray-500'
-                      }`}
-                      style={moneda === c ? { backgroundColor: accentColor } : {}}
-                    >
-                      {c}
-                    </button>
-                  ))}
-                </div>
-                {montoInvalid && (
-                  <p className="text-[11px] text-red-400 mt-1.5">Ingresá un monto mayor a 0</p>
-                )}
+                <X size={15} className="text-gray-600" />
+              </button>
+            </div>
+          </div>
+
+          {/* ── Cuerpo scrolleable ── */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 space-y-4">
+
+            {/* Monto + moneda en un solo bloque */}
+            <div
+              className="rounded-2xl px-4 py-3 flex items-center gap-3"
+              style={{ backgroundColor: accentColor + '12' }}
+            >
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="0"
+                autoFocus={!editingTransaction}
+                value={monto}
+                onChange={(e) => setMonto(e.target.value)}
+                className={`flex-1 min-w-0 text-4xl font-bold bg-transparent border-0 outline-none placeholder:text-gray-300 tabular-nums ${
+                  montoInvalid ? 'text-red-400' : 'text-gray-900'
+                }`}
+                style={{ caretColor: accentColor }}
+              />
+              <div className="flex flex-col gap-1 flex-shrink-0">
+                {CURRENCIES.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setMoneda(c)}
+                    className={`w-14 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                      moneda === c ? 'text-white shadow-sm' : 'bg-surface/70 text-gray-400'
+                    }`}
+                    style={moneda === c ? { backgroundColor: accentColor } : {}}
+                  >
+                    {c}
+                  </button>
+                ))}
               </div>
             </div>
 
-            <div className="h-px bg-gray-100 mx-5" />
-
-            {/* ── Descripción ── */}
-            <div className="px-5 py-4">
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                Descripción
-                {montoValido && !descripcion.trim() && (
-                  <span className="ml-1.5 text-amber-400 font-semibold normal-case tracking-normal">· recomendado</span>
-                )}
-              </label>
+            {/* Descripción */}
+            <div>
               <input
                 type="text"
-                placeholder="¿En qué fue?"
+                placeholder={montoValido && !descripcion.trim() ? '¿En qué fue? (recomendado)' : '¿En qué fue?'}
                 value={descripcion}
                 onChange={(e) => setDescripcion(e.target.value)}
-                className={`mt-2 w-full bg-gray-50 rounded-xl px-3.5 py-3 text-sm text-gray-900 outline-none focus:ring-2 transition-all placeholder:text-gray-300 ${
+                className={`w-full bg-gray-50 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 transition-all placeholder:text-gray-300 ${
                   montoValido && !descripcion.trim()
-                    ? 'ring-1 ring-amber-200 focus:ring-amber-300'
+                    ? 'ring-1 ring-amber-200 focus:ring-amber-300 placeholder:text-amber-300'
                     : 'focus:ring-primary/30 focus:bg-surface'
                 }`}
               />
-              {/* Sugerencias */}
               {sugerencias.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   {sugerencias.map((sg) => (
@@ -374,17 +433,15 @@ export default function TransactionModal() {
               )}
             </div>
 
-            <div className="h-px bg-gray-100 mx-5" />
-
-            {/* ── Categoría ── */}
-            <div className="px-5 py-4">
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+            {/* Categoría */}
+            <div>
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
                 Categoría
                 {montoValido && !categoria && (
                   <span className="ml-1.5 text-amber-400 font-semibold normal-case tracking-normal">· recomendado</span>
                 )}
-              </label>
-              <div className="flex flex-wrap gap-2 mt-2">
+              </p>
+              <div className="flex flex-wrap gap-1.5">
                 {activeGroups.map((g) => {
                   const isSelected = selectedGroup === g.id
                   return (
@@ -392,7 +449,7 @@ export default function TransactionModal() {
                       key={g.id}
                       type="button"
                       onClick={() => { setSelectedGroup(g.id); setSelectedSub('') }}
-                      className="px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all active:scale-95"
+                      className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all active:scale-95"
                       style={isSelected
                         ? { backgroundColor: g.color, color: '#fff' }
                         : { backgroundColor: g.color + '15', color: g.color }
@@ -404,7 +461,7 @@ export default function TransactionModal() {
                 })}
               </div>
               {selectedGroup && activeSubs.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-2.5 pl-3 border-l-2 border-gray-100">
+                <div className="flex flex-wrap gap-1.5 mt-2 pl-3 border-l-2 border-gray-100">
                   {activeSubs.map((sub) => {
                     const isSelected = selectedSub === sub.id
                     return (
@@ -426,137 +483,198 @@ export default function TransactionModal() {
               )}
             </div>
 
-            {/* ── Destino de ahorro (solo egresos) ── */}
-            {tipo === 'egreso' && (
-              <>
-                <div className="h-px bg-gray-100 mx-5" />
-                <div className="px-5 py-4">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                    Destino de ahorro
-                    <span className="ml-1 font-normal normal-case tracking-normal text-gray-300">— opcional</span>
-                  </label>
-                  <select
-                    value={ahorroAssetId}
-                    onChange={(e) => setAhorroAssetId(e.target.value)}
-                    className="mt-2 w-full h-11 rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-surface"
+            {/* Fecha + persona */}
+            <div className="flex gap-2">
+              <input
+                type="date"
+                value={fecha}
+                onChange={(e) => setFecha(e.target.value)}
+                className="flex-1 min-w-0 h-10 bg-gray-50 rounded-xl px-3 text-sm text-gray-700 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-surface"
+              />
+              <div className="flex rounded-xl bg-gray-100 p-0.5 gap-0.5 flex-shrink-0">
+                {SHARED_USERS.map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => setCreadoPor(u.id)}
+                    className={`px-3.5 h-9 rounded-[10px] text-xs font-bold transition-all ${
+                      creadoPor === u.id ? 'bg-primary text-white shadow-sm' : 'text-gray-400'
+                    }`}
                   >
-                    <option value="">Sin destino de ahorro</option>
-                    {assets.filter((a) => a.clase === 'activo').map((a) => (
-                      <option key={a.id} value={a.id}>{a.nombre} ({a.moneda})</option>
-                    ))}
-                  </select>
-                  {ahorroAssetId && (
-                    <p className="text-[11px] text-primary mt-1.5">El saldo de esta cuenta se actualizará al guardar</p>
-                  )}
-                </div>
-              </>
-            )}
-
-            {/* ── Asignar a Ingreso (solo egresos) ── */}
-            {tipo === 'egreso' && (
-              <>
-                <div className="h-px bg-gray-100 mx-5" />
-                <div className="px-5 py-4">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                    Asignar a Ingreso
-                    <span className="ml-1 font-normal normal-case tracking-normal text-gray-300">— opcional</span>
-                  </label>
-                  <select
-                    value={asignadoA ?? ''}
-                    onChange={(e) => setAsignadoA(e.target.value || null)}
-                    className="mt-2 w-full h-11 rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-surface"
-                  >
-                    <option value="">Sin asignar</option>
-                    {ingresoOptions.map(({ ing, remaining, wouldExceed }) => {
-                      const cat = getCatFromSettings(ing.categoria, settings ?? null)
-                      const nombre = ing.descripcion?.trim() || cat?.nombre || ing.categoria
-                      const dateStr = ing.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
-                      const remainStr = hideAmounts ? '$ ****' : formatAmount(remaining, base)
-                      return (
-                        <option key={ing.id} value={ing.id} disabled={wouldExceed}>
-                          {wouldExceed ? '🚫 ' : ''}{nombre} — {remainStr} ({dateStr})
-                        </option>
-                      )
-                    })}
-                  </select>
-                  {asignadoA && ingresoOptions.find((o) => o.ing.id === asignadoA)?.wouldExceed && (
-                    <p className="text-[11px] text-red-400 mt-1.5">Excede la capacidad del ingreso seleccionado</p>
-                  )}
-                </div>
-              </>
-            )}
-
-            <div className="h-px bg-gray-100 mx-5" />
-
-            {/* ── Fecha + Estado (grid 2 cols, sin superposición) ── */}
-            <div className="px-5 py-4 grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Fecha</label>
-                <input
-                  type="date"
-                  value={fecha}
-                  onChange={(e) => setFecha(e.target.value)}
-                  className="mt-2 w-full h-11 bg-gray-50 rounded-xl px-3 text-sm text-gray-700 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-surface"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Estado</label>
-                <button
-                  type="button"
-                  onClick={() => setEjecutado((v) => !v)}
-                  className={`mt-2 w-full h-11 flex items-center justify-center gap-2 rounded-xl border-2 text-sm font-semibold transition-all ${
-                    ejecutado
-                      ? 'bg-green-50 border-green-400 text-green-600'
-                      : 'bg-gray-50 border-gray-200 text-gray-400'
-                  }`}
-                >
-                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${ejecutado ? 'bg-green-500' : 'bg-gray-300'}`} />
-                  {ejecutado ? 'Ejecutado' : 'Pendiente'}
-                </button>
+                    {u.nombre}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* ── Recurrente ── */}
-            <div className="px-5 pb-4">
+            {/* Estado + recurrente */}
+            <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => setRecurrente((v) => !v)}
-                className={`w-full h-11 flex items-center justify-center gap-2 rounded-xl border-2 text-sm font-semibold transition-all ${
-                  recurrente
-                    ? 'bg-primary/10 border-primary text-primary'
+                onClick={() => setEjecutado((v) => !v)}
+                className={`flex-1 h-10 flex items-center justify-center gap-1.5 rounded-xl border text-xs font-semibold transition-all ${
+                  ejecutado
+                    ? 'bg-green-50 border-green-300 text-green-600'
                     : 'bg-gray-50 border-gray-200 text-gray-400'
                 }`}
               >
-                <Repeat size={15} />
-                {recurrente ? 'Recurrente' : 'Marcar como recurrente'}
+                {ejecutado ? <CheckCircle2 size={14} /> : <span className="w-3 h-3 rounded-full border border-gray-300" />}
+                {ejecutado ? 'Ejecutado' : 'Pendiente'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setRecurrente((v) => !v)}
+                className={`flex-1 h-10 flex items-center justify-center gap-1.5 rounded-xl border text-xs font-semibold transition-all ${
+                  recurrente
+                    ? 'bg-primary/10 border-primary/40 text-primary'
+                    : 'bg-gray-50 border-gray-200 text-gray-400'
+                }`}
+              >
+                <Repeat size={14} />
+                Recurrente
               </button>
             </div>
 
-            {/* ── Clonar / Mover a otro mes (solo al editar) ── */}
+            {/* ── Asignar a ingreso(s) — solo egresos ── */}
+            {tipo === 'egreso' && (
+              <div>
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+                  Asignar a ingreso
+                  <span className="ml-1 font-normal normal-case tracking-normal text-gray-300">
+                    — tocá otro para dividir
+                  </span>
+                </p>
+                {ingresoOptions.length === 0 ? (
+                  <p className="text-xs text-gray-300 italic px-1">No hay ingresos este mes</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {ingresoOptions.map(({ ing, remaining }) => {
+                      const cat = getCatFromSettings(ing.categoria, settings ?? null)
+                      const nombre = ing.descripcion?.trim() || cat?.nombre || ing.categoria
+                      const dateStr = ing.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
+                      const draft = asigs.find((a) => a.ingresoId === ing.id)
+                      const isSel = !!draft
+                      // Disponible proyectado: lo que le quedaría restando lo que este movimiento le asigna
+                      const draftBase = draft ? toBase(num(draft.monto), moneda, base, s) : 0
+                      const projected = remaining - draftBase
+                      const overAfter = isSel && projected < 0
+
+                      return (
+                        <div
+                          key={ing.id}
+                          className={`rounded-xl border transition-all ${
+                            isSel ? 'border-primary/50 bg-primary/5' : 'border-gray-200 bg-gray-50'
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => toggleIngreso(ing.id!)}
+                            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left"
+                          >
+                            <span className={`w-[18px] h-[18px] rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${
+                              isSel ? 'bg-primary border-primary' : 'border-gray-300 bg-surface'
+                            }`}>
+                              {isSel && <Check size={11} color="white" strokeWidth={3.5} />}
+                            </span>
+                            <span className="flex-1 min-w-0">
+                              <span className="block text-xs font-semibold text-gray-800 truncate">{nombre}</span>
+                              <span className="block text-[11px] text-gray-400">{dateStr}</span>
+                            </span>
+                            <span className="flex-shrink-0 text-right">
+                              <span className={`block text-[11px] font-semibold tabular-nums ${
+                                overAfter ? 'text-red-400' : remaining < 0 ? 'text-red-400' : 'text-green-600'
+                              } ${hideAmounts ? 'blur-sm' : ''}`}>
+                                {isSel
+                                  ? `quedan ${formatAmount(projected, base)}`
+                                  : `disp. ${formatAmount(remaining, base)}`
+                                }
+                              </span>
+                            </span>
+                          </button>
+
+                          {/* Input de monto parcial — solo cuando está dividido */}
+                          {isSel && isSplit && (
+                            <div className="flex items-center gap-2 px-3 pb-2.5 pl-[42px]">
+                              <span className="text-[11px] text-gray-400 flex-shrink-0">Parte:</span>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                value={draft!.monto}
+                                onChange={(e) => setAsigMonto(ing.id!, e.target.value)}
+                                className="flex-1 min-w-0 h-9 bg-surface border border-gray-200 rounded-lg px-2.5 text-sm font-semibold text-gray-900 tabular-nums text-right focus:outline-none focus:ring-2 focus:ring-primary/30"
+                              />
+                              <span className="text-[11px] text-gray-400 flex-shrink-0">{moneda}</span>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+
+                    {/* Resumen de la división */}
+                    {isSplit && (
+                      <div className={`flex items-center gap-1.5 px-1 text-[11px] font-semibold ${
+                        asigOk ? 'text-green-600' : 'text-red-400'
+                      }`}>
+                        {asigOk ? <Check size={12} strokeWidth={3} /> : <X size={12} strokeWidth={3} />}
+                        <span className={hideAmounts ? 'blur-sm' : ''}>
+                          Dividido: {asigs.map((a) => formatAmount(num(a.monto), moneda)).join(' + ')}
+                          {asigOk ? '' : ` — deben sumar ${formatAmount(parsedMonto, moneda)}`}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Destino de ahorro — solo egresos ── */}
+            {tipo === 'egreso' && (
+              <div>
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+                  Destino de ahorro
+                  <span className="ml-1 font-normal normal-case tracking-normal text-gray-300">— opcional</span>
+                </p>
+                <select
+                  value={ahorroAssetId}
+                  onChange={(e) => setAhorroAssetId(e.target.value)}
+                  className="w-full h-10 rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-surface"
+                >
+                  <option value="">Sin destino de ahorro</option>
+                  {assets.filter((a) => a.clase === 'activo').map((a) => (
+                    <option key={a.id} value={a.id}>{a.nombre} ({a.moneda})</option>
+                  ))}
+                </select>
+                {ahorroAssetId && (
+                  <p className="text-[11px] text-primary mt-1">El saldo de esta cuenta se actualizará al guardar</p>
+                )}
+              </div>
+            )}
+
+            {/* ── Clonar / Mover — solo al editar ── */}
             {editingTransaction && (
-              <div className="px-5 pb-4">
+              <div>
                 <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={() => setCloneAction(cloneAction === 'clone' ? null : 'clone')}
-                    className={`flex-1 h-10 flex items-center justify-center gap-1.5 rounded-xl border text-xs font-semibold transition-all ${
+                    className={`flex-1 h-9 flex items-center justify-center gap-1.5 rounded-xl border text-xs font-semibold transition-all ${
                       cloneAction === 'clone'
-                        ? 'bg-primary/10 border-primary text-primary'
+                        ? 'bg-primary/10 border-primary/40 text-primary'
                         : 'bg-gray-50 border-gray-200 text-gray-400'
                     }`}
                   >
-                    <Copy size={13} />Clonar
+                    <Copy size={13} />Clonar a otro mes
                   </button>
                   <button
                     type="button"
                     onClick={() => setCloneAction(cloneAction === 'move' ? null : 'move')}
-                    className={`flex-1 h-10 flex items-center justify-center gap-1.5 rounded-xl border text-xs font-semibold transition-all ${
+                    className={`flex-1 h-9 flex items-center justify-center gap-1.5 rounded-xl border text-xs font-semibold transition-all ${
                       cloneAction === 'move'
-                        ? 'bg-amber-50 border-amber-400 text-amber-600'
+                        ? 'bg-amber-50 border-amber-300 text-amber-600'
                         : 'bg-gray-50 border-gray-200 text-gray-400'
                     }`}
                   >
-                    <ArrowRight size={13} />Mover
+                    <ArrowRight size={13} />Mover de mes
                   </button>
                 </div>
                 {cloneAction && (
@@ -565,13 +683,13 @@ export default function TransactionModal() {
                       type="month"
                       value={cloneMonth}
                       onChange={(e) => setCloneMonth(e.target.value)}
-                      className="flex-1 h-10 bg-gray-50 rounded-xl px-3 text-sm text-gray-700 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      className="flex-1 h-9 bg-gray-50 rounded-xl px-3 text-sm text-gray-700 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/30"
                     />
                     <button
                       type="button"
                       onClick={handleCloneMove}
                       disabled={!cloneMonth || saving}
-                      className={`px-4 h-10 rounded-xl text-xs font-bold text-white disabled:opacity-40 ${cloneAction === 'move' ? 'bg-amber-400' : 'bg-primary'}`}
+                      className={`px-4 h-9 rounded-xl text-xs font-bold text-white disabled:opacity-40 ${cloneAction === 'move' ? 'bg-amber-400' : 'bg-primary'}`}
                     >
                       {saving ? '…' : cloneAction === 'move' ? 'Mover' : 'Clonar'}
                     </button>
@@ -579,16 +697,29 @@ export default function TransactionModal() {
                 )}
               </div>
             )}
+          </div>
 
-            {/* ── Error ── */}
+          {/* ── Footer fijo: siempre visible, sin scrollear ── */}
+          <div className="flex-shrink-0 border-t border-gray-100 px-4 pt-3 pb-5 bg-surface">
+            {montoInvalid && (
+              <p className="text-[11px] text-red-400 mb-2">Ingresá un monto mayor a 0</p>
+            )}
+            {tipo === 'egreso' && !asigOk && montoValido && (
+              <p className="text-[11px] text-red-400 mb-2">
+                Las partes asignadas deben sumar el total del egreso
+              </p>
+            )}
             {saveError && (
-              <div className="mx-5 mb-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-xs text-red-400 font-medium break-all">
+              <div className="mb-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-xs text-red-400 font-medium break-all">
                 Error: {saveError}
               </div>
             )}
-
-            {/* ── Acciones ── */}
-            <div className="px-5 pb-2 flex gap-2.5">
+            {deleteConfirm && (
+              <p className="text-[11px] text-red-400 mb-2">
+                Tocá el ícono rojo de nuevo para confirmar la eliminación
+              </p>
+            )}
+            <div className="flex gap-2">
               {editingTransaction && (
                 <button
                   onClick={handleDelete}
@@ -606,7 +737,7 @@ export default function TransactionModal() {
               <button
                 onClick={closeTransactionModal}
                 disabled={saving}
-                className="h-12 px-5 rounded-2xl bg-gray-100 text-sm font-semibold text-gray-500 hover:bg-gray-200 transition-colors"
+                className="h-12 px-4 rounded-2xl bg-gray-100 text-sm font-semibold text-gray-500 hover:bg-gray-200 transition-colors"
               >
                 Cancelar
               </button>
@@ -618,12 +749,6 @@ export default function TransactionModal() {
                 {saving ? 'Guardando…' : editingTransaction ? 'Guardar cambios' : 'Agregar'}
               </button>
             </div>
-
-            {deleteConfirm && (
-              <p className="text-xs text-red-400 text-center pb-3 -mt-1">
-                Tocá el ícono rojo de nuevo para confirmar
-              </p>
-            )}
           </div>
         </Dialog.Content>
       </Dialog.Portal>

@@ -20,6 +20,18 @@ export interface SessionUser {
   nombre: string
 }
 
+/**
+ * Asignación parcial de un egreso a un ingreso.
+ * Un egreso puede dividirse entre varios ingresos (p. ej. parte al sueldo
+ * de Javier y el resto al de Mary). La suma de los montos debe cubrir el
+ * total del egreso.
+ */
+export interface Asignacion {
+  ingresoId: string
+  /** Monto asignado, en la moneda del egreso */
+  monto: number
+}
+
 export interface Transaction {
   id?: string
   userId: string
@@ -32,7 +44,8 @@ export interface Transaction {
   tags: string[]
   fecha: FechaCompat
   ejecutado: boolean
-  asignadoA: string | null
+  /** Ingresos a los que está asignado el egreso (vacío = sin asignar) */
+  asignaciones: Asignacion[]
   creadoPor: string
   recurrente?: boolean
   ahorroAssetId?: string | null

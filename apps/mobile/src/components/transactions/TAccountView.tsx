@@ -165,18 +165,21 @@ export default function TAccountView({ search = '' }: Props) {
     [egresos, base, s],
   )
 
-  // Etiqueta del ingreso asignado por id, resuelta una sola vez por render
+  // Etiqueta del/los ingreso(s) asignados por id, resuelta una sola vez por render.
+  // Egresos divididos muestran el primer ingreso + "+N".
   const linkedLabels = useMemo(() => {
     const byId = new Map(transactions.map((t) => [t.id, t]))
     const labels = new Map<string, string>()
     for (const t of transactions) {
-      if (t.tipo !== 'egreso' || !t.asignadoA) continue
-      const ing = byId.get(t.asignadoA)
-      if (!ing) continue
-      labels.set(
-        t.id!,
-        ing.descripcion?.trim() || getCatFromSettings(ing.categoria, settings)?.nombre || ing.categoria,
-      )
+      if (t.tipo !== 'egreso' || t.asignaciones.length === 0) continue
+      const linked = t.asignaciones
+        .map((a) => byId.get(a.ingresoId))
+        .filter((ing): ing is Transaction => !!ing)
+      if (linked.length === 0) continue
+      const first = linked[0]
+      let label = first.descripcion?.trim() || getCatFromSettings(first.categoria, settings)?.nombre || first.categoria
+      if (linked.length > 1) label += ` +${linked.length - 1}`
+      labels.set(t.id!, label)
     }
     return labels
   }, [transactions, settings])

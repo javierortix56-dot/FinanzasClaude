@@ -89,9 +89,9 @@ export default function ReassignModal({
                       </div>
                       <div className="flex-shrink-0 text-right">
                         {(() => {
-                          const totalAsignado = egresos
-                            .filter((e) => e.asignadoA === inc.id)
-                            .reduce((sum, e) => sum + toBase(e.monto, e.moneda, monedaBase, settings), 0)
+                          const totalAsignado = egresos.reduce((sum, e) => sum + e.asignaciones
+                            .filter((a) => a.ingresoId === inc.id)
+                            .reduce((x, a) => x + toBase(a.monto, e.moneda, monedaBase, settings), 0), 0)
                           const disponible = toBase(inc.monto, inc.moneda, monedaBase, settings) - totalAsignado
                           const isOver = disponible < 0
                           return (

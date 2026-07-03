@@ -1,6 +1,7 @@
 import { supabase, SHARED_UUID } from './supabase'
-import { Transaction, Asset, Settings, Budget } from '../types'
+import { Transaction, Asset, Settings, Budget, Asignacion } from '../types'
 import { toLocalDateString } from './constants'
+import { rowToTx } from './transactions'
 
 export interface BackupData {
   version: number
@@ -55,27 +56,8 @@ export async function exportBackup(userId: string): Promise<BackupData> {
     moneda: row.moneda,
   }))
 
-  const transactions = (txData ?? []).map((row) => {
-    const dateStr = row.date as string
-    const extra = row.children ?? {}
-    const tx: Transaction = {
-      id: row.id,
-      userId: 'shared',
-      tipo: row.type,
-      monto: row.amount,
-      moneda: row.currency,
-      categoria: row.category ?? '',
-      descripcion: row.description ?? '',
-      nota: extra.nota ?? '',
-      tags: extra.tags ?? [],
-      fecha: { toDate: () => new Date(dateStr + 'T12:00:00') },
-      ejecutado: row.executed ?? false,
-      asignadoA: extra.asignadoA ?? null,
-      creadoPor: extra.creadoPor ?? 'shared',
-      recurrente: extra.recurrente ?? false,
-    }
-    return serializeTx(tx)
-  })
+  // Reusa el mapeo canónico (incluye asignaciones divididas y ahorroAssetId)
+  const transactions = (txData ?? []).map((row) => serializeTx(rowToTx(row)))
 
   const assets = (assetData ?? []).map((row) => {
     const asset: Asset = {
@@ -138,6 +120,12 @@ export async function importBackup(
       const r = raw as Record<string, unknown>
       const isoDate = r.fecha as string
       const date = isoDate ? isoDate.slice(0, 10) : toLocalDateString()
+      // Backups nuevos traen asignaciones[]; los viejos solo asignadoA
+      const asignaciones: Asignacion[] = Array.isArray(r.asignaciones)
+        ? (r.asignaciones as Asignacion[])
+        : r.asignadoA
+          ? [{ ingresoId: r.asignadoA as string, monto: r.monto as number }]
+          : []
       return {
         user_id: '00000000-0000-0000-0000-000000000000',
         type: r.tipo as string,
@@ -150,9 +138,11 @@ export async function importBackup(
         children: {
           nota: r.nota,
           tags: r.tags,
-          asignadoA: r.asignadoA,
+          asignaciones,
+          asignadoA: asignaciones[0]?.ingresoId ?? null,
           creadoPor: r.creadoPor,
           recurrente: r.recurrente,
+          ahorroAssetId: r.ahorroAssetId ?? null,
         },
       }
     })

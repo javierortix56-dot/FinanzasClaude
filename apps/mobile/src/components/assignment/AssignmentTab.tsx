@@ -12,7 +12,7 @@ import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { SHARED_USERS } from '@finanzas/core/lib/constants'
 import { toBase } from '@finanzas/core/lib/currency'
 import { Transaction, Currency } from '@finanzas/core/types'
-import AssignmentGroup from './AssignmentGroup'
+import AssignmentGroup, { GroupItem } from './AssignmentGroup'
 import ReassignModal from './ReassignModal'
 
 export default function AssignmentTab() {
@@ -46,20 +46,28 @@ export default function AssignmentTab() {
     [transactions]
   )
 
+  // Un egreso dividido aparece bajo CADA ingreso al que está asignado, con su
+  // monto parcial. Asignaciones huérfanas (ingreso borrado) caen en "Sin asignar".
   const groups = useMemo(() => {
-    const map = new Map<string, { income: Transaction | null; expenses: Transaction[] }>()
-    ingresos.forEach((inc) => map.set(inc.id!, { income: inc, expenses: [] }))
-    map.set('unassigned', { income: null, expenses: [] })
+    const ingresoIds = new Set(ingresos.map((i) => i.id!))
+    const map = new Map<string, { income: Transaction | null; items: GroupItem[] }>()
+    ingresos.forEach((inc) => map.set(inc.id!, { income: inc, items: [] }))
+    map.set('unassigned', { income: null, items: [] })
     egresos.forEach((exp) => {
-      const key = exp.asignadoA ?? 'unassigned'
-      if (!map.has(key)) map.get('unassigned')!.expenses.push(exp)
-      else map.get(key)!.expenses.push(exp)
+      const validas = exp.asignaciones.filter((a) => ingresoIds.has(a.ingresoId))
+      if (validas.length === 0) {
+        map.get('unassigned')!.items.push({ exp, montoAsignado: exp.monto, esParcial: false })
+      } else {
+        validas.forEach((a) => {
+          map.get(a.ingresoId)!.items.push({ exp, montoAsignado: a.monto, esParcial: validas.length > 1 })
+        })
+      }
     })
     return map
   }, [ingresos, egresos])
 
   const totalEgresos       = egresos.length
-  const realUnassigned     = groups.get('unassigned')?.expenses.length ?? 0
+  const realUnassigned     = groups.get('unassigned')?.items.length ?? 0
   const assignedCount      = totalEgresos - realUnassigned
   const progressPercent    = totalEgresos > 0 ? (assignedCount / totalEgresos) * 100 : 0
   const allAssigned        = realUnassigned === 0 && totalEgresos > 0
@@ -68,19 +76,21 @@ export default function AssignmentTab() {
   // ninguno, asigna al ingreso con más capacidad restante (o al más cercano
   // por fecha) para que ningún egreso quede sin asignar.
   async function autoAssign() {
-    // Incluye los egresos sin asignar Y los huérfanos (asignadoA apunta a
-    // un ingreso que ya no existe — caen en el grupo "Sin asignar").
+    // Incluye los egresos sin asignar Y los huérfanos (todas sus asignaciones
+    // apuntan a ingresos que ya no existen — caen en el grupo "Sin asignar").
     const ingresoIds = new Set(ingresos.map((i) => i.id!))
-    const unassigned = egresos.filter((e) => e.asignadoA === null || !ingresoIds.has(e.asignadoA))
+    const unassigned = egresos.filter(
+      (e) => !e.asignaciones.some((a) => ingresoIds.has(a.ingresoId))
+    )
     if (ingresos.length === 0 || unassigned.length === 0) return
     setAutoLoading(true)
 
     const capacity = new Map<string, number>()
     ingresos.forEach((inc) => {
       const incBase = toBase(inc.monto, inc.moneda, base, s)
-      const yaAsignado = egresos
-        .filter((e) => e.asignadoA === inc.id)
-        .reduce((sum, e) => sum + toBase(e.monto, e.moneda, base, s), 0)
+      const yaAsignado = egresos.reduce((sum, e) => sum + e.asignaciones
+        .filter((a) => a.ingresoId === inc.id)
+        .reduce((x, a) => x + toBase(a.monto, e.moneda, base, s), 0), 0)
       capacity.set(inc.id!, incBase - yaAsignado)
     })
 
@@ -116,7 +126,9 @@ export default function AssignmentTab() {
           })
         }
         capacity.set(target.id!, (capacity.get(target.id!) ?? 0) - expBase)
-        await updateTransaction(exp.id!, { asignadoA: target.id! })
+        await updateTransaction(exp.id!, {
+          asignaciones: [{ ingresoId: target.id!, monto: exp.monto }],
+        })
       }
     } finally {
       setAutoLoading(false)
@@ -133,8 +145,8 @@ export default function AssignmentTab() {
     setUnassignLoading(true)
     setUnassignConfirm(false)
     try {
-      const assigned = egresos.filter((e) => e.asignadoA !== null)
-      await Promise.allSettled(assigned.map((e) => updateTransaction(e.id!, { asignadoA: null })))
+      const assigned = egresos.filter((e) => e.asignaciones.length > 0)
+      await Promise.allSettled(assigned.map((e) => updateTransaction(e.id!, { asignaciones: [] })))
     } finally {
       setUnassignLoading(false)
     }
@@ -143,11 +155,22 @@ export default function AssignmentTab() {
   async function desassignGroup(incomeId: string) {
     const group = groups.get(incomeId)
     if (!group) return
-    await Promise.allSettled(group.expenses.map((e) => updateTransaction(e.id!, { asignadoA: null })))
+    // Quita solo el vínculo con ESTE ingreso; si el egreso estaba dividido,
+    // conserva la parte asignada al otro ingreso.
+    await Promise.allSettled(group.items.map(({ exp }) => updateTransaction(exp.id!, {
+      asignaciones: exp.asignaciones.filter((a) => a.ingresoId !== incomeId),
+    })))
   }
 
   async function reassignSelected(newIncomeId: string) {
-    await Promise.allSettled([...selectedIds].map((id) => updateTransaction(id, { asignadoA: newIncomeId })))
+    const byId = new Map(egresos.map((e) => [e.id!, e]))
+    await Promise.allSettled([...selectedIds].map((id) => {
+      const exp = byId.get(id)
+      if (!exp) return Promise.resolve()
+      return updateTransaction(id, {
+        asignaciones: [{ ingresoId: newIncomeId, monto: exp.monto }],
+      })
+    }))
     setSelectedIds(new Set())
     setReassignOpen(false)
   }
@@ -191,10 +214,10 @@ export default function AssignmentTab() {
     })
   }
 
-  const unassignedExpenses = groups.get('unassigned')?.expenses ?? []
+  const unassignedExpenses = groups.get('unassigned')?.items ?? []
   const groupEntries = [
     ...ingresos.map((inc) => ({ key: inc.id!, group: groups.get(inc.id!)! })),
-    { key: 'unassigned', group: { income: null, expenses: unassignedExpenses } },
+    { key: 'unassigned', group: { income: null, items: unassignedExpenses } },
   ]
 
   const barGradient = allAssigned
@@ -286,7 +309,7 @@ export default function AssignmentTab() {
               <AssignmentGroup
                 key={key}
                 income={group.income}
-                expenses={group.expenses}
+                items={group.items}
                 selectedIds={selectedIds}
                 onToggleSelect={toggleSelect}
                 onEdit={openEditModal}
