@@ -1,4 +1,4 @@
-const CACHE_NAME = 'finanzas-jm-v3'
+const CACHE_NAME = 'finanzas-jm-v4'
 
 // Assets to cache on install (app shell)
 const PRECACHE_URLS = [
@@ -71,4 +71,33 @@ self.addEventListener('fetch', (event) => {
     )
     return
   }
+})
+
+// ── Push notifications ─────────────────────────────────────────────────────────
+self.addEventListener('push', (event) => {
+  let data = {}
+  try { data = event.data ? event.data.json() : {} } catch { /* payload no-JSON */ }
+  const title = data.title || 'Finanzas J&M'
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: data.body || '',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      data: { url: data.url || '/dashboard' },
+      tag: data.tag || 'finanzas-jm',
+    })
+  )
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const url = (event.notification.data && event.notification.data.url) || '/dashboard'
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
+      for (const win of wins) {
+        if ('focus' in win) { win.navigate(url); return win.focus() }
+      }
+      return clients.openWindow(url)
+    })
+  )
 })

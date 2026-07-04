@@ -10,6 +10,7 @@ import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useAssetStore } from '@finanzas/core/store/useAssetStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { signOut } from '@finanzas/core/lib/auth'
+import { pushSoportado, getSuscripcionActual, activarPush, desactivarPush } from '@finanzas/core/lib/push'
 import { updateSettings } from '@finanzas/core/lib/settings'
 import {
   deleteMonthTransactions,
@@ -24,7 +25,7 @@ import { Category, CategoryGroup, AhorroLink, Currency } from '@finanzas/core/ty
 
 const CategoryModal = dynamic(() => import('@/components/ajustes/CategoryModal'), { ssr: false })
 
-type Section = 'cuenta' | 'cambio' | 'categorias' | 'categorias_ing' | 'tipos' | 'ahorro_links' | 'mes' | 'datos' | null
+type Section = 'cuenta' | 'notif' | 'cambio' | 'categorias' | 'categorias_ing' | 'tipos' | 'ahorro_links' | 'mes' | 'datos' | null
 
 // ── Modal state types ─────────────────────────────────────────────────────────
 type GroupModalState = {
@@ -49,6 +50,11 @@ export default function AjustesPage() {
   // Cuenta / sesión
   const [signingOut, setSigningOut] = useState(false)
   const [savingMoneda, setSavingMoneda] = useState(false)
+
+  // Notificaciones push
+  const [pushEstado, setPushEstado] = useState<'cargando' | 'activo' | 'inactivo' | 'no-soportado'>('cargando')
+  const [pushBusy, setPushBusy] = useState(false)
+  const [pushError, setPushError] = useState<string | null>(null)
 
   // Tipos de cambio
   const [arsRate, setArsRate] = useState(String(settings?.tipoCambio.ARS_USD ?? 1200))
@@ -320,6 +326,37 @@ export default function AjustesPage() {
     }
   }
 
+  // ── Notificaciones push ──────────────────────────────────────────────────────
+  async function checkPushEstado() {
+    if (!pushSoportado()) { setPushEstado('no-soportado'); return }
+    try {
+      const sub = await getSuscripcionActual()
+      setPushEstado(sub ? 'activo' : 'inactivo')
+    } catch {
+      setPushEstado('inactivo')
+    }
+  }
+
+  async function handleTogglePush() {
+    if (pushBusy) return
+    setPushBusy(true)
+    setPushError(null)
+    try {
+      if (pushEstado === 'activo') {
+        await desactivarPush()
+        setPushEstado('inactivo')
+      } else {
+        const err = await activarPush(user?.nombre || user?.email || 'shared')
+        if (err) setPushError(err)
+        else setPushEstado('activo')
+      }
+    } catch (err) {
+      setPushError(err instanceof Error ? err.message : 'Error inesperado')
+    } finally {
+      setPushBusy(false)
+    }
+  }
+
   async function handleMonedaBase(m: Currency) {
     if (m === monedaBase || savingMoneda) return
     setSavingMoneda(true)
@@ -518,6 +555,52 @@ export default function AjustesPage() {
                 <LogOut size={14} />
                 {signingOut ? 'Cerrando sesión...' : 'Cerrar sesión'}
               </button>
+            </div>
+          </Section>
+
+          {/* ── Notificaciones ── */}
+          <Section
+            label="Notificaciones"
+            open={openSection === 'notif'}
+            onToggle={() => { toggle('notif'); setPushError(null); checkPushEstado() }}
+          >
+            <div className="space-y-3 pt-2">
+              <div className="text-xs text-gray-500 space-y-1">
+                <p>📝 <span className="font-medium">Recordatorio diario (21 hs):</span> si ese día no cargaron ningún movimiento</p>
+                <p>💳 <span className="font-medium">Cuotas del mes (día 1):</span> cuántas cuotas vencen y por cuánto</p>
+              </div>
+
+              {pushEstado === 'no-soportado' ? (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-xs text-amber-700">
+                  Este navegador no soporta notificaciones. En iPhone: primero agregá la app a la
+                  pantalla de inicio (Compartir → Agregar a inicio) y abrila desde ahí.
+                </div>
+              ) : (
+                <button
+                  onClick={handleTogglePush}
+                  disabled={pushBusy || pushEstado === 'cargando'}
+                  className={`w-full h-11 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 ${
+                    pushEstado === 'activo'
+                      ? 'bg-green-50 border border-green-300 text-green-600'
+                      : 'bg-primary text-white'
+                  }`}
+                >
+                  {pushBusy || pushEstado === 'cargando'
+                    ? 'Un momento…'
+                    : pushEstado === 'activo'
+                      ? '✓ Activas en este dispositivo — tocá para desactivar'
+                      : 'Activar en este dispositivo'}
+                </button>
+              )}
+
+              {pushError && (
+                <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-xs text-red-400">
+                  {pushError}
+                </div>
+              )}
+              <p className="text-[11px] text-gray-300">
+                La activación es por dispositivo: actívenla cada uno en su teléfono.
+              </p>
             </div>
           </Section>
 

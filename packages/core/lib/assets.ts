@@ -1,6 +1,8 @@
 import { supabase, SHARED_UUID } from './supabase'
 import { useAssetStore } from '../store/useAssetStore'
-import { Asset, AssetSnapshot } from '../types'
+import { Asset, AssetSnapshot, Currency, Settings } from '../types'
+import { toUSD } from './currency'
+import { getCurrentMonth, shiftMonth } from './constants'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function rowToAsset(row: Record<string, any>): Asset {
@@ -157,6 +159,33 @@ export async function upsertSnapshot(asset: Asset, snap: AssetSnapshot) {
   if (latest && latest.month >= snap.month) partial.init_bal = latest.saldo
   const { error } = await supabase.from('cuentas').update(partial).eq('id', asset.id!)
   if (error) throw error
+}
+
+/**
+ * Proyección de la meta de ahorro: a qué mes se llega manteniendo el ritmo
+ * de aportes de los últimos snapshots (hasta 6).
+ * - null → el activo no tiene meta, o no hay ritmo de aporte para proyectar
+ * - meses = 0 → la meta ya está cumplida
+ */
+export function proyeccionMeta(
+  asset: Asset,
+  settings: Settings
+): { meses: number; mes: string; aportePromedioUSD: number } | null {
+  if (asset.metaObjetivo == null || !asset.metaMoneda) return null
+  const saldoUSD = toUSD(asset.saldo, asset.moneda, settings)
+  const metaUSD  = toUSD(asset.metaObjetivo, asset.metaMoneda as Currency, settings)
+  if (metaUSD <= 0) return null
+  if (saldoUSD >= metaUSD) return { meses: 0, mes: getCurrentMonth(), aportePromedioUSD: 0 }
+
+  const recientes = (asset.snapshots ?? []).slice(-6)
+  if (recientes.length === 0) return null
+  const aportes = recientes.map((s) => toUSD(s.aporte, asset.moneda, settings))
+  const promedio = aportes.reduce((a, b) => a + b, 0) / aportes.length
+  if (promedio <= 0) return null
+
+  const meses = Math.ceil((metaUSD - saldoUSD) / promedio)
+  if (meses > 120) return null // más de 10 años: el ritmo no alcanza para proyectar algo útil
+  return { meses, mes: shiftMonth(getCurrentMonth(), meses), aportePromedioUSD: promedio }
 }
 
 export async function adjustAssetSaldo(assetId: string, delta: number, txMonth: string): Promise<void> {
