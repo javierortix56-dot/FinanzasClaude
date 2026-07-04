@@ -17,7 +17,7 @@ export interface CuotaDetectada {
 }
 
 /** Parsea montos en formato es-AR/es-CO ("1.234,56") o en formato plano ("1234.56") */
-function parseMonto(raw: string): number {
+export function parseMonto(raw: string): number {
   let s = raw.trim().replace(/[$\s]/g, '').replace(/-$/, '')
   if (s.startsWith('-')) s = s.slice(1)
   const lastComma = s.lastIndexOf(',')

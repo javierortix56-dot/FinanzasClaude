@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { Asset, Settings, Currency } from '@finanzas/core/types'
 import { toUSD } from '@finanzas/core/lib/currency'
+import { proyeccionMeta } from '@finanzas/core/lib/assets'
 import { formatAmount, getCurrentMonth, monthLabel } from '@finanzas/core/lib/constants'
 
 const TIPO_ICONS: Record<string, React.ReactNode> = {
@@ -90,6 +91,20 @@ export default function AssetCard({ asset, settings, onClick, onUpdateSnapshot }
                 style={{ width: `${metaPercent}%` }}
               />
             </div>
+            {/* Proyección: a este ritmo de aportes, ¿cuándo llegan? */}
+            {(() => {
+              const proy = proyeccionMeta(asset, settings)
+              if (!proy) return null
+              if (proy.meses === 0) {
+                return <p className="text-[11px] text-green-600 font-semibold mt-1">🎉 ¡Meta cumplida!</p>
+              }
+              return (
+                <p className="text-[11px] text-gray-400 mt-1">
+                  A este ritmo llegan en <span className="font-semibold text-primary">{proy.meses} mes{proy.meses !== 1 ? 'es' : ''}</span>
+                  {' '}(<span className="capitalize">{monthLabel(proy.mes)}</span>)
+                </p>
+              )
+            })()}
           </div>
         )}
 

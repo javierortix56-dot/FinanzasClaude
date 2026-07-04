@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { X, Trash2, Repeat, Copy, ArrowRight, Check, CheckCircle2 } from 'lucide-react'
+import { X, Trash2, Repeat, Copy, ArrowRight, Check, CheckCircle2, Camera } from 'lucide-react'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
@@ -13,6 +13,8 @@ import { SHARED_USER_ID, SHARED_USERS, formatAmount, getParentGroup, getCatFromS
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { adjustAssetSaldo } from '@finanzas/core/lib/assets'
 import { toBase } from '@finanzas/core/lib/currency'
+import { parseTicket } from '@finanzas/core/lib/ticket'
+import { ocrImagen } from '@/lib/ocr'
 import { Transaction, Currency, TransactionType, CategoryGroup, Asignacion } from '@finanzas/core/types'
 
 const CURRENCIES: Currency[] = ['ARS', 'COP', 'USD']
@@ -58,6 +60,9 @@ export default function TransactionModal() {
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [cloneMonth, setCloneMonth] = useState('')
   const [cloneAction, setCloneAction] = useState<'clone' | 'move' | null>(null)
+  const scanInputRef = useRef<HTMLInputElement>(null)
+  const [scanning, setScanning] = useState(false)
+  const [scanPct, setScanPct] = useState(0)
 
   useEffect(() => {
     if (!isTransactionModalOpen) {
@@ -199,6 +204,33 @@ export default function TransactionModal() {
   }
 
   const canSave = montoValido && (tipo === 'ingreso' || asigOk)
+
+  // ── Escanear ticket con la cámara (OCR en el dispositivo) ───────────────────
+  async function handleScanTicket(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setScanning(true)
+    setScanPct(0)
+    setSaveError(null)
+    try {
+      const texto = await ocrImagen(file, setScanPct)
+      const parsed = parseTicket(texto)
+      if (parsed.total === null && !parsed.comercio) {
+        showToast('No se pudo leer el ticket — probá con más luz', 'error')
+        return
+      }
+      if (parsed.total !== null) setMonto(String(parsed.total))
+      if (parsed.comercio && !descripcion.trim()) setDescripcion(parsed.comercio)
+      if (parsed.fecha) setFecha(parsed.fecha)
+      showToast('Ticket leído — revisá los datos 📸')
+    } catch (err) {
+      console.error('[scan] OCR error:', err)
+      showToast('Error al leer el ticket', 'error')
+    } finally {
+      setScanning(false)
+      if (scanInputRef.current) scanInputRef.current.value = ''
+    }
+  }
 
   const accentColor = tipo === 'egreso' ? '#f87171' : '#22c55e'
   const accentBg    = tipo === 'egreso' ? 'bg-red-400' : 'bg-green-500'
@@ -403,6 +435,31 @@ export default function TransactionModal() {
                 ))}
               </div>
             </div>
+
+            {/* Escanear ticket — solo egresos nuevos */}
+            {tipo === 'egreso' && !editingTransaction && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => scanInputRef.current?.click()}
+                  disabled={scanning}
+                  className="w-full h-9 flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-gray-300 text-gray-400 text-xs font-semibold hover:border-primary/40 hover:text-primary transition-colors disabled:opacity-70"
+                >
+                  <Camera size={14} />
+                  {scanning
+                    ? scanPct > 0 ? `Leyendo ticket… ${scanPct}%` : 'Preparando lector…'
+                    : 'Escanear ticket con la cámara'}
+                </button>
+                <input
+                  ref={scanInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={handleScanTicket}
+                />
+              </>
+            )}
 
             {/* Descripción */}
             <div>
