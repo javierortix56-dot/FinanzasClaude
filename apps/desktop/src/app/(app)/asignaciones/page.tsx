@@ -13,6 +13,7 @@ import { updateTransaction } from '@finanzas/core/lib/transactions'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { toBase } from '@finanzas/core/lib/currency'
 import { getCatFromSettings } from '@finanzas/core/lib/constants'
+import { conceptOf } from '@/components/ledger/concept'
 import { cn } from '@finanzas/core/lib/utils'
 import { Currency, Settings, Transaction } from '@finanzas/core/types'
 
@@ -115,19 +116,19 @@ export default function AsignacionesPage() {
         <LedgerTabs />
         <button
           onClick={autoAsignar}
-          className="ml-auto inline-flex items-center gap-1.5 rounded-[10px] border border-border bg-surface px-3 py-[6px] text-[12.5px] font-semibold text-foreground transition-colors hover:bg-surface-2"
+          className="ml-auto inline-flex items-center gap-1.5 rounded-[10px] border border-border bg-surface px-3 py-[6px] text-[12.5px] font-medium text-foreground transition-colors hover:bg-surface-2"
         >
           <Wand2 className="h-3.5 w-3.5" /> Auto-asignar
         </button>
       </div>
 
       <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface px-4 py-3 shadow-card">
-        <div className="flex justify-between text-[13px] font-semibold">
+        <div className="flex justify-between text-[13px] font-medium">
           <span className="text-foreground">
             Asignado <MoneyText amount={asignados} currency={base} /> de{' '}
             <MoneyText amount={totalEgresos} currency={base} />
           </span>
-          <span className="tabular-nums text-primary">{pctAsignado.toFixed(0)}%</span>
+          <span className="tabular-nums font-medium text-primary">{pctAsignado.toFixed(0)}%</span>
         </div>
         <div className="h-2 overflow-hidden rounded-full bg-surface-2">
           <div className="h-2 rounded-full bg-primary transition-all" style={{ width: `${pctAsignado}%` }} />
@@ -140,23 +141,23 @@ export default function AsignacionesPage() {
 
       {selected.size > 0 && (
         <div className="flex items-center justify-between gap-2 rounded-xl bg-primary px-4 py-2.5 text-primary-foreground shadow-card-md">
-          <div className="text-[13px] font-semibold">{selected.size} seleccionados</div>
+          <div className="text-[13px] font-medium">{selected.size} seleccionados</div>
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => reasignar(null)}
-              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition-colors hover:bg-white/10"
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] font-medium transition-colors hover:bg-white/10"
             >
               <Unlink className="h-3.5 w-3.5" /> Desasignar
             </button>
             <button
               onClick={() => setReassignOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-surface px-3 py-1.5 text-[12.5px] font-semibold text-foreground transition-colors hover:bg-surface-2"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-surface px-3 py-1.5 text-[12.5px] font-medium text-foreground transition-colors hover:bg-surface-2"
             >
               <Link2 className="h-3.5 w-3.5" /> Reasignar
             </button>
             <button
               onClick={() => setSelected(new Set())}
-              className="rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition-colors hover:bg-white/10"
+              className="rounded-lg px-3 py-1.5 text-[12.5px] font-medium transition-colors hover:bg-white/10"
             >
               Cancelar
             </button>
@@ -168,7 +169,7 @@ export default function AsignacionesPage() {
         {grupos.map((g) => (
           <GrupoCard
             key={g.ingreso.id}
-            titulo={`${g.ingreso.descripcion || '(sin descripción)'} · ${g.ingreso.fecha
+            titulo={`${conceptOf(g.ingreso, settings)} · ${g.ingreso.fecha
               .toDate()
               .toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}`}
             meta={
@@ -227,7 +228,7 @@ export default function AsignacionesPage() {
               onClick={() => reasignar(ing.id ?? null)}
               className="w-full rounded-md border border-border p-3 text-left transition-colors hover:bg-surface-2"
             >
-              <div className="text-sm font-medium text-foreground">{ing.descripcion}</div>
+              <div className="text-sm font-medium text-foreground">{conceptOf(ing, settings)}</div>
               <div className="mt-0.5 text-xs text-muted">
                 {ing.fecha.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })} ·{' '}
                 <MoneyText amount={ing.monto} currency={ing.moneda} />
@@ -277,7 +278,7 @@ function GrupoCard({
         <span className="flex min-w-0 flex-col gap-[3px]">
           <span
             className={cn(
-              'truncate text-[15px] font-semibold',
+              'truncate text-[14px] font-medium',
               warning ? 'text-unassigned' : 'text-foreground',
             )}
           >
@@ -288,7 +289,7 @@ function GrupoCard({
         <span className="flex flex-col items-end gap-[3px] text-right">
           <span
             className={cn(
-              'text-[15px] font-bold tabular-nums',
+              'text-[14px] font-semibold tabular-nums',
               warning ? 'text-unassigned' : 'text-foreground',
             )}
           >
@@ -329,13 +330,13 @@ function GrupoCard({
                       style={{ background: cat?.color ?? '#94a3b8' }}
                     />
                     <span className="truncate font-medium text-foreground">
-                      {e.descripcion || '(sin descripción)'}
+                      {conceptOf(e, settings)}
                     </span>
                     {!e.ejecutado && (
                       <span className="shrink-0 text-[11px] text-muted-2">· pendiente</span>
                     )}
                   </span>
-                  <span className="whitespace-nowrap font-bold tabular-nums text-expense">
+                  <span className="whitespace-nowrap font-semibold tabular-nums text-expense">
                     −<MoneyText amount={e.monto} currency={e.moneda} />
                   </span>
                 </label>

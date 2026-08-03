@@ -11,6 +11,7 @@ import { TransactionModal } from '@/components/modals/TransactionModal'
 import { LedgerStats, LedgerTabs, FilterPill } from '@/components/ledger/LedgerHeader'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { getCatFromSettings, SHARED_USERS } from '@finanzas/core/lib/constants'
+import { conceptOf, categoryMeta } from '@/components/ledger/concept'
 import { markEjecutado, deleteTransaction } from '@finanzas/core/lib/transactions'
 import { toBase } from '@finanzas/core/lib/currency'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
@@ -49,7 +50,10 @@ export default function MovimientosPage() {
     if (categoria && t.categoria !== categoria) return false
     if (search) {
       const q = search.toLowerCase()
-      if (!t.descripcion.toLowerCase().includes(q) && !t.nota.toLowerCase().includes(q)) return false
+      // Se busca sobre el concepto visible: cuando no hay descripción, el
+      // nombre de la categoría es lo que el usuario ve y escribe.
+      const haystack = `${conceptOf(t, settings)} ${t.nota}`.toLowerCase()
+      if (!haystack.includes(q)) return false
     }
     return true
   }
@@ -164,13 +168,13 @@ export default function MovimientosPage() {
         <div className="flex gap-2">
           <button
             onClick={() => openNew('ingreso')}
-            className="inline-flex items-center gap-1 rounded-[10px] border border-border bg-surface px-3 py-[6px] text-[12.5px] font-semibold text-income transition-colors hover:bg-surface-2"
+            className="inline-flex items-center gap-1 rounded-[10px] border border-border bg-surface px-3 py-[6px] text-[12.5px] font-medium text-income transition-colors hover:bg-surface-2"
           >
             <Plus className="h-3.5 w-3.5" /> Ingreso
           </button>
           <button
             onClick={() => openNew('egreso')}
-            className="inline-flex items-center gap-1 rounded-[10px] bg-primary px-3 py-[6px] text-[12.5px] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
+            className="inline-flex items-center gap-1 rounded-[10px] bg-primary px-3 py-[6px] text-[12.5px] font-medium text-primary-foreground transition-colors hover:bg-primary-hover"
           >
             <Plus className="h-3.5 w-3.5" /> Egreso
           </button>
@@ -208,7 +212,7 @@ export default function MovimientosPage() {
           onDelete={handleDelete}
           footer={
             selectedTx
-              ? `${selectedTx.descripcion || '(sin descripción)'} seleccionado · se resaltan las partidas vinculadas`
+              ? `${conceptOf(selectedTx, settings)} seleccionado · se resaltan las partidas vinculadas`
               : 'Clic en un movimiento para ver su contrapartida · clic en el círculo para marcarlo ejecutado'
           }
         />
@@ -255,7 +259,7 @@ function LedgerColumn({
         <div className="flex items-baseline gap-2">
           <span
             className={cn(
-              'text-xs font-bold uppercase tracking-[0.06em]',
+              'text-xs font-semibold uppercase tracking-[0.08em]',
               income ? 'text-income' : 'text-expense',
             )}
           >
@@ -264,7 +268,7 @@ function LedgerColumn({
           <span className="text-xs tabular-nums text-muted">({rows.length})</span>
         </div>
         <div className="flex flex-col items-end gap-0.5">
-          <div className={cn('text-[15px] font-bold tabular-nums', income ? 'text-income' : 'text-expense')}>
+          <div className={cn('text-[15px] font-semibold tabular-nums', income ? 'text-income' : 'text-expense')}>
             <MoneyText amount={total} currency={base} />
           </div>
           {headerSub && <div className="whitespace-nowrap text-[11px] text-muted-2">{headerSub}</div>}
@@ -326,7 +330,14 @@ function LedgerRow({
   const done = t.ejecutado
   const income = kind === 'in'
 
-  const meta = [cat?.nombre ?? '—', fecha, persona, ...(done ? [] : ['pendiente'])].join(' · ')
+  const concept = conceptOf(t, settings)
+  const catName = categoryMeta(t, settings)
+  const meta = [
+    ...(catName ? [catName] : []),
+    fecha,
+    persona,
+    ...(done ? [] : ['pendiente']),
+  ].join(' · ')
 
   return (
     <div
@@ -345,11 +356,11 @@ function LedgerRow({
       <span className="flex min-w-0 flex-col gap-px pl-[11px]">
         <span
           className={cn(
-            'truncate text-[12.5px] font-semibold',
+            'truncate text-[12.5px] font-medium',
             done ? 'text-muted-2 line-through' : 'text-foreground',
           )}
         >
-          {t.descripcion || '(sin descripción)'}
+          {concept}
         </span>
         <span className="flex min-w-0 items-center gap-1.5 truncate text-[10.5px] text-muted-2">
           <span
@@ -363,7 +374,7 @@ function LedgerRow({
       <span className="flex flex-col items-end gap-px text-right">
         <span
           className={cn(
-            'text-[12.5px] font-bold tabular-nums',
+            'text-[12.5px] font-semibold tabular-nums',
             done ? 'text-muted-2 line-through' : income ? 'text-income' : 'text-expense',
           )}
         >

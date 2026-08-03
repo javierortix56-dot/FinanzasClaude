@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronLeft, ChevronRight, LogOut, Menu } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Eye, EyeOff, LogOut, Menu } from 'lucide-react'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
@@ -39,10 +39,10 @@ export function Topbar() {
         <Menu className="h-5 w-5" />
       </button>
 
-      <h1 className="text-base font-semibold text-foreground truncate">{title}</h1>
+      <h1 className="text-[15px] font-medium text-foreground truncate">{title}</h1>
 
-      <div className="ml-auto flex items-center gap-2.5">
-        <div className="flex items-center overflow-hidden rounded-[10px] border border-border bg-surface">
+      <div className="ml-auto flex items-center gap-1">
+        <div className="flex items-center overflow-hidden rounded-[10px] border border-border bg-surface mr-1.5">
           <button
             onClick={prevMonth}
             className="px-[11px] py-1.5 text-muted hover:bg-surface-2 hover:text-foreground transition-colors"
@@ -50,7 +50,7 @@ export function Topbar() {
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <div className="min-w-[140px] px-1 py-1.5 text-center text-[13px] font-semibold text-foreground first-letter:uppercase">
+          <div className="min-w-[140px] px-1 py-1.5 text-center text-[13px] font-medium text-foreground first-letter:uppercase">
             {monthLabel(currentMonth)}
           </div>
           <button
@@ -65,20 +65,22 @@ export function Topbar() {
         <button
           onClick={toggleHideAmounts}
           className={cn(
-            'rounded-[10px] border border-border bg-surface px-[11px] py-1.5 text-[12.5px] font-medium transition-colors hover:bg-surface-2',
-            hideAmounts ? 'text-primary' : 'text-muted',
+            'rounded-lg p-1.5 transition-colors hover:bg-surface-2',
+            hideAmounts ? 'text-primary' : 'text-muted-2 hover:text-foreground',
           )}
+          aria-label={hideAmounts ? 'Mostrar cifras' : 'Ocultar cifras'}
+          title={hideAmounts ? 'Mostrar cifras' : 'Ocultar cifras'}
         >
-          {hideAmounts ? 'Mostrar cifras' : 'Ocultar cifras'}
+          {hideAmounts ? <EyeOff className="h-[15px] w-[15px]" /> : <Eye className="h-[15px] w-[15px]" />}
         </button>
 
         <button
           onClick={() => signOut()}
-          className="rounded-[10px] border border-border bg-surface p-[7px] text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+          className="rounded-lg p-1.5 text-muted-2 transition-colors hover:bg-surface-2 hover:text-foreground"
           aria-label="Cerrar sesión"
           title={user?.email ? `Cerrar sesión (${user.email})` : 'Cerrar sesión'}
         >
-          <LogOut className="h-4 w-4" />
+          <LogOut className="h-[15px] w-[15px]" />
         </button>
       </div>
 

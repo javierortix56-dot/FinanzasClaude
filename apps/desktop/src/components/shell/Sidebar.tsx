@@ -41,11 +41,11 @@ export function Sidebar() {
   return (
     <aside className="hidden lg:flex w-[236px] shrink-0 flex-col border-r border-border bg-surface min-h-0 overflow-y-auto">
       <div className="flex items-center gap-2.5 px-4 h-[52px] shrink-0 border-b border-border">
-        <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-primary text-primary-foreground font-bold text-[13px] tracking-tight">
+        <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-primary text-primary-foreground font-semibold text-[13px] tracking-tight">
           J&amp;M
         </div>
         <div className="leading-tight">
-          <div className="text-sm font-semibold text-foreground">Finanzas J&amp;M</div>
+          <div className="text-sm font-medium text-foreground">Finanzas J&amp;M</div>
           <div className="text-xs text-muted">Desktop</div>
         </div>
       </div>
@@ -71,7 +71,7 @@ export function Sidebar() {
               {count && count.value > 0 && (
                 <span
                   className={cn(
-                    'ml-auto rounded-full px-[7px] py-0.5 text-[11px] font-semibold tabular-nums',
+                    'ml-auto rounded-full px-[7px] py-0.5 text-[11px] font-medium tabular-nums',
                     count.tone === 'warning'
                       ? 'bg-unassigned-soft text-unassigned'
                       : 'bg-surface-2 text-muted',
@@ -86,20 +86,20 @@ export function Sidebar() {
       </nav>
 
       <div className="mx-3.5 rounded-[10px] border border-border bg-surface-2 px-3 py-[11px] flex flex-col gap-2.5">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-2">
+        <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-2">
           Tipo de cambio
         </div>
         <div className="flex justify-between text-[13px] tabular-nums">
           <span className="text-muted">USD / ARS</span>
-          <strong className="text-foreground">
+          <span className="font-medium text-foreground">
             {settings.tipoCambio.ARS_USD.toLocaleString('es-AR')}
-          </strong>
+          </span>
         </div>
         <div className="flex justify-between text-[13px] tabular-nums">
           <span className="text-muted">USD / COP</span>
-          <strong className="text-foreground">
+          <span className="font-medium text-foreground">
             {settings.tipoCambio.COP_USD.toLocaleString('es-AR')}
-          </strong>
+          </span>
         </div>
       </div>
 

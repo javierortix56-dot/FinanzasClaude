@@ -43,10 +43,10 @@ export function LedgerStats() {
   return (
     <div className="grid grid-cols-2 xl:grid-cols-[1.3fr_1fr_1fr_1fr] gap-2.5">
       <div className="flex flex-col gap-[3px] rounded-xl border border-border bg-surface px-3.5 py-3 shadow-card">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.04em] text-muted-2">
+        <div className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted-2">
           Balance de {shortMonth(currentMonth)}
         </div>
-        <div className="text-[25px] font-bold leading-[1.1] tracking-[-0.025em] tabular-nums text-foreground">
+        <div className="text-[25px] font-semibold leading-[1.1] tracking-[-0.025em] tabular-nums text-foreground">
           <MoneyText amount={balance} currency={base} />
         </div>
         <div className="text-[11.5px] tabular-nums text-muted">
@@ -95,8 +95,8 @@ function StatCard({
 }) {
   return (
     <div className={cn('flex flex-col gap-[3px] rounded-xl border px-3.5 py-3', toneStyles[tone])}>
-      <div className="text-[11px] font-semibold uppercase tracking-[0.04em]">{label}</div>
-      <div className="text-[18px] font-bold leading-[1.15] tracking-[-0.02em] tabular-nums">
+      <div className="text-[11px] font-medium uppercase tracking-[0.06em]">{label}</div>
+      <div className="text-[18px] font-semibold leading-[1.15] tracking-[-0.02em] tabular-nums">
         {value}
       </div>
       <div className="text-[11px] tabular-nums text-muted">{sub}</div>
@@ -121,7 +121,7 @@ export function LedgerTabs() {
             key={t.href}
             href={t.href}
             className={cn(
-              'rounded-lg px-[13px] py-[5px] text-[12.5px] font-semibold transition-colors',
+              'rounded-lg px-[13px] py-[5px] text-[12.5px] font-medium transition-colors',
               active ? 'bg-surface text-primary shadow-card' : 'text-muted hover:text-foreground',
             )}
           >
