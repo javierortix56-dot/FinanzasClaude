@@ -11,6 +11,7 @@ import { Input, Label } from '@/components/ui/input'
 import { updateSettings, DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { cloneMonthTransactions, createRecurringTransactions, countMonthTransactions } from '@finanzas/core/lib/transactions'
 import { shiftMonth, monthLabel } from '@finanzas/core/lib/constants'
+import { PageScroll } from '@/components/shell/PageScroll'
 
 export default function AjustesPage() {
   const settings = useSettingsStore((s) => s.settings) ?? DEFAULT_SETTINGS
@@ -62,7 +63,7 @@ export default function AjustesPage() {
   }
 
   return (
-    <div className="space-y-5 max-w-3xl">
+    <PageScroll className="space-y-5 max-w-3xl">
       <h2 className="text-2xl font-semibold tracking-tight">Ajustes</h2>
 
       <Card>
@@ -162,6 +163,6 @@ export default function AjustesPage() {
           <p>Sincronizado con la app móvil mediante el mismo proyecto Supabase.</p>
         </CardContent>
       </Card>
-    </div>
+    </PageScroll>
   )
 }

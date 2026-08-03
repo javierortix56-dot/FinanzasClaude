@@ -12,6 +12,7 @@ import { AssetModal } from '@/components/modals/AssetModal'
 import { toBase } from '@finanzas/core/lib/currency'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { Asset } from '@finanzas/core/types'
+import { PageScroll } from '@/components/shell/PageScroll'
 
 type Tab = 'activo' | 'pasivo'
 
@@ -40,7 +41,7 @@ export default function CuentasPage() {
   function openEdit(a: Asset) { setEditing(a); setOpen(true) }
 
   return (
-    <div className="space-y-5">
+    <PageScroll className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-2xl font-semibold tracking-tight">Cuentas y patrimonio</h2>
         <Button onClick={openNew}>
@@ -162,6 +163,6 @@ export default function CuentasPage() {
       </Card>
 
       <AssetModal open={open} onClose={() => setOpen(false)} editing={editing} />
-    </div>
+    </PageScroll>
   )
 }

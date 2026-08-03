@@ -14,6 +14,7 @@ import { toBase } from '@finanzas/core/lib/currency'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { getCatFromSettings, monthLabel, shiftMonth, formatAmount } from '@finanzas/core/lib/constants'
 import { Currency, Transaction } from '@finanzas/core/types'
+import { PageScroll } from '@/components/shell/PageScroll'
 
 type TabBig = 'historico' | 'piloto'
 type TabCat = 'gastos' | 'ingresos'
@@ -75,7 +76,7 @@ export default function AnalisisPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <PageScroll className="space-y-5">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-semibold tracking-tight">Análisis</h2>
         <div className="inline-flex p-1 rounded-md bg-surface-2 border border-border">
@@ -166,7 +167,7 @@ export default function AnalisisPage() {
           base={base}
         />
       )}
-    </div>
+    </PageScroll>
   )
 }
 

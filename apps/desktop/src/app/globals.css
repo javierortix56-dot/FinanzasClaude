@@ -16,10 +16,13 @@
 
   --income: #16a34a;
   --income-soft: #dcfce7;
+  --income-tint: #f0fdf4;
   --expense: #dc2626;
   --expense-soft: #fee2e2;
+  --expense-tint: #fef2f2;
   --unassigned: #ea580c;
   --unassigned-soft: #ffedd5;
+  --unassigned-tint: #fff7ed;
 
   --ring: #534AB7;
 
@@ -47,10 +50,13 @@
 
     --income: #34c979;
     --income-soft: #12291c;
+    --income-tint: #101d16;
     --expense: #ef6a6a;
     --expense-soft: #2c1519;
+    --expense-tint: #1f1418;
     --unassigned: #f0883e;
     --unassigned-soft: #2d1d10;
+    --unassigned-tint: #20170f;
 
     --ring: #7269d4;
 
@@ -74,10 +80,13 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-income: var(--income);
   --color-income-soft: var(--income-soft);
+  --color-income-tint: var(--income-tint);
   --color-expense: var(--expense);
   --color-expense-soft: var(--expense-soft);
+  --color-expense-tint: var(--expense-tint);
   --color-unassigned: var(--unassigned);
   --color-unassigned-soft: var(--unassigned-soft);
+  --color-unassigned-tint: var(--unassigned-tint);
   --color-ring: var(--ring);
 }
 
@@ -124,7 +133,7 @@ body { min-height: 100vh; }
 .tnum { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 
 /* Custom scrollbar */
-*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
 *::-webkit-scrollbar-track { background: transparent; }
 *::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; }
 *::-webkit-scrollbar-thumb:hover { background: var(--muted-2); }

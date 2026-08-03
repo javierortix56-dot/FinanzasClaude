@@ -1,12 +1,12 @@
 'use client'
 
-import { ChevronLeft, ChevronRight, Eye, EyeOff, LogOut, Menu } from 'lucide-react'
+import { ChevronLeft, ChevronRight, LogOut, Menu } from 'lucide-react'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { signOut } from '@finanzas/core/lib/auth'
-import { monthLabel, getCurrentMonth } from '@finanzas/core/lib/constants'
-import { Button } from '@/components/ui/button'
+import { monthLabel } from '@finanzas/core/lib/constants'
+import { cn } from '@finanzas/core/lib/utils'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
@@ -14,7 +14,7 @@ import { useState } from 'react'
 const titles: Record<string, string> = {
   '/dashboard':    'Dashboard',
   '/movimientos':  'Movimientos',
-  '/asignaciones': 'Asignaciones',
+  '/asignaciones': 'Asignación de egresos',
   '/cuentas':      'Cuentas y patrimonio',
   '/analisis':     'Análisis',
   '/ajustes':      'Ajustes',
@@ -28,10 +28,9 @@ export function Topbar() {
   const [open, setOpen] = useState(false)
 
   const title = Object.entries(titles).find(([k]) => pathname.startsWith(k))?.[1] ?? ''
-  const isCurrent = currentMonth === getCurrentMonth()
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-surface/85 backdrop-blur px-4 lg:px-8">
+    <header className="relative z-30 flex h-[52px] shrink-0 items-center gap-4 border-b border-border bg-surface px-4">
       <button
         className="lg:hidden -ml-1 p-2 text-muted hover:text-foreground"
         onClick={() => setOpen((v) => !v)}
@@ -40,55 +39,51 @@ export function Topbar() {
         <Menu className="h-5 w-5" />
       </button>
 
-      <div className="flex-1 min-w-0">
-        <h1 className="text-base font-semibold text-foreground truncate">{title}</h1>
-      </div>
+      <h1 className="text-base font-semibold text-foreground truncate">{title}</h1>
 
-      <div className="flex items-center gap-2">
-        <div className="flex items-center gap-1 rounded-md border border-border bg-surface px-1 py-1">
+      <div className="ml-auto flex items-center gap-2.5">
+        <div className="flex items-center overflow-hidden rounded-[10px] border border-border bg-surface">
           <button
             onClick={prevMonth}
-            className="h-7 w-7 inline-flex items-center justify-center rounded text-muted hover:text-foreground hover:bg-surface-2"
+            className="px-[11px] py-1.5 text-muted hover:bg-surface-2 hover:text-foreground transition-colors"
             aria-label="Mes anterior"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <div className="px-2 text-sm font-medium text-foreground capitalize min-w-[140px] text-center">
+          <div className="min-w-[140px] px-1 py-1.5 text-center text-[13px] font-semibold text-foreground first-letter:uppercase">
             {monthLabel(currentMonth)}
-            {!isCurrent && <span className="ml-1 text-xs text-muted">·</span>}
           </div>
           <button
             onClick={nextMonth}
-            className="h-7 w-7 inline-flex items-center justify-center rounded text-muted hover:text-foreground hover:bg-surface-2"
+            className="px-[11px] py-1.5 text-muted hover:bg-surface-2 hover:text-foreground transition-colors"
             aria-label="Mes siguiente"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
 
-        <Button
-          variant="secondary"
-          size="icon"
+        <button
           onClick={toggleHideAmounts}
-          aria-label={hideAmounts ? 'Mostrar montos' : 'Ocultar montos'}
-          title={hideAmounts ? 'Mostrar montos' : 'Ocultar montos'}
+          className={cn(
+            'rounded-[10px] border border-border bg-surface px-[11px] py-1.5 text-[12.5px] font-medium transition-colors hover:bg-surface-2',
+            hideAmounts ? 'text-primary' : 'text-muted',
+          )}
         >
-          {hideAmounts ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-        </Button>
+          {hideAmounts ? 'Mostrar cifras' : 'Ocultar cifras'}
+        </button>
 
-        <Button
-          variant="secondary"
-          size="icon"
+        <button
           onClick={() => signOut()}
+          className="rounded-[10px] border border-border bg-surface p-[7px] text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
           aria-label="Cerrar sesión"
           title={user?.email ? `Cerrar sesión (${user.email})` : 'Cerrar sesión'}
         >
           <LogOut className="h-4 w-4" />
-        </Button>
+        </button>
       </div>
 
       {open && (
-        <div className="absolute top-16 left-0 right-0 lg:hidden border-b border-border bg-surface shadow-lg p-3 space-y-1">
+        <div className="absolute top-[52px] left-0 right-0 lg:hidden border-b border-border bg-surface shadow-lg p-3 space-y-1">
           {[
             ['/dashboard', 'Dashboard'],
             ['/movimientos', 'Movimientos'],

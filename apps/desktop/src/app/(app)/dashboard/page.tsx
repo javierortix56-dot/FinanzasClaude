@@ -16,6 +16,7 @@ import { formatAmount, getCatFromSettings, monthLabel, shiftMonth } from '@finan
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { fetchLastNMonths } from '@finanzas/core/lib/analytics'
 import { Currency, Transaction, Settings } from '@finanzas/core/types'
+import { PageScroll } from '@/components/shell/PageScroll'
 
 interface MonthAgg { month: string; ingresos: number; egresos: number; balance: number }
 
@@ -173,10 +174,10 @@ export default function DashboardPage() {
     .slice(0, 6)
 
   return (
-    <div className="space-y-6">
+    <PageScroll className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
-          <p className="text-sm text-muted capitalize">{monthLabel(currentMonth)}</p>
+          <p className="text-sm text-muted first-letter:uppercase">{monthLabel(currentMonth)}</p>
           <h2 className="text-2xl font-semibold tracking-tight text-foreground">Resumen del mes</h2>
         </div>
         <div className="flex items-center gap-2 text-xs">
@@ -295,7 +296,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </PageScroll>
   )
 }
 

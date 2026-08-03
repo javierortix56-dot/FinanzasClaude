@@ -4,22 +4,25 @@ import { useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, Link2, Wand2, Unlink } from 'lucide-react'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
+import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Modal } from '@/components/ui/modal'
 import { MoneyText } from '@/components/MoneyText'
+import { LedgerStats, LedgerTabs } from '@/components/ledger/LedgerHeader'
 import { updateTransaction } from '@finanzas/core/lib/transactions'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { toBase } from '@finanzas/core/lib/currency'
 import { getCatFromSettings } from '@finanzas/core/lib/constants'
-import { Transaction } from '@finanzas/core/types'
+import { cn } from '@finanzas/core/lib/utils'
+import { Currency, Settings, Transaction } from '@finanzas/core/types'
 
 export default function AsignacionesPage() {
   const { transactions } = useTransactionStore()
-  const settings = useSettingsStore((s) => s.settings) ?? DEFAULT_SETTINGS
+  const settings = (useSettingsStore((s) => s.settings) ?? DEFAULT_SETTINGS) as Settings
+  const { monedaBase } = useAuthStore()
   const showToast = useUIStore((s) => s.showToast)
+
+  const base = monedaBase as Currency
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -27,30 +30,32 @@ export default function AsignacionesPage() {
 
   const ingresos = useMemo(
     () => transactions.filter((t) => t.tipo === 'ingreso')
-                       .sort((a, b) => a.fecha.toDate().getTime() - b.fecha.toDate().getTime()),
+                      .sort((a, b) => a.fecha.toDate().getTime() - b.fecha.toDate().getTime()),
     [transactions],
   )
   const egresos = useMemo(() => transactions.filter((t) => t.tipo === 'egreso'), [transactions])
 
-  const totalEgresosUSD   = egresos.reduce((s, t) => s + toBase(t.monto, t.moneda, 'USD', settings), 0)
-  const asignadosUSD      = egresos.filter((e) => e.asignaciones.length > 0).reduce((s, t) => s + toBase(t.monto, t.moneda, 'USD', settings), 0)
-  const sinAsignarUSD     = totalEgresosUSD - asignadosUSD
-  const pctAsignado = totalEgresosUSD > 0 ? (asignadosUSD / totalEgresosUSD) * 100 : 0
+  const totalEgresos = egresos.reduce((s, t) => s + toBase(t.monto, t.moneda, base, settings), 0)
+  const asignados = egresos.filter((e) => e.asignaciones.length > 0)
+                           .reduce((s, t) => s + toBase(t.monto, t.moneda, base, settings), 0)
+  const sinAsignarTotal = totalEgresos - asignados
+  const pctAsignado = totalEgresos > 0 ? (asignados / totalEgresos) * 100 : 0
 
   // Un egreso dividido aparece bajo cada ingreso; el total del grupo suma
   // solo la parte asignada a ese ingreso.
   const grupos = useMemo(() => {
     return ingresos.map((ing) => {
       const asignados = egresos.filter((e) => e.asignaciones.some((a) => a.ingresoId === ing.id))
-      const totalUSD = egresos.reduce((s, e) => s + e.asignaciones
+      const total = egresos.reduce((s, e) => s + e.asignaciones
         .filter((a) => a.ingresoId === ing.id)
-        .reduce((x, a) => x + toBase(a.monto, e.moneda, 'USD', settings), 0), 0)
-      const ingresoUSD = toBase(ing.monto, ing.moneda, 'USD', settings)
-      return { ingreso: ing, asignados, totalUSD, ingresoUSD, restante: ingresoUSD - totalUSD }
+        .reduce((x, a) => x + toBase(a.monto, e.moneda, base, settings), 0), 0)
+      const ingresoTotal = toBase(ing.monto, ing.moneda, base, settings)
+      return { ingreso: ing, asignados, total, ingresoTotal }
     })
-  }, [ingresos, egresos, settings])
+  }, [ingresos, egresos, settings, base])
 
   const sinAsignar = egresos.filter((e) => e.asignaciones.length === 0)
+  const pendientes = egresos.filter((e) => !e.ejecutado).length
 
   function toggle(id: string) {
     setExpanded((e) => ({ ...e, [id]: !e[id] }))
@@ -103,202 +108,242 @@ export default function AsignacionesPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-2xl font-semibold tracking-tight">Asignación de egresos</h2>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={autoAsignar}>
-            <Wand2 className="h-4 w-4" /> Auto-asignar
-          </Button>
+    <main className="flex flex-1 min-h-0 flex-col gap-2.5 px-4 lg:px-6 pt-3">
+      <LedgerStats />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <LedgerTabs />
+        <button
+          onClick={autoAsignar}
+          className="ml-auto inline-flex items-center gap-1.5 rounded-[10px] border border-border bg-surface px-3 py-[6px] text-[12.5px] font-semibold text-foreground transition-colors hover:bg-surface-2"
+        >
+          <Wand2 className="h-3.5 w-3.5" /> Auto-asignar
+        </button>
+      </div>
+
+      <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface px-4 py-3 shadow-card">
+        <div className="flex justify-between text-[13px] font-semibold">
+          <span className="text-foreground">
+            Asignado <MoneyText amount={asignados} currency={base} /> de{' '}
+            <MoneyText amount={totalEgresos} currency={base} />
+          </span>
+          <span className="tabular-nums text-primary">{pctAsignado.toFixed(0)}%</span>
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-surface-2">
+          <div className="h-2 rounded-full bg-primary transition-all" style={{ width: `${pctAsignado}%` }} />
+        </div>
+        <div className="flex justify-between text-xs text-muted-2">
+          <span>Sin asignar <MoneyText amount={sinAsignarTotal} currency={base} /></span>
+          <span>{pendientes} {pendientes === 1 ? 'egreso pendiente' : 'egresos pendientes'}</span>
         </div>
       </div>
 
-      <Card>
-        <CardContent className="pt-5">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-sm font-medium text-foreground">
-              Asignado <MoneyText amount={asignadosUSD} currency="USD" /> de <MoneyText amount={totalEgresosUSD} currency="USD" />
-            </div>
-            <div className="text-sm font-semibold tabular-nums">{pctAsignado.toFixed(0)}%</div>
-          </div>
-          <div className="h-2 bg-surface-2 rounded-full overflow-hidden">
-            <div className="h-full bg-primary transition-all" style={{ width: `${pctAsignado}%` }} />
-          </div>
-          <div className="flex justify-between text-xs text-muted mt-2">
-            <span>Sin asignar: <MoneyText amount={sinAsignarUSD} currency="USD" /></span>
-            <span>{sinAsignar.length} egresos pendientes</span>
-          </div>
-        </CardContent>
-      </Card>
-
       {selected.size > 0 && (
-        <div className="sticky top-20 z-20 flex items-center justify-between gap-2 px-4 py-3 rounded-lg bg-primary text-primary-foreground shadow-md">
-          <div className="text-sm font-medium">{selected.size} seleccionados</div>
-          <div className="flex gap-2">
-            <Button variant="ghost" className="text-primary-foreground hover:bg-white/10" onClick={() => reasignar(null)}>
-              <Unlink className="h-4 w-4" /> Desasignar
-            </Button>
-            <Button variant="secondary" onClick={() => setReassignOpen(true)}>
-              <Link2 className="h-4 w-4" /> Reasignar
-            </Button>
-            <Button variant="ghost" className="text-primary-foreground hover:bg-white/10" onClick={() => setSelected(new Set())}>
+        <div className="flex items-center justify-between gap-2 rounded-xl bg-primary px-4 py-2.5 text-primary-foreground shadow-card-md">
+          <div className="text-[13px] font-semibold">{selected.size} seleccionados</div>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => reasignar(null)}
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition-colors hover:bg-white/10"
+            >
+              <Unlink className="h-3.5 w-3.5" /> Desasignar
+            </button>
+            <button
+              onClick={() => setReassignOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-surface px-3 py-1.5 text-[12.5px] font-semibold text-foreground transition-colors hover:bg-surface-2"
+            >
+              <Link2 className="h-3.5 w-3.5" /> Reasignar
+            </button>
+            <button
+              onClick={() => setSelected(new Set())}
+              className="rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition-colors hover:bg-white/10"
+            >
               Cancelar
-            </Button>
+            </button>
           </div>
         </div>
       )}
 
-      {sinAsignar.length > 0 && (
-        <GrupoCard
-          titulo="Sin asignar"
-          tone="warning"
-          subtitulo={`${sinAsignar.length} egresos · ${''}`}
-          totalUSD={sinAsignarUSD}
-          color="#ea580c"
-          expanded={expanded['_sin'] ?? true}
-          onToggle={() => toggle('_sin')}
-          
-          settings={settings}
-          egresos={sinAsignar}
-          selected={selected}
-          onSelect={toggleSelect}
-        />
-      )}
+      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pb-3.5">
+        {grupos.map((g) => (
+          <GrupoCard
+            key={g.ingreso.id}
+            titulo={`${g.ingreso.descripcion || '(sin descripción)'} · ${g.ingreso.fecha
+              .toDate()
+              .toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}`}
+            meta={
+              <>
+                Ingreso <MoneyText amount={g.ingresoTotal} currency={base} /> ·{' '}
+                {g.asignados.length} {g.asignados.length === 1 ? 'egreso' : 'egresos'}
+              </>
+            }
+            total={g.total}
+            sub={
+              g.ingresoTotal > 0
+                ? `${Math.round((g.total / g.ingresoTotal) * 100)}% del ingreso`
+                : 'sin monto de referencia'
+            }
+            base={base}
+            expanded={expanded[g.ingreso.id ?? ''] ?? false}
+            onToggle={() => toggle(g.ingreso.id ?? '')}
+            settings={settings}
+            egresos={g.asignados}
+            selected={selected}
+            onSelect={toggleSelect}
+          />
+        ))}
 
-      {grupos.map((g) => (
-        <GrupoCard
-          key={g.ingreso.id}
-          titulo={g.ingreso.descripcion || '(sin descripción)'}
-          subtitulo={`Ingreso · ${g.ingreso.fecha.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}`}
-          totalUSD={g.totalUSD}
-          ingresoUSD={g.ingresoUSD}
-          color="#534AB7"
-          expanded={expanded[g.ingreso.id ?? ''] ?? false}
-          onToggle={() => toggle(g.ingreso.id ?? '')}
-          
-          settings={settings}
-          egresos={g.asignados}
-          selected={selected}
-          onSelect={toggleSelect}
-        />
-      ))}
+        {sinAsignar.length > 0 && (
+          <GrupoCard
+            titulo="Sin asignar"
+            tone="warning"
+            meta={`${sinAsignar.length} ${
+              sinAsignar.length === 1 ? 'egreso' : 'egresos'
+            } sin ingreso de respaldo`}
+            total={sinAsignarTotal}
+            sub="requiere asignación"
+            base={base}
+            expanded={expanded['_sin'] ?? true}
+            onToggle={() => toggle('_sin')}
+            settings={settings}
+            egresos={sinAsignar}
+            selected={selected}
+            onSelect={toggleSelect}
+          />
+        )}
 
-      {grupos.length === 0 && sinAsignar.length === 0 && (
-        <Card>
-          <CardContent className="py-12 text-center text-muted text-sm">
+        {grupos.length === 0 && sinAsignar.length === 0 && (
+          <div className="rounded-[14px] border border-border bg-surface py-12 text-center text-[13px] text-muted">
             No hay movimientos en este mes.
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        )}
+      </div>
 
-      <Modal
-        open={reassignOpen}
-        onClose={() => setReassignOpen(false)}
-        title="Reasignar a un ingreso"
-      >
-        <div className="space-y-2 max-h-[400px] overflow-auto">
+      <Modal open={reassignOpen} onClose={() => setReassignOpen(false)} title="Reasignar a un ingreso">
+        <div className="max-h-[400px] space-y-2 overflow-auto">
           {ingresos.map((ing) => (
             <button
               key={ing.id}
               onClick={() => reasignar(ing.id ?? null)}
-              className="w-full text-left p-3 rounded-md border border-border hover:bg-surface-2 transition-colors"
+              className="w-full rounded-md border border-border p-3 text-left transition-colors hover:bg-surface-2"
             >
               <div className="text-sm font-medium text-foreground">{ing.descripcion}</div>
-              <div className="text-xs text-muted mt-0.5">
+              <div className="mt-0.5 text-xs text-muted">
                 {ing.fecha.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })} ·{' '}
                 <MoneyText amount={ing.monto} currency={ing.moneda} />
               </div>
             </button>
           ))}
-          {ingresos.length === 0 && <p className="text-sm text-muted text-center py-6">No hay ingresos.</p>}
+          {ingresos.length === 0 && <p className="py-6 text-center text-sm text-muted">No hay ingresos.</p>}
         </div>
       </Modal>
-    </div>
+    </main>
   )
 }
 
 function GrupoCard({
-  titulo, subtitulo, totalUSD, ingresoUSD, color, expanded, onToggle, settings, egresos, selected, onSelect, tone,
+  titulo, meta, total, sub, base, expanded, onToggle, settings, egresos, selected, onSelect, tone,
 }: {
   titulo: string
-  subtitulo: string
-  totalUSD: number
-  ingresoUSD?: number
-  color: string
+  meta: React.ReactNode
+  total: number
+  sub: string
+  base: Currency
   expanded: boolean
   onToggle: () => void
-  settings: typeof DEFAULT_SETTINGS
+  settings: Settings
   egresos: Transaction[]
   selected: Set<string>
   onSelect: (id: string) => void
   tone?: 'warning'
 }) {
-  const pct = ingresoUSD && ingresoUSD > 0 ? Math.min(100, (totalUSD / ingresoUSD) * 100) : 0
+  const warning = tone === 'warning'
   return (
-    <Card className={tone === 'warning' ? 'border-unassigned/30' : ''}>
+    <div
+      className={cn(
+        'shrink-0 overflow-hidden rounded-[14px] border bg-surface',
+        warning ? 'border-unassigned-soft' : 'border-border',
+      )}
+    >
       <button
         onClick={onToggle}
-        className="w-full px-5 py-4 flex items-center justify-between gap-3 hover:bg-surface-2/60"
+        className="grid w-full grid-cols-[16px_1fr_auto] items-center gap-3 px-[15px] py-[11px] text-left transition-colors hover:bg-surface-2"
       >
-        <div className="flex items-center gap-3 min-w-0">
-          {expanded ? <ChevronDown className="h-4 w-4 text-muted" /> : <ChevronRight className="h-4 w-4 text-muted" />}
-          <span className="h-2 w-2 rounded-full shrink-0" style={{ background: color }} />
-          <div className="text-left min-w-0">
-            <div className="text-sm font-semibold text-foreground truncate">{titulo}</div>
-            <div className="text-xs text-muted">{subtitulo} · {egresos.length} egresos</div>
-          </div>
-        </div>
-        <div className="text-right whitespace-nowrap">
-          <div className="text-sm font-semibold tabular-nums">
-            <MoneyText amount={totalUSD} currency="USD" />
-          </div>
-          {ingresoUSD !== undefined && (
-            <div className="text-xs text-muted">
-              de <MoneyText amount={ingresoUSD} currency="USD" /> ({pct.toFixed(0)}%)
-            </div>
-          )}
-        </div>
+        {expanded ? (
+          <ChevronDown className="h-[13px] w-[13px] text-muted-2" />
+        ) : (
+          <ChevronRight className="h-[13px] w-[13px] text-muted-2" />
+        )}
+        <span className="flex min-w-0 flex-col gap-[3px]">
+          <span
+            className={cn(
+              'truncate text-[15px] font-semibold',
+              warning ? 'text-unassigned' : 'text-foreground',
+            )}
+          >
+            {titulo}
+          </span>
+          <span className="truncate text-xs text-muted-2">{meta}</span>
+        </span>
+        <span className="flex flex-col items-end gap-[3px] text-right">
+          <span
+            className={cn(
+              'text-[15px] font-bold tabular-nums',
+              warning ? 'text-unassigned' : 'text-foreground',
+            )}
+          >
+            <MoneyText amount={total} currency={base} />
+          </span>
+          <span className="whitespace-nowrap text-[11px] text-muted-2">{sub}</span>
+        </span>
       </button>
+
       {expanded && (
         <div className="border-t border-border">
           {egresos.length === 0 ? (
-            <p className="text-sm text-muted text-center py-6">Sin egresos asignados.</p>
+            <p className="py-6 text-center text-[13px] text-muted">Sin egresos asignados.</p>
           ) : (
-            <div>
-              {egresos.map((e) => {
-                const cat = getCatFromSettings(e.categoria, settings)
-                const isSel = e.id ? selected.has(e.id) : false
-                return (
-                  <label
-                    key={e.id}
-                    className={`flex items-center gap-3 px-5 py-2.5 border-b border-border last:border-0 cursor-pointer hover:bg-surface-2/60 ${
-                      isSel ? 'bg-primary/5' : ''
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isSel}
-                      onChange={() => e.id && onSelect(e.id)}
-                      className="h-4 w-4 rounded border-border accent-primary"
+            egresos.map((e) => {
+              const cat = getCatFromSettings(e.categoria, settings)
+              const isSel = e.id ? selected.has(e.id) : false
+              return (
+                <label
+                  key={e.id}
+                  className={cn(
+                    'grid cursor-pointer grid-cols-[16px_52px_1fr_auto] items-center gap-3.5 border-b border-border py-[7px] pl-[15px] pr-[15px] text-[12.5px] transition-colors last:border-0 hover:bg-surface-2',
+                    isSel && 'bg-primary/5',
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSel}
+                    onChange={() => e.id && onSelect(e.id)}
+                    className="h-3.5 w-3.5 rounded border-border accent-primary"
+                  />
+                  <span className="tabular-nums text-muted-2">
+                    {e.fecha.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
+                  </span>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span
+                      className="h-[5px] w-[5px] shrink-0 rounded-full"
+                      style={{ background: cat?.color ?? '#94a3b8' }}
                     />
-                    <span className="h-2 w-2 rounded-full shrink-0" style={{ background: cat?.color ?? '#94a3b8' }} />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm text-foreground truncate">{e.descripcion || '(sin descripción)'}</div>
-                      <div className="text-xs text-muted">
-                        {cat?.nombre ?? '—'} · {e.fecha.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
-                      </div>
-                    </div>
-                    {!e.ejecutado && <Badge tone="warning">Pendiente</Badge>}
-                    <span className="text-sm font-semibold text-expense tabular-nums whitespace-nowrap">
-                      −<MoneyText amount={e.monto} currency={e.moneda} />
+                    <span className="truncate font-medium text-foreground">
+                      {e.descripcion || '(sin descripción)'}
                     </span>
-                  </label>
-                )
-              })}
-            </div>
+                    {!e.ejecutado && (
+                      <span className="shrink-0 text-[11px] text-muted-2">· pendiente</span>
+                    )}
+                  </span>
+                  <span className="whitespace-nowrap font-bold tabular-nums text-expense">
+                    −<MoneyText amount={e.monto} currency={e.moneda} />
+                  </span>
+                </label>
+              )
+            })
           )}
         </div>
       )}
-    </Card>
+    </div>
   )
 }
