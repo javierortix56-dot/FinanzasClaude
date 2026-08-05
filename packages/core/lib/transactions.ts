@@ -23,6 +23,29 @@ function readAsignaciones(extra: Record<string, any>, monto: number): Asignacion
   return []
 }
 
+/**
+ * Filas migradas de Firebase: `amount` trae el importe YA convertido a ARS y
+ * `orig_amt` el importe en la moneda original, así que ahí hay que leer el
+ * movimiento como ARS aunque `currency` diga otra cosa.
+ *
+ * Ojo: un desfasaje entre ambos NO alcanza para dar por migrada la fila. Una
+ * edición vieja podía dejar `orig_amt` sin actualizar, y esa fila se leía como
+ * ARS: un ingreso de COP 1.000.000 aparecía como ARS 1.000.000, sin convertir.
+ * Por eso exigimos además que la conversión tenga sentido para la moneda: el
+ * equivalente en ARS de un importe en COP siempre es MENOR (el peso colombiano
+ * vale menos que el argentino) y el de un importe en USD siempre es MAYOR.
+ */
+function isPreConvertedToARS(
+  currency: string,
+  amount: number,
+  origAmt: number | null,
+): boolean {
+  if (origAmt == null || Math.abs(origAmt - amount) <= 0.01) return false
+  if (currency === 'COP') return amount < origAmt
+  if (currency === 'USD') return amount > origAmt
+  return true
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function rowToTx(row: Record<string, any>): Transaction {
   const dateStr = row.date as string
@@ -30,11 +53,9 @@ export function rowToTx(row: Record<string, any>): Transaction {
   // DB may store 'inc'/'exp' (old app) or 'ingreso'/'egreso' (new)
   const rawType = row.type as string
   const tipo = rawType === 'inc' ? 'ingreso' : rawType === 'exp' ? 'egreso' : rawType as 'ingreso' | 'egreso'
-  // Migrated Firebase rows: amount = pre-converted ARS value, orig_amt = original currency value.
-  // When orig_amt differs from amount, amount is already in ARS — use it directly.
   const origAmt = row.orig_amt as number | null
   const amount = row.amount as number
-  const isPreConverted = origAmt != null && Math.abs(origAmt - amount) > 0.01
+  const isPreConverted = isPreConvertedToARS(row.currency as string, amount, origAmt)
   return {
     id: row.id as string,
     userId: 'shared',
@@ -138,7 +159,13 @@ export async function addTransaction(data: Omit<Transaction, 'id'>): Promise<str
 export async function updateTransaction(id: string, data: Partial<Omit<Transaction, 'id'>>) {
   const partial: Record<string, unknown> = {}
   if (data.tipo !== undefined) partial.type = data.tipo
-  if (data.monto !== undefined) partial.amount = data.monto
+  if (data.monto !== undefined) {
+    partial.amount = data.monto
+    // orig_amt tiene que seguir a amount: si queda con el importe viejo, la
+    // fila parece migrada de Firebase (importe ya convertido) y se pierde la
+    // moneda original al releerla.
+    partial.orig_amt = data.monto
+  }
   if (data.moneda !== undefined) partial.currency = data.moneda
   if (data.categoria !== undefined) partial.category = data.categoria
   if (data.descripcion !== undefined) partial.description = data.descripcion
