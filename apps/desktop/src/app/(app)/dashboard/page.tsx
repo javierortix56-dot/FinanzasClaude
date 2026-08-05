@@ -17,6 +17,7 @@ import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { fetchLastNMonths } from '@finanzas/core/lib/analytics'
 import { Currency, Transaction, Settings } from '@finanzas/core/types'
 import { PageScroll } from '@/components/shell/PageScroll'
+import { txLabel } from '@/lib/labels'
 
 interface MonthAgg { month: string; ingresos: number; egresos: number; balance: number }
 
@@ -307,7 +308,7 @@ function RecentRow({ t, settings }: { t: Transaction; settings: Settings }) {
   return (
     <tr className="border-b border-border last:border-0 hover:bg-surface-2/60 transition-colors">
       <td className="px-6 py-3">
-        <div className="text-sm text-foreground font-medium truncate max-w-[280px]">{t.descripcion || '(sin descripción)'}</div>
+        <div className="text-sm text-foreground font-medium truncate max-w-[280px]">{txLabel(t, settings)}</div>
         {!t.ejecutado && <span className="text-[10px] uppercase tracking-wide text-unassigned font-semibold">Pendiente</span>}
       </td>
       <td className="px-6 py-3">

@@ -14,6 +14,7 @@ import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { toBase } from '@finanzas/core/lib/currency'
 import { getCatFromSettings } from '@finanzas/core/lib/constants'
 import { cn } from '@finanzas/core/lib/utils'
+import { txLabel } from '@/lib/labels'
 import { Currency, Settings, Transaction } from '@finanzas/core/types'
 
 export default function AsignacionesPage() {
@@ -168,7 +169,7 @@ export default function AsignacionesPage() {
         {grupos.map((g) => (
           <GrupoCard
             key={g.ingreso.id}
-            titulo={`${g.ingreso.descripcion || '(sin descripción)'} · ${g.ingreso.fecha
+            titulo={`${txLabel(g.ingreso, settings)} · ${g.ingreso.fecha
               .toDate()
               .toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}`}
             meta={
@@ -227,7 +228,7 @@ export default function AsignacionesPage() {
               onClick={() => reasignar(ing.id ?? null)}
               className="w-full rounded-md border border-border p-3 text-left transition-colors hover:bg-surface-2"
             >
-              <div className="text-sm font-medium text-foreground">{ing.descripcion}</div>
+              <div className="text-sm font-medium text-foreground">{txLabel(ing, settings)}</div>
               <div className="mt-0.5 text-xs text-muted">
                 {ing.fecha.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })} ·{' '}
                 <MoneyInBase amount={ing.monto} currency={ing.moneda} />
@@ -330,7 +331,7 @@ function GrupoCard({
                       style={{ background: cat?.color ?? '#94a3b8' }}
                     />
                     <span className="truncate font-medium text-foreground">
-                      {e.descripcion || '(sin descripción)'}
+                      {txLabel(e, settings)}
                     </span>
                     {!e.ejecutado && (
                       <span className="shrink-0 text-[11px] text-muted-2">· pendiente</span>

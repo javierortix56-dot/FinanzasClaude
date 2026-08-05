@@ -15,6 +15,7 @@ import { markEjecutado, deleteTransaction } from '@finanzas/core/lib/transaction
 import { toBase } from '@finanzas/core/lib/currency'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { cn } from '@finanzas/core/lib/utils'
+import { txLabel } from '@/lib/labels'
 import { Currency, Settings, Transaction, TransactionType } from '@finanzas/core/types'
 
 type Filter = 'todas' | 'pendientes' | 'javier' | 'mary'
@@ -51,7 +52,7 @@ export default function MovimientosPage() {
     if (categoria && t.categoria !== categoria) return false
     if (search) {
       const q = search.toLowerCase()
-      if (!t.descripcion.toLowerCase().includes(q) && !t.nota.toLowerCase().includes(q)) return false
+      if (!txLabel(t, settings).toLowerCase().includes(q) && !t.nota.toLowerCase().includes(q)) return false
     }
     return true
   }
@@ -210,7 +211,7 @@ export default function MovimientosPage() {
           onDelete={handleDelete}
           footer={
             selectedTx
-              ? `${selectedTx.descripcion || '(sin descripción)'} · se resaltan las partidas vinculadas`
+              ? `${txLabel(selectedTx, settings)} · se resaltan las partidas vinculadas`
               : 'Clic en un movimiento para editarlo · pasá el mouse para ver su contrapartida · clic en el círculo para marcarlo ejecutado'
           }
         />
@@ -364,7 +365,7 @@ function LedgerRow({
             done ? 'text-muted-2 line-through' : 'text-foreground',
           )}
         >
-          {t.descripcion || '(sin descripción)'}
+          {txLabel(t, settings)}
         </span>
         <span className="flex min-w-0 items-center gap-1.5 truncate text-[10.5px] text-muted-2">
           <span

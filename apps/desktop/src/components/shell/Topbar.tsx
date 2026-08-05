@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronLeft, ChevronRight, LogOut, Menu } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Eye, EyeOff, LogOut, Menu } from 'lucide-react'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
@@ -65,11 +65,13 @@ export function Topbar() {
         <button
           onClick={toggleHideAmounts}
           className={cn(
-            'rounded-[10px] border border-border bg-surface px-[11px] py-1.5 text-[12.5px] font-medium transition-colors hover:bg-surface-2',
+            'rounded-[10px] border border-border bg-surface p-[7px] transition-colors hover:bg-surface-2 hover:text-foreground',
             hideAmounts ? 'text-primary' : 'text-muted',
           )}
+          aria-label={hideAmounts ? 'Mostrar montos' : 'Ocultar montos'}
+          title={hideAmounts ? 'Mostrar montos' : 'Ocultar montos'}
         >
-          {hideAmounts ? 'Mostrar cifras' : 'Ocultar cifras'}
+          {hideAmounts ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
         </button>
 
         <button
