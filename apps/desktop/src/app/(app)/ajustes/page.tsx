@@ -12,6 +12,7 @@ import { updateSettings, DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { cloneMonthTransactions, createRecurringTransactions, countMonthTransactions } from '@finanzas/core/lib/transactions'
 import { shiftMonth, monthLabel } from '@finanzas/core/lib/constants'
 import { PageScroll } from '@/components/shell/PageScroll'
+import { CategoryTree } from '@/components/ajustes/CategoryTree'
 
 export default function AjustesPage() {
   const settings = useSettingsStore((s) => s.settings) ?? DEFAULT_SETTINGS
@@ -116,40 +117,18 @@ export default function AjustesPage() {
       <Card>
         <div className="px-5 py-4 border-b border-border">
           <div className="text-sm font-semibold">Categorías</div>
-          <div className="text-xs text-muted mt-0.5">Vista de solo lectura. Para editar, usá la app móvil por ahora.</div>
+          <div className="text-xs text-muted mt-0.5">
+            Los cambios se guardan solos y se comparten con la app móvil.
+          </div>
         </div>
-        <CardContent className="pt-5 space-y-4">
+        <CardContent className="pt-5 space-y-5">
           <div>
             <div className="text-xs font-medium text-muted uppercase tracking-wide mb-2">Egresos</div>
-            <div className="space-y-2">
-              {settings.categoriasGasto.map((g) => (
-                <div key={g.id} className="text-sm">
-                  <div className="font-medium flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full" style={{ background: g.color }} />
-                    {g.nombre}
-                  </div>
-                  <div className="text-xs text-muted ml-4 mt-1">
-                    {g.subcategorias.map((s) => s.nombre).join(' · ') || '(sin subcategorías)'}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <CategoryTree tipo="gasto" />
           </div>
           <div>
             <div className="text-xs font-medium text-muted uppercase tracking-wide mb-2">Ingresos</div>
-            <div className="space-y-2">
-              {settings.categoriasIngreso.map((g) => (
-                <div key={g.id} className="text-sm">
-                  <div className="font-medium flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full" style={{ background: g.color }} />
-                    {g.nombre}
-                  </div>
-                  <div className="text-xs text-muted ml-4 mt-1">
-                    {g.subcategorias.map((s) => s.nombre).join(' · ') || '(sin subcategorías)'}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <CategoryTree tipo="ingreso" />
           </div>
         </CardContent>
       </Card>
