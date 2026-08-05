@@ -10,12 +10,12 @@ import { MoneyText } from '@/components/MoneyText'
 import { TransactionModal } from '@/components/modals/TransactionModal'
 import { LedgerStats, LedgerTabs, FilterPill } from '@/components/ledger/LedgerHeader'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
-import { getCatFromSettings, SHARED_USERS } from '@finanzas/core/lib/constants'
+import { getCatFromSettings } from '@finanzas/core/lib/constants'
 import { markEjecutado, deleteTransaction } from '@finanzas/core/lib/transactions'
 import { toBase } from '@finanzas/core/lib/currency'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { cn } from '@finanzas/core/lib/utils'
-import { txLabel } from '@/lib/labels'
+import { txCategoryPath, txLabel } from '@/lib/labels'
 import { Currency, Settings, Transaction, TransactionType } from '@finanzas/core/types'
 
 type Filter = 'todas' | 'pendientes' | 'javier' | 'mary'
@@ -321,7 +321,6 @@ function LedgerRow({
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const cat = getCatFromSettings(t.categoria, settings)
-  const persona = SHARED_USERS.find((u) => u.id === t.creadoPor)?.nombre ?? '—'
   const fecha = t.fecha.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })
   // El importe principal siempre va en la moneda base: si se cargó en COP o USD
   // se muestra ya convertido, y abajo queda el importe original como referencia.
@@ -332,7 +331,9 @@ function LedgerRow({
   const done = t.ejecutado
   const income = kind === 'in'
 
-  const meta = [cat?.nombre ?? '—', fecha, persona, ...(done ? [] : ['pendiente'])].join(' · ')
+  // El grupo ubica al movimiento sin repetir el título; el estado ya se lee del
+  // tachado y de quién lo cargó están los filtros de arriba.
+  const meta = [txCategoryPath(t, settings), fecha].filter(Boolean).join(' · ')
 
   return (
     <div
