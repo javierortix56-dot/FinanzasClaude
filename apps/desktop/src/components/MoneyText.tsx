@@ -3,7 +3,7 @@
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
-import { formatAmount } from '@finanzas/core/lib/constants'
+import { formatMoney } from '@/lib/money'
 import { toBase } from '@finanzas/core/lib/currency'
 import { cn } from '@finanzas/core/lib/utils'
 import { Currency, Settings } from '@finanzas/core/types'
@@ -18,7 +18,7 @@ export function MoneyText({ amount, currency, className }: Props) {
   const hide = useSettingsStore((s) => s.hideAmounts)
   return (
     <span className={cn(hide && 'blur-amount', className)}>
-      {formatAmount(amount, currency)}
+      {formatMoney(amount, currency)}
     </span>
   )
 }

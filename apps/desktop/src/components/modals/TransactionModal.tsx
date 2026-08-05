@@ -11,7 +11,8 @@ import { addTransaction, updateTransaction, deleteTransaction } from '@finanzas/
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { toBase } from '@finanzas/core/lib/currency'
 import { Currency, Transaction, TransactionType, CategoryGroup } from '@finanzas/core/types'
-import { formatAmount, SHARED_USERS, toLocalDateString } from '@finanzas/core/lib/constants'
+import { SHARED_USERS, toLocalDateString } from '@finanzas/core/lib/constants'
+import { formatMoney } from '@/lib/money'
 import { Trash2 } from 'lucide-react'
 
 interface Props {
@@ -188,7 +189,7 @@ function Form({
       {montoEnBase !== null && (
         <p className="-mt-2 text-xs text-muted">
           {montoEnBase > 0
-            ? <>Equivale a <span className="font-semibold text-foreground tabular-nums">{formatAmount(montoEnBase, base)}</span> con el tipo de cambio actual.</>
+            ? <>Equivale a <span className="font-semibold text-foreground tabular-nums">{formatMoney(montoEnBase, base)}</span> con el tipo de cambio actual.</>
             : <>Falta configurar el tipo de cambio de {moneda} en Ajustes para convertirlo a {base}.</>}
         </p>
       )}

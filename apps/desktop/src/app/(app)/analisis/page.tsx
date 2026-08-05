@@ -12,7 +12,8 @@ import { LineChart } from '@/components/charts/LineChart'
 import { fetchLastNMonths, fetchMonthTransactions } from '@finanzas/core/lib/analytics'
 import { toBase } from '@finanzas/core/lib/currency'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
-import { getCatFromSettings, monthLabel, shiftMonth, formatAmount } from '@finanzas/core/lib/constants'
+import { getCatFromSettings, monthLabel, shiftMonth } from '@finanzas/core/lib/constants'
+import { formatMoney } from '@/lib/money'
 import { Currency, Transaction } from '@finanzas/core/types'
 import { PageScroll } from '@/components/shell/PageScroll'
 
@@ -124,7 +125,7 @@ export default function AnalisisPage() {
                   <Donut
                     data={slices}
                     centerLabel="Total"
-                    centerValue={formatAmount(totalCat, base)}
+                    centerValue={formatMoney(totalCat, base)}
                   />
                   <div className="flex-1 w-full space-y-2">
                     {slices.length === 0 ? (

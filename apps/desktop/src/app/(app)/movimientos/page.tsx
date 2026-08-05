@@ -325,10 +325,9 @@ function LedgerRow({
   const fecha = t.fecha.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })
   // El importe principal siempre va en la moneda base: si se cargó en COP o USD
   // se muestra ya convertido, y abajo queda el importe original como referencia.
+  // Si ya se cargó en la moneda base no hay segundo renglón: repetir el mismo
+  // número en otra divisa solo ensucia la columna.
   const montoBase = toBase(t.monto, t.moneda, base, settings)
-  // El renglón en USD es una referencia, no un importe operable: se redondea
-  // para que la columna de montos no se llene de decimales.
-  const usd = Math.round(toBase(t.monto, t.moneda, 'USD', settings))
   const esOtraMoneda = t.moneda !== base
   const done = t.ejecutado
   const income = kind === 'in'
@@ -386,11 +385,11 @@ function LedgerRow({
           {income ? '' : '−'}
           <MoneyText amount={montoBase} currency={base} />
         </span>
-        <span className="text-[10px] tabular-nums text-muted-2">
-          {esOtraMoneda
-            ? <MoneyText amount={t.monto} currency={t.moneda} />
-            : base !== 'USD' && <MoneyText amount={usd} currency="USD" />}
-        </span>
+        {esOtraMoneda && (
+          <span className="text-[10px] tabular-nums text-muted-2">
+            <MoneyText amount={t.monto} currency={t.moneda} />
+          </span>
+        )}
       </span>
 
       <span className="relative flex items-center gap-1">
