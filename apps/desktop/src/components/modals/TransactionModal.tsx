@@ -6,10 +6,12 @@ import { Input, Select, Textarea, Label } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
+import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { addTransaction, updateTransaction, deleteTransaction } from '@finanzas/core/lib/transactions'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
+import { toBase } from '@finanzas/core/lib/currency'
 import { Currency, Transaction, TransactionType, CategoryGroup } from '@finanzas/core/types'
-import { SHARED_USERS, toLocalDateString } from '@finanzas/core/lib/constants'
+import { formatAmount, SHARED_USERS, toLocalDateString } from '@finanzas/core/lib/constants'
 import { Trash2 } from 'lucide-react'
 
 interface Props {
@@ -62,6 +64,7 @@ function Form({
 }) {
   const settings = useSettingsStore((s) => s.settings) ?? DEFAULT_SETTINGS
   const showToast = useUIStore((s) => s.showToast)
+  const base = useAuthStore((s) => s.monedaBase) as Currency
 
   const [tipo, setTipo]             = useState<TransactionType>(editing?.tipo ?? initialType)
   const [monto, setMonto]           = useState(editing ? String(editing.monto) : '')
@@ -80,6 +83,14 @@ function Form({
   const cats = flattenCategories(
     tipo === 'ingreso' ? settings.categoriasIngreso : settings.categoriasGasto,
   )
+
+  // Vista previa de la conversión: el movimiento se guarda en su moneda
+  // original, pero los totales y los listados lo muestran en la moneda base.
+  const montoNum = parseFloat(monto)
+  const montoEnBase =
+    moneda !== base && Number.isFinite(montoNum) && montoNum > 0
+      ? toBase(montoNum, moneda, base, settings)
+      : null
 
   async function handleSave() {
     const m = parseFloat(monto)
@@ -173,6 +184,14 @@ function Form({
           </Select>
         </div>
       </div>
+
+      {montoEnBase !== null && (
+        <p className="-mt-2 text-xs text-muted">
+          {montoEnBase > 0
+            ? <>Equivale a <span className="font-semibold text-foreground tabular-nums">{formatAmount(montoEnBase, base)}</span> con el tipo de cambio actual.</>
+            : <>Falta configurar el tipo de cambio de {moneda} en Ajustes para convertirlo a {base}.</>}
+        </p>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <div>

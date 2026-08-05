@@ -7,7 +7,7 @@ import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { Modal } from '@/components/ui/modal'
-import { MoneyText } from '@/components/MoneyText'
+import { MoneyText, MoneyInBase, MoneyOriginal } from '@/components/MoneyText'
 import { LedgerStats, LedgerTabs } from '@/components/ledger/LedgerHeader'
 import { updateTransaction } from '@finanzas/core/lib/transactions'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
@@ -230,7 +230,8 @@ export default function AsignacionesPage() {
               <div className="text-sm font-medium text-foreground">{ing.descripcion}</div>
               <div className="mt-0.5 text-xs text-muted">
                 {ing.fecha.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })} ·{' '}
-                <MoneyText amount={ing.monto} currency={ing.moneda} />
+                <MoneyInBase amount={ing.monto} currency={ing.moneda} />
+                <MoneyOriginal amount={ing.monto} currency={ing.moneda} className="ml-1 text-muted-2" />
               </div>
             </button>
           ))}
@@ -335,8 +336,15 @@ function GrupoCard({
                       <span className="shrink-0 text-[11px] text-muted-2">· pendiente</span>
                     )}
                   </span>
-                  <span className="whitespace-nowrap font-bold tabular-nums text-expense">
-                    −<MoneyText amount={e.monto} currency={e.moneda} />
+                  <span className="flex flex-col items-end whitespace-nowrap tabular-nums">
+                    <span className="font-bold text-expense">
+                      −<MoneyInBase amount={e.monto} currency={e.moneda} />
+                    </span>
+                    <MoneyOriginal
+                      amount={e.monto}
+                      currency={e.moneda}
+                      className="text-[10px] text-muted-2"
+                    />
                   </span>
                 </label>
               )

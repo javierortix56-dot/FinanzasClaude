@@ -9,7 +9,7 @@ import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useAssetStore } from '@finanzas/core/store/useAssetStore'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { MoneyText } from '@/components/MoneyText'
+import { MoneyText, MoneyInBase, MoneyOriginal } from '@/components/MoneyText'
 import { Donut } from '@/components/charts/Donut'
 import { toBase } from '@finanzas/core/lib/currency'
 import { formatAmount, getCatFromSettings, monthLabel, shiftMonth } from '@finanzas/core/lib/constants'
@@ -319,8 +319,13 @@ function RecentRow({ t, settings }: { t: Transaction; settings: Settings }) {
       <td className="px-6 py-3 text-xs text-muted">{fechaStr}</td>
       <td className="px-6 py-3 text-right">
         <span className={`text-sm font-semibold tnum ${t.tipo === 'ingreso' ? 'text-income' : 'text-expense'}`}>
-          {t.tipo === 'ingreso' ? '+' : '−'}<MoneyText amount={t.monto} currency={t.moneda} />
+          {t.tipo === 'ingreso' ? '+' : '−'}<MoneyInBase amount={t.monto} currency={t.moneda} />
         </span>
+        <MoneyOriginal
+          amount={t.monto}
+          currency={t.moneda}
+          className="block text-[10px] tnum text-muted-2"
+        />
       </td>
     </tr>
   )

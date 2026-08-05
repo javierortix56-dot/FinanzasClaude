@@ -35,6 +35,8 @@ export default function MovimientosPage() {
   const [filter, setFilter] = useState<Filter>('todas')
   const [search, setSearch] = useState('')
   const [categoria, setCategoria] = useState('')
+  // `selected` ya no se fija con un clic (el clic abre la edición): se activa
+  // al pasar el mouse por encima, para ver la contrapartida sin perder el clic.
   const [selected, setSelected] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Transaction | null>(null)
@@ -208,8 +210,8 @@ export default function MovimientosPage() {
           onDelete={handleDelete}
           footer={
             selectedTx
-              ? `${selectedTx.descripcion || '(sin descripción)'} seleccionado · se resaltan las partidas vinculadas`
-              : 'Clic en un movimiento para ver su contrapartida · clic en el círculo para marcarlo ejecutado'
+              ? `${selectedTx.descripcion || '(sin descripción)'} · se resaltan las partidas vinculadas`
+              : 'Clic en un movimiento para editarlo · pasá el mouse para ver su contrapartida · clic en el círculo para marcarlo ejecutado'
           }
         />
       </div>
@@ -282,11 +284,11 @@ function LedgerColumn({
               key={t.id}
               t={t}
               kind={kind}
+              base={base}
               settings={settings}
               isSelected={t.id === selected}
               isLinked={isLinked(t)}
-              dimmed={selected !== null && !isLinked(t)}
-              onSelect={() => onSelect(t.id === selected ? null : t.id ?? null)}
+              onHover={(on) => onSelect(on ? t.id ?? null : null)}
               onToggle={() => onToggle(t)}
               onEdit={() => onEdit(t)}
               onDelete={() => onDelete(t)}
@@ -303,15 +305,15 @@ function LedgerColumn({
 }
 
 function LedgerRow({
-  t, kind, settings, isSelected, isLinked, dimmed, onSelect, onToggle, onEdit, onDelete,
+  t, kind, base, settings, isSelected, isLinked, onHover, onToggle, onEdit, onDelete,
 }: {
   t: Transaction
   kind: 'in' | 'out'
+  base: Currency
   settings: Settings
   isSelected: boolean
   isLinked: boolean
-  dimmed: boolean
-  onSelect: () => void
+  onHover: (on: boolean) => void
   onToggle: () => void
   onEdit: () => void
   onDelete: () => void
@@ -320,9 +322,13 @@ function LedgerRow({
   const cat = getCatFromSettings(t.categoria, settings)
   const persona = SHARED_USERS.find((u) => u.id === t.creadoPor)?.nombre ?? '—'
   const fecha = t.fecha.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })
+  // El importe principal siempre va en la moneda base: si se cargó en COP o USD
+  // se muestra ya convertido, y abajo queda el importe original como referencia.
+  const montoBase = toBase(t.monto, t.moneda, base, settings)
   // El renglón en USD es una referencia, no un importe operable: se redondea
   // para que la columna de montos no se llene de decimales.
   const usd = Math.round(toBase(t.monto, t.moneda, 'USD', settings))
+  const esOtraMoneda = t.moneda !== base
   const done = t.ejecutado
   const income = kind === 'in'
 
@@ -330,12 +336,21 @@ function LedgerRow({
 
   return (
     <div
-      onClick={onSelect}
+      role="button"
+      tabIndex={0}
+      title="Editar movimiento"
+      onClick={onEdit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onEdit() }
+      }}
+      onMouseEnter={() => onHover(true)}
+      onMouseLeave={() => onHover(false)}
+      onFocus={() => onHover(true)}
+      onBlur={() => onHover(false)}
       className={cn(
-        'group grid cursor-pointer grid-cols-[3px_1fr_auto_auto] items-center gap-2.5 border-b border-border py-[7px] pr-3.5 transition-colors last:border-0',
+        'group grid cursor-pointer grid-cols-[3px_1fr_auto_auto] items-center gap-2.5 border-b border-border py-[7px] pr-3.5 transition-colors last:border-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
         income ? 'hover:bg-income-tint' : 'hover:bg-expense-tint',
-        isSelected && 'bg-primary/5',
-        dimmed && 'opacity-[0.34]',
+        isLinked && !isSelected && 'bg-primary/5',
       )}
     >
       <span
@@ -368,10 +383,12 @@ function LedgerRow({
           )}
         >
           {income ? '' : '−'}
-          <MoneyText amount={t.monto} currency={t.moneda} />
+          <MoneyText amount={montoBase} currency={base} />
         </span>
         <span className="text-[10px] tabular-nums text-muted-2">
-          <MoneyText amount={usd} currency="USD" />
+          {esOtraMoneda
+            ? <MoneyText amount={t.monto} currency={t.moneda} />
+            : base !== 'USD' && <MoneyText amount={usd} currency="USD" />}
         </span>
       </span>
 
