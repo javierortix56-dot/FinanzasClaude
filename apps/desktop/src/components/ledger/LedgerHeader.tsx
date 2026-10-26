@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { motion } from 'motion/react'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
@@ -35,41 +36,52 @@ export function LedgerStats() {
   const balance = totalIn - totalOut
   const balanceUSD = Math.round(toBase(balance, base, 'USD', settings))
 
-  const sinAsignarList = egresos.filter((t) => t.asignaciones.length === 0)
+  // Huérfanos (asignados a un ingreso que ya no existe) cuentan como sin asignar,
+  // igual que el badge de la barra lateral.
+  const ingresoIds = new Set(ingresos.map((t) => t.id))
+  const sinAsignarList = egresos.filter((t) => !t.asignaciones.some((a) => ingresoIds.has(a.ingresoId)))
   const sinAsignar = sinAsignarList.reduce((s, t) => s + toBase(t.monto, t.moneda, base, settings), 0)
 
   const share = totalIn > 0 ? Math.round((totalOut / totalIn) * 100) : 0
 
   return (
     <div className="grid grid-cols-2 xl:grid-cols-[1.3fr_1fr_1fr_1fr] gap-2.5">
-      <div className="flex flex-col gap-[3px] rounded-xl border border-border bg-surface px-3.5 py-3 shadow-card">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.04em] text-muted-2">
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative overflow-hidden flex flex-col gap-[3px] rounded-2xl bg-brand text-white px-4 py-3 shadow-card-md"
+      >
+        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/70">
           Balance de {shortMonth(currentMonth)}
         </div>
-        <div className="text-[25px] font-bold leading-[1.1] tracking-[-0.025em] tabular-nums text-foreground">
-          <MoneyText amount={balance} currency={base} />
+        <div className="text-[25px] font-bold leading-[1.1] tracking-[-0.025em] tnum">
+          <MoneyText amount={balance} currency={base} animated />
         </div>
-        <div className="text-[11.5px] tabular-nums text-muted">
+        <div className="text-[11.5px] tnum text-white/70">
           ≈ <MoneyText amount={balanceUSD} currency="USD" />
         </div>
-      </div>
+      </motion.div>
 
       <StatCard
+        delay={0.04}
         label="Ingresos"
         tone="income"
-        value={<MoneyText amount={totalIn} currency={base} />}
+        value={<MoneyText amount={totalIn} currency={base} animated />}
         sub={`${ingresos.length} ${ingresos.length === 1 ? 'movimiento' : 'movimientos'}`}
       />
       <StatCard
+        delay={0.08}
         label="Egresos"
         tone="expense"
-        value={<MoneyText amount={totalOut} currency={base} />}
+        value={<MoneyText amount={totalOut} currency={base} animated />}
         sub={totalIn > 0 ? `${share}% del ingreso` : `${egresos.length} movimientos`}
+        progress={totalIn > 0 ? share : undefined}
       />
       <StatCard
+        delay={0.12}
         label="Sin asignar"
         tone="unassigned"
-        value={<MoneyText amount={sinAsignar} currency={base} />}
+        value={<MoneyText amount={sinAsignar} currency={base} animated />}
         sub={`${sinAsignarList.length} ${sinAsignarList.length === 1 ? 'egreso' : 'egresos'} sin asignar`}
       />
     </div>
@@ -77,9 +89,9 @@ export function LedgerStats() {
 }
 
 const toneStyles = {
-  income: 'bg-income-tint border-income-soft text-income',
-  expense: 'bg-expense-tint border-expense-soft text-expense',
-  unassigned: 'bg-unassigned-tint border-unassigned-soft text-unassigned',
+  income: { text: 'text-income', dot: 'bg-income', bar: 'var(--income)' },
+  expense: { text: 'text-expense', dot: 'bg-expense', bar: 'var(--expense)' },
+  unassigned: { text: 'text-unassigned', dot: 'bg-unassigned', bar: 'var(--unassigned)' },
 } as const
 
 function StatCard({
@@ -87,20 +99,45 @@ function StatCard({
   value,
   sub,
   tone,
+  delay,
+  progress,
 }: {
   label: string
   value: React.ReactNode
   sub: string
   tone: keyof typeof toneStyles
+  delay?: number
+  /** 0–100: barra fina bajo el monto */
+  progress?: number
 }) {
+  const t = toneStyles[tone]
   return (
-    <div className={cn('flex flex-col gap-[3px] rounded-xl border px-3.5 py-3', toneStyles[tone])}>
-      <div className="text-[11px] font-semibold uppercase tracking-[0.04em]">{label}</div>
-      <div className="text-[18px] font-bold leading-[1.15] tracking-[-0.02em] tabular-nums">
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay }}
+      className="glass flex flex-col gap-[3px] rounded-2xl px-4 py-3"
+    >
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+        <span className={cn('h-1.5 w-1.5 rounded-full', t.dot)} />
+        {label}
+      </div>
+      <div className={cn('text-[18px] font-bold leading-[1.15] tracking-[-0.02em] tnum', t.text)}>
         {value}
       </div>
-      <div className="text-[11px] tabular-nums text-muted">{sub}</div>
-    </div>
+      {progress !== undefined && (
+        <div className="h-1 rounded-full bg-surface-2 overflow-hidden my-0.5">
+          <motion.div
+            className="h-full rounded-full"
+            style={{ background: t.bar }}
+            initial={{ width: 0 }}
+            animate={{ width: `${Math.min(progress, 100)}%` }}
+            transition={{ type: 'spring', stiffness: 120, damping: 22 }}
+          />
+        </div>
+      )}
+      <div className="text-[11px] tnum text-muted">{sub}</div>
+    </motion.div>
   )
 }
 
@@ -113,7 +150,7 @@ const tabs = [
 export function LedgerTabs() {
   const pathname = usePathname()
   return (
-    <div className="flex gap-[3px] rounded-[10px] bg-surface-2 p-[3px]">
+    <div className="flex gap-[3px] rounded-xl bg-surface-2 p-[3px]">
       {tabs.map((t) => {
         const active = pathname.startsWith(t.href)
         return (
@@ -121,37 +158,21 @@ export function LedgerTabs() {
             key={t.href}
             href={t.href}
             className={cn(
-              'rounded-lg px-[13px] py-[5px] text-[12.5px] font-semibold transition-colors',
-              active ? 'bg-surface text-primary shadow-card' : 'text-muted hover:text-foreground',
+              'relative rounded-[9px] px-[13px] py-[5px] text-[12.5px] font-semibold transition-colors',
+              active ? 'text-primary' : 'text-muted hover:text-foreground',
             )}
           >
-            {t.label}
+            {active && (
+              <motion.span
+                layoutId="ledger-tab"
+                transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                className="absolute inset-0 rounded-[9px] bg-surface shadow-card"
+              />
+            )}
+            <span className="relative">{t.label}</span>
           </Link>
         )
       })}
     </div>
-  )
-}
-
-/** Píldora de filtro usada en la barra de herramientas del libro mayor. */
-export function FilterPill({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        'rounded-lg px-[11px] py-[5px] text-[12.5px] font-medium transition-colors',
-        active ? 'bg-surface text-primary shadow-card' : 'text-muted hover:text-foreground',
-      )}
-    >
-      {children}
-    </button>
   )
 }

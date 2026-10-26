@@ -108,6 +108,8 @@ export async function updateAsset(id: string, data: Partial<Omit<Asset, 'id'>>) 
   if (data.saldo !== undefined) partial.init_bal = data.saldo
   if (data.metaObjetivo !== undefined) partial.meta_objetivo = data.metaObjetivo
   if (data.metaMoneda !== undefined) partial.meta_moneda = data.metaMoneda
+  // Antes se ignoraba: editar la fecha de alta no se guardaba
+  if (data.fechaAlta !== undefined) partial.date_created = data.fechaAlta.toDate().toISOString().slice(0, 10)
 
   const { error } = await supabase.from('cuentas').update(partial).eq('id', id)
   if (error) throw error
@@ -168,6 +170,16 @@ export async function upsertSnapshot(asset: Asset, snap: AssetSnapshot) {
   if (latest && latest.month >= snap.month) partial.init_bal = latest.saldo
   const { error } = await supabase.from('cuentas').update(partial).eq('id', asset.id!)
   if (error) throw error
+  // Optimistic update: el historial y el saldo se ven al instante (el
+  // realtime reconciliará después).
+  const prev = useAssetStore.getState().assets.find((a) => a.id === asset.id)
+  if (prev) {
+    useAssetStore.getState().upsertAsset({
+      ...prev,
+      snapshots: next,
+      ...(partial.init_bal !== undefined && { saldo: latest.saldo }),
+    })
+  }
 }
 
 /**

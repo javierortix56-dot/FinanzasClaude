@@ -16,5 +16,9 @@
   },
   "devDependencies": {
     "typescript": "^5"
+  },
+  "peerDependencies": {
+    "lucide-react": ">=0.500.0",
+    "react": ">=19"
   }
 }

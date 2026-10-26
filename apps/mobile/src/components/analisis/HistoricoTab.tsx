@@ -17,6 +17,16 @@ import MultiLineChart, { LineSeries } from './MultiLineChart'
 import { motion } from 'motion/react'
 import { PiggyBank, CalendarDays, Crown, TrendingUp, TrendingDown, AlertTriangle, Clock, Gauge, Lightbulb } from 'lucide-react'
 import Card from '@/components/ui/Card'
+import { computeInsights, InsightIcon } from '@finanzas/core/lib/insights'
+
+const INSIGHT_ICONS: Record<InsightIcon, React.ReactNode> = {
+  up: <TrendingUp size={15} />,
+  down: <TrendingDown size={15} />,
+  piggy: <PiggyBank size={15} />,
+  gauge: <Gauge size={15} />,
+  alert: <AlertTriangle size={15} />,
+  clock: <Clock size={15} />,
+}
 import { CategoryIcon } from '@/lib/categoryIcons'
 import { Money } from '@/components/ui/AnimatedNumber'
 
@@ -150,90 +160,10 @@ export default function HistoricoTab() {
 
   const ahorroOk = tasaAhorro !== null && tasaAhorro >= 0
 
-  // ── Insights en lenguaje natural ──────────────────────────────────────────
-  // Frases cortas y accionables derivadas de los mismos datos de los gráficos.
-  const insights: { key: string; icon: React.ReactNode; tone: 'good' | 'bad' | 'info'; text: React.ReactNode }[] = []
-  const M = (v: number) => (
-    <span className={`font-semibold tabular-nums ${hideAmounts ? 'blur-[4px] select-none' : ''}`}>{formatAmount(Math.round(v), base)}</span>
-  )
-  const mesPrevNombre = monthLabel(prevMonth).split(' ')[0]
-
-  // 1. Mayor cambio por grupo vs. el mes anterior
-  const gruposPrev = new Map<string, number>()
-  for (const t of prevTxs) {
-    if (t.tipo !== 'egreso') continue
-    const id = getParentGroup(t.categoria, s.categoriasGasto)?.id ?? t.categoria
-    gruposPrev.set(id, (gruposPrev.get(id) ?? 0) + toBase(t.monto, t.moneda, base, s))
-  }
-  const cambios = [...new Set([...gruposMes.keys(), ...gruposPrev.keys()])]
-    .map((id) => ({ id, cur: gruposMes.get(id) ?? 0, prev: gruposPrev.get(id) ?? 0 }))
-    .filter((c) => c.prev > 0 && Math.abs(c.cur - c.prev) / c.prev >= 0.1)
-    .sort((a, b) => Math.abs(b.cur - b.prev) - Math.abs(a.cur - a.prev))
-  if (cambios[0]) {
-    const c = cambios[0]
-    const pct = Math.round(((c.cur - c.prev) / c.prev) * 100)
-    const nombre = getCatFromSettings(c.id, s)?.nombre ?? c.id
-    insights.push({
-      key: 'cambio',
-      icon: pct > 0 ? <TrendingUp size={15} /> : <TrendingDown size={15} />,
-      tone: pct > 0 ? 'bad' : 'good',
-      text: <>Gastaron <b>{Math.abs(pct)}% {pct > 0 ? 'más' : 'menos'}</b> en {nombre} que en {mesPrevNombre} ({M(c.cur)} vs {M(c.prev)}).</>,
-    })
-  }
-
-  // 2. Ahorro del mes
-  if (tasaAhorro !== null) {
-    insights.push({
-      key: 'ahorro',
-      icon: <PiggyBank size={15} />,
-      tone: tasaAhorro >= 0 ? 'good' : 'bad',
-      text: tasaAhorro >= 0
-        ? <>Guardaron el <b>{Math.round(tasaAhorro)}%</b> de lo que ingresó: {M(incMes - expMes)} libres este mes.</>
-        : <>Este mes gastaron {M(expMes - incMes)} <b>más de lo que ingresó</b>.</>,
-    })
-  }
-
-  // 3. Proyección del cierre (solo mes en curso)
-  if (esMesActual && expMes > 0) {
-    const diasMes = new Date(...(currentMonth.split('-').map(Number) as [number, number]), 0).getDate()
-    const proyectado = (expMes / Math.max(diasTranscurridos, 1)) * diasMes
-    insights.push({
-      key: 'proy',
-      icon: <Gauge size={15} />,
-      tone: incMes > 0 && proyectado > incMes ? 'bad' : 'info',
-      text: <>A este ritmo, el mes cierra con egresos de {M(proyectado)}{incMes > 0 && proyectado > incMes ? <>, <b>por encima de lo ingresado</b></> : ''}.</>,
-    })
-  }
-
-  // 4. Presupuestos superados
-  const superados = budgets.filter((b) => {
-    if (b.mes !== currentMonth || b.limite <= 0) return false
-    const gastado = transactions
-      .filter((t) => t.tipo === 'egreso' && (t.categoria === b.categoria || getParentGroup(t.categoria, s.categoriasGasto)?.id === b.categoria))
-      .reduce((sum, t) => sum + toBase(t.monto, t.moneda, base, s), 0)
-    return toBase(gastado, base, b.moneda as Currency, s) > b.limite
+  // ── Insights en lenguaje natural (cálculo compartido en core) ─────────────
+  const insights = computeInsights({
+    transactions, prevTransactions: prevTxs, budgets, settings: s, base, month: currentMonth,
   })
-  if (superados.length > 0) {
-    const nombres = superados.map((b) => getCatFromSettings(b.categoria, s)?.nombre ?? b.categoria)
-    insights.push({
-      key: 'presu',
-      icon: <AlertTriangle size={15} />,
-      tone: 'bad',
-      text: <>Superaron el presupuesto de <b>{nombres.join(', ')}</b>.</>,
-    })
-  }
-
-  // 5. Pagos pendientes
-  const pendientes = transactions.filter((t) => t.tipo === 'egreso' && !t.ejecutado)
-  if (pendientes.length > 0) {
-    const totalPend = pendientes.reduce((sum, t) => sum + toBase(t.monto, t.moneda, base, s), 0)
-    insights.push({
-      key: 'pend',
-      icon: <Clock size={15} />,
-      tone: 'info',
-      text: <>Quedan <b>{pendientes.length} pago{pendientes.length !== 1 ? 's' : ''} pendiente{pendientes.length !== 1 ? 's' : ''}</b> por {M(totalPend)}.</>,
-    })
-  }
 
   return (
     <div className="h-full overflow-y-auto overscroll-contain px-4 pt-1 pb-28 space-y-3 no-scrollbar">
@@ -253,8 +183,18 @@ export default function HistoricoTab() {
                   transition={{ delay: 0.1 + i * 0.06 }}
                   className="flex items-start gap-2.5"
                 >
-                  <span className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${tone}`}>{ins.icon}</span>
-                  <p className="text-[13px] text-gray-700 leading-snug pt-1">{ins.text}</p>
+                  <span className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${tone}`}>{INSIGHT_ICONS[ins.icon]}</span>
+                  <p className="text-[13px] text-gray-700 leading-snug pt-1">
+                    {ins.segments.map((seg, j) =>
+                      typeof seg === 'string' ? seg
+                        : 'bold' in seg ? <b key={j}>{seg.bold}</b>
+                          : (
+                            <span key={j} className={`font-semibold tabular-nums ${hideAmounts ? 'blur-[4px] select-none' : ''}`}>
+                              {formatAmount(Math.round(seg.money), base)}
+                            </span>
+                          ),
+                    )}
+                  </p>
                 </motion.div>
               )
             })}

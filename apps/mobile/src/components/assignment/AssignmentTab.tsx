@@ -13,7 +13,7 @@ import { deleteTransactionsWithUndo, updateAsignacionesWithUndo, offerUndo } fro
 import { haptic } from '@/lib/haptics'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { SHARED_USERS } from '@finanzas/core/lib/constants'
-import { toBase } from '@finanzas/core/lib/currency'
+import { planAutoAssign } from '@finanzas/core/lib/autoAssign'
 import { Transaction, Currency } from '@finanzas/core/types'
 import AssignmentGroup, { GroupItem } from './AssignmentGroup'
 import ReassignModal from './ReassignModal'
@@ -74,67 +74,21 @@ export default function AssignmentTab({ onScrollY }: { onScrollY?: (y: number) =
   const progressPercent    = totalEgresos > 0 ? (assignedCount / totalEgresos) * 100 : 0
   const allAssigned        = realUnassigned === 0 && totalEgresos > 0
 
-  // Auto-asignar: prioriza capacidad + cercanía por fecha; si no entra en
-  // ninguno, asigna al ingreso con más capacidad restante (o al más cercano
-  // por fecha) para que ningún egreso quede sin asignar.
+  // Auto-asignar: el plan (capacidad + cercanía por fecha) vive en core y lo
+  // comparten mobile y desktop.
   async function autoAssign() {
-    // Incluye los egresos sin asignar Y los huérfanos (todas sus asignaciones
-    // apuntan a ingresos que ya no existen — caen en el grupo "Sin asignar").
-    const ingresoIds = new Set(ingresos.map((i) => i.id!))
-    const unassigned = egresos.filter(
-      (e) => !e.asignaciones.some((a) => ingresoIds.has(a.ingresoId))
-    )
-    if (ingresos.length === 0 || unassigned.length === 0) return
+    const plan = planAutoAssign(ingresos, egresos, base, s)
+    if (plan.length === 0) return
     setAutoLoading(true)
-
-    const capacity = new Map<string, number>()
-    ingresos.forEach((inc) => {
-      const incBase = toBase(inc.monto, inc.moneda, base, s)
-      const yaAsignado = egresos.reduce((sum, e) => sum + e.asignaciones
-        .filter((a) => a.ingresoId === inc.id)
-        .reduce((x, a) => x + toBase(a.monto, e.moneda, base, s), 0), 0)
-      capacity.set(inc.id!, incBase - yaAsignado)
-    })
-
-    // Procesa primero los egresos más grandes para mejor empaquetado.
-    const ordered = [...unassigned].sort(
-      (a, b) => toBase(b.monto, b.moneda, base, s) - toBase(a.monto, a.moneda, base, s)
-    )
-
-    const previas = ordered.map((e) => ({ id: e.id!, asignaciones: e.asignaciones }))
+    const previas = plan.map(({ exp }) => ({ id: exp.id!, asignaciones: exp.asignaciones }))
     try {
-      for (const exp of ordered) {
-        const expBase = toBase(exp.monto, exp.moneda, base, s)
-        const expTime = exp.fecha.toDate().getTime()
-
-        const elegibles = ingresos.filter((inc) => (capacity.get(inc.id!) ?? 0) >= expBase)
-
-        let target: Transaction
-        if (elegibles.length > 0) {
-          // Más cercano por fecha entre los que tienen capacidad
-          target = elegibles.reduce((prev, curr) =>
-            Math.abs(curr.fecha.toDate().getTime() - expTime) <
-            Math.abs(prev.fecha.toDate().getTime() - expTime) ? curr : prev
-          )
-        } else {
-          // Fallback: ningún ingreso cubre solo. Elegimos el de mayor
-          // capacidad restante (menos sobregiro). En empate, el más
-          // cercano por fecha.
-          target = ingresos.reduce((prev, curr) => {
-            const prevCap = capacity.get(prev.id!) ?? 0
-            const currCap = capacity.get(curr.id!) ?? 0
-            if (currCap !== prevCap) return currCap > prevCap ? curr : prev
-            return Math.abs(curr.fecha.toDate().getTime() - expTime) <
-                   Math.abs(prev.fecha.toDate().getTime() - expTime) ? curr : prev
-          })
-        }
-        capacity.set(target.id!, (capacity.get(target.id!) ?? 0) - expBase)
+      for (const { exp, ingresoId } of plan) {
         await updateTransaction(exp.id!, {
-          asignaciones: [{ ingresoId: target.id!, monto: exp.monto }],
+          asignaciones: [{ ingresoId, monto: exp.monto }],
         })
       }
       haptic('success')
-      offerUndo(`${ordered.length} egreso${ordered.length !== 1 ? 's' : ''} asignado${ordered.length !== 1 ? 's' : ''}`, async () => {
+      offerUndo(`${plan.length} egreso${plan.length !== 1 ? 's' : ''} asignado${plan.length !== 1 ? 's' : ''}`, async () => {
         await Promise.allSettled(previas.map(({ id, asignaciones }) => updateTransaction(id, { asignaciones })))
       })
     } finally {
