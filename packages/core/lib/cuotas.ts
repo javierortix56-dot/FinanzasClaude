@@ -88,6 +88,13 @@ export async function updateCompraCuotas(id: string, data: Omit<CompraCuotas, 'i
   if (error) throw error
 }
 
+/** Re-crea una compra borrada con su mismo id (botón "Deshacer"). */
+export async function restoreCompraCuotas(c: CompraCuotas) {
+  const { id, ...rest } = c
+  const { error } = await supabase.from('compras_cuotas').insert({ id, ...compraToRow(rest) })
+  if (error) throw error
+}
+
 export async function deleteCompraCuotas(id: string) {
   const { error } = await supabase.from('compras_cuotas').delete().eq('id', id)
   if (error) throw error

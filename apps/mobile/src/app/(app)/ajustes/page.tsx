@@ -2,9 +2,20 @@
 
 import { useState, useRef } from 'react'
 import {
-  ChevronRight, Plus, Pencil, ChevronDown, ChevronUp,
-  Copy, RotateCcw, Lock, Trash2, Check, Download, Upload, ChevronLeft, LogOut,
+  ChevronRight, ChevronLeft, Plus, Pencil,
+  Copy, RotateCcw, Lock, Trash2, Check, Download, Upload, LogOut,
+  UserRound, Bell, ArrowLeftRight, Tags, Coins, Layers, PiggyBank, CalendarCog, DatabaseBackup,
+  Palette, Sparkles,
 } from 'lucide-react'
+import { AnimatePresence, motion, type PanInfo } from 'motion/react'
+import PageHeader from '@/components/ui/PageHeader'
+import Segmented from '@/components/ui/Segmented'
+import { springSoft } from '@/components/ui/motion'
+import CategoryTree from '@/components/ajustes/CategoryTree'
+import { offerUndo } from '@/lib/undo'
+import { getThemePref, setThemePref, ThemePref } from '@/lib/theme'
+import { openOnboarding } from '@/lib/onboarding'
+import { useTransactionStore as txStore } from '@finanzas/core/store/useTransactionStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useAssetStore } from '@finanzas/core/store/useAssetStore'
@@ -14,6 +25,7 @@ import { pushSoportado, getSuscripcionActual, activarPush, desactivarPush } from
 import { updateSettings } from '@finanzas/core/lib/settings'
 import {
   deleteMonthTransactions,
+  restoreTransactions,
   cloneMonthTransactions,
   createRecurringTransactions,
   countMonthTransactions,
@@ -25,7 +37,7 @@ import { Category, CategoryGroup, AhorroLink, Currency } from '@finanzas/core/ty
 
 const CategoryModal = dynamic(() => import('@/components/ajustes/CategoryModal'), { ssr: false })
 
-type Section = 'cuenta' | 'notif' | 'cambio' | 'categorias' | 'categorias_ing' | 'tipos' | 'ahorro_links' | 'mes' | 'datos' | null
+type Section = 'cuenta' | 'apariencia' | 'notif' | 'cambio' | 'categorias' | 'categorias_ing' | 'tipos' | 'ahorro_links' | 'mes' | 'datos' | null
 
 // ── Modal state types ─────────────────────────────────────────────────────────
 type GroupModalState = {
@@ -63,8 +75,8 @@ export default function AjustesPage() {
   const [rateSaved, setRateSaved] = useState(false)
   const [rateError, setRateError] = useState<string | null>(null)
 
-  // Category tree: expanded groups
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  // Apariencia (por dispositivo)
+  const [theme, setTheme] = useState<ThemePref>(() => getThemePref())
 
   // Modal for top-level groups
   const [groupModal, setGroupModal] = useState<GroupModalState>({
@@ -88,7 +100,6 @@ export default function AjustesPage() {
   const [mesAction, setMesAction] = useState<string | null>(null)
   const [mesResult, setMesResult] = useState<string | null>(null)
   const [mesError, setMesError] = useState<string | null>(null)
-  const [deleteMonthConfirm, setDeleteMonthConfirm] = useState(false)
   // Confirmaciones cuando el mes destino ya tiene movimientos
   const [clonarConfirm, setClonarConfirm] = useState<{ existing: number; next: string } | null>(null)
   const [recurrentesConfirm, setRecurrentesConfirm] = useState<{ existing: number; next: string } | null>(null)
@@ -104,13 +115,10 @@ export default function AjustesPage() {
 
   if (!settings) {
     return (
-      <div className="flex flex-col h-full bg-gray-50">
-        <div className="bg-surface px-4 pt-10 pb-4 shadow-sm">
-          <h1 className="text-gray-800 font-bold text-xl">Ajustes</h1>
-          <p className="text-gray-400 text-xs mt-0.5">Javier &amp; Mary</p>
-        </div>
-        <div className="flex items-center justify-center flex-1">
-          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      <div className="flex flex-col h-full">
+        <PageHeader title="Ajustes" subtitle="Javier & Mary" />
+        <div className="px-4 space-y-2">
+          {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-14 rounded-[20px]" />)}
         </div>
       </div>
     )
@@ -122,13 +130,9 @@ export default function AjustesPage() {
     setOpenSection((prev) => (prev === section ? null : section))
   }
 
-  function toggleGroup(id: string) {
-    setExpandedGroups((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+  function changeTheme(t: ThemePref) {
+    setTheme(t)
+    setThemePref(t)
   }
 
   // ── Tipos de cambio ──────────────────────────────────────────────────────────
@@ -160,23 +164,45 @@ export default function AjustesPage() {
     const list = [...(tipo === 'gasto' ? s.categoriasGasto : s.categoriasIngreso)]
     const idx  = list.findIndex((g) => g.id === cat.id)
     if (idx >= 0) {
-      list[idx] = { ...list[idx], nombre: cat.nombre, color: cat.color, activa: cat.activa }
+      list[idx] = { ...list[idx], nombre: cat.nombre, color: cat.color, activa: cat.activa, icono: cat.icono }
     } else {
-      list.push({ id: cat.id, nombre: cat.nombre, color: cat.color, activa: cat.activa, subcategorias: [] })
+      list.push({ id: cat.id, nombre: cat.nombre, color: cat.color, activa: cat.activa, icono: cat.icono, subcategorias: [] })
     }
     const partial = { [key]: list }
     await updateSettings(SHARED_USER_ID, partial)
     setSettings({ ...s, ...partial })
-    setGroupModal((prev) => ({ ...prev, open: false, group: null }))
+    setGroupModal((prev) => ({ ...prev, open: false }))
+  }
+
+  // Guarda una lista de grupos y ofrece "Deshacer" restaurando la anterior
+  async function saveGroupsWithUndo(tipo: 'gasto' | 'ingreso', list: CategoryGroup[], message: string) {
+    const key  = tipo === 'gasto' ? 'categoriasGasto' : 'categoriasIngreso'
+    const prev = tipo === 'gasto' ? s.categoriasGasto : s.categoriasIngreso
+    await updateSettings(SHARED_USER_ID, { [key]: list })
+    setSettings({ ...s, [key]: list })
+    offerUndo(message, async () => {
+      await updateSettings(SHARED_USER_ID, { [key]: prev })
+      const actual = useSettingsStore.getState().settings ?? s
+      setSettings({ ...actual, [key]: prev })
+    })
   }
 
   async function handleDeleteGroup(id: string, tipo: 'gasto' | 'ingreso') {
-    const key  = tipo === 'gasto' ? 'categoriasGasto' : 'categoriasIngreso'
-    const list = (tipo === 'gasto' ? s.categoriasGasto : s.categoriasIngreso).filter((g) => g.id !== id)
-    const partial = { [key]: list }
-    await updateSettings(SHARED_USER_ID, partial)
-    setSettings({ ...s, ...partial })
-    setGroupModal((prev) => ({ ...prev, open: false, group: null }))
+    const groups = tipo === 'gasto' ? s.categoriasGasto : s.categoriasIngreso
+    const nombre = groups.find((g) => g.id === id)?.nombre ?? 'Categoría'
+    setGroupModal((prev) => ({ ...prev, open: false }))
+    await saveGroupsWithUndo(tipo, groups.filter((g) => g.id !== id), `"${nombre}" eliminada`)
+  }
+
+  // Orden nuevo desde el árbol (arrastrar y soltar)
+  async function handleReorder(tipo: 'gasto' | 'ingreso', list: CategoryGroup[]) {
+    const key = tipo === 'gasto' ? 'categoriasGasto' : 'categoriasIngreso'
+    setSettings({ ...s, [key]: list })
+    try {
+      await updateSettings(SHARED_USER_ID, { [key]: list })
+    } catch (err) {
+      console.error('[ajustes] reorder error:', err)
+    }
   }
 
   // ── CRUD Subcategorías ───────────────────────────────────────────────────────
@@ -193,19 +219,17 @@ export default function AjustesPage() {
     const partial = { [key]: list }
     await updateSettings(SHARED_USER_ID, partial)
     setSettings({ ...s, ...partial })
-    setSubModal((prev) => ({ ...prev, open: false, category: null }))
+    setSubModal((prev) => ({ ...prev, open: false }))
   }
 
   async function handleDeleteSubcat(id: string, tipo: 'gasto' | 'ingreso', groupId: string) {
-    const key  = tipo === 'gasto' ? 'categoriasGasto' : 'categoriasIngreso'
     const list = (tipo === 'gasto' ? [...s.categoriasGasto] : [...s.categoriasIngreso])
     const gIdx = list.findIndex((g) => g.id === groupId)
     if (gIdx < 0) return
+    const nombre = list[gIdx].subcategorias.find((c) => c.id === id)?.nombre ?? 'Subcategoría'
     list[gIdx] = { ...list[gIdx], subcategorias: list[gIdx].subcategorias.filter((c) => c.id !== id) }
-    const partial = { [key]: list }
-    await updateSettings(SHARED_USER_ID, partial)
-    setSettings({ ...s, ...partial })
-    setSubModal((prev) => ({ ...prev, open: false, category: null }))
+    setSubModal((prev) => ({ ...prev, open: false }))
+    await saveGroupsWithUndo(tipo, list, `"${nombre}" eliminada`)
   }
 
   // ── Tipos activo/pasivo ──────────────────────────────────────────────────────
@@ -300,13 +324,16 @@ export default function AjustesPage() {
   }
 
   async function handleBorrarMes() {
-    if (!deleteMonthConfirm) { setDeleteMonthConfirm(true); return }
     resetMesFeedback()
     setMesAction('borrando')
+    // Se guardan los movimientos visibles del mes para poder restaurarlos
+    const previos = txStore.getState().currentMonth === currentMonth ? txStore.getState().transactions : []
     try {
       const count = await deleteMonthTransactions(currentMonth)
       setMesResult(`${count} movimiento(s) eliminados de ${monthLabel(currentMonth)}.`)
-      setDeleteMonthConfirm(false)
+      if (previos.length > 0) {
+        offerUndo(`${count} movimiento${count !== 1 ? 's' : ''} eliminado${count !== 1 ? 's' : ''}`, () => restoreTransactions(previos))
+      }
     } catch (err) {
       setMesError('Error al borrar mes: ' + (err instanceof Error ? err.message : String(err)))
     } finally { setMesAction(null) }
@@ -401,177 +428,137 @@ export default function AjustesPage() {
     }
   }
 
-  // ── Category tree helper ─────────────────────────────────────────────────────
-  function CategoryTree({ tipo }: { tipo: 'gasto' | 'ingreso' }) {
-    const groups = tipo === 'gasto' ? s.categoriasGasto : s.categoriasIngreso
+  // ── Árbol de categorías ───────────────────────────────────────────────────────
+  // Se invoca como función (no como <Componente/> definido acá adentro): así
+  // no se remonta en cada render.
+  function renderCategoryTree(tipo: 'gasto' | 'ingreso') {
     return (
-      <div className="space-y-1 pt-2">
-        {/* Botón nuevo grupo */}
-        <button
-          onClick={() => setGroupModal({ open: true, tipo, group: null })}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-primary/30 text-primary text-xs font-semibold hover:bg-primary/5 transition-colors"
-        >
-          <Plus size={13} /> Nueva categoría padre
-        </button>
-
-        {groups.map((group) => {
-          const isOpen = expandedGroups.has(group.id)
-          return (
-            <div key={group.id} className="rounded-xl border border-gray-100 overflow-hidden">
-              {/* Header del grupo */}
-              <div className="flex items-center gap-2 px-3 py-2.5 bg-surface">
-                <button
-                  onClick={() => toggleGroup(group.id)}
-                  className="flex items-center gap-2 flex-1 min-w-0 text-left"
-                >
-                  <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: group.color }} />
-                  <span className={`text-sm font-semibold truncate ${!group.activa ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
-                    {group.nombre}
-                  </span>
-                  <span className="text-[11px] text-gray-400 ml-1">({group.subcategorias.length})</span>
-                  {isOpen
-                    ? <ChevronDown size={13} className="text-gray-400 flex-shrink-0 ml-auto" />
-                    : <ChevronLeft size={13} className="text-gray-400 flex-shrink-0 ml-auto rotate-180" />
-                  }
-                </button>
-
-                {/* Acciones grupo */}
-                <button
-                  onClick={() => setSubModal({ open: true, tipo, groupId: group.id, category: null })}
-                  className="p-1.5 rounded-lg hover:bg-gray-100 text-primary flex-shrink-0"
-                  title="Nueva subcategoría"
-                >
-                  <Plus size={13} />
-                </button>
-                <button
-                  onClick={() => setGroupModal({ open: true, tipo, group })}
-                  className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 flex-shrink-0"
-                  title="Editar grupo"
-                >
-                  <Pencil size={13} />
-                </button>
-                <button
-                  onClick={() => handleDeleteGroup(group.id, tipo)}
-                  className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 flex-shrink-0"
-                  title="Eliminar grupo"
-                >
-                  <Trash2 size={13} />
-                </button>
-              </div>
-
-              {/* Subcategorías expandibles */}
-              {isOpen && (
-                <div className="border-t border-gray-50 bg-gray-50/60 divide-y divide-gray-50">
-                  {group.subcategorias.length === 0 ? (
-                    <p className="text-xs text-gray-400 px-5 py-2.5 italic">Sin subcategorías</p>
-                  ) : (
-                    group.subcategorias.map((sub) => (
-                      <div key={sub.id} className="flex items-center gap-2 px-5 py-2">
-                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: sub.color }} />
-                        <span className={`flex-1 text-xs truncate ${!sub.activa ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
-                          {sub.nombre}
-                        </span>
-                        <button
-                          onClick={() => setSubModal({ open: true, tipo, groupId: group.id, category: sub })}
-                          className="p-1 rounded hover:bg-gray-200 text-gray-400"
-                        >
-                          <Pencil size={11} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteSubcat(sub.id, tipo, group.id)}
-                          className="p-1 rounded hover:bg-red-50 text-red-400"
-                        >
-                          <Trash2 size={11} />
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
+      <CategoryTree
+        groups={tipo === 'gasto' ? s.categoriasGasto : s.categoriasIngreso}
+        onReorder={(list) => handleReorder(tipo, list)}
+        onAddGroup={() => setGroupModal({ open: true, tipo, group: null })}
+        onEditGroup={(group) => setGroupModal({ open: true, tipo, group })}
+        onDeleteGroup={(group) => handleDeleteGroup(group.id, tipo)}
+        onAddSub={(group) => setSubModal({ open: true, tipo, groupId: group.id, category: null })}
+        onEditSub={(group, sub) => setSubModal({ open: true, tipo, groupId: group.id, category: sub })}
+        onDeleteSub={(group, sub) => handleDeleteSubcat(sub.id, tipo, group.id)}
+      />
     )
   }
 
   return (
-    <div className="flex flex-col h-full bg-gray-50">
-      {/* Header */}
-      <div className="bg-surface px-4 pt-10 pb-4 shadow-sm">
-        <h1 className="text-gray-800 font-bold text-xl">Ajustes</h1>
-        <p className="text-gray-400 text-xs mt-0.5">{user?.email ?? 'Javier & Mary'}</p>
-      </div>
+    <div className="flex flex-col h-full">
+      <PageHeader title="Ajustes" subtitle="Javier & Mary" />
 
-      {/* Card */}
-      <div className="flex-1 bg-surface overflow-y-auto">
-        <div className="px-4 pt-4 pb-24 space-y-1">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain no-scrollbar">
+        <div className="px-4 pb-28 space-y-5">
+
+          {/* ── Perfil ── */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="glass rounded-[24px] p-3.5 flex items-center gap-3"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-brand shadow-soft flex items-center justify-center flex-shrink-0">
+              <span className="text-white font-bold text-lg">
+                {(user?.nombre || user?.email || '?').charAt(0).toUpperCase()}
+              </span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[15px] font-semibold text-gray-900 leading-tight truncate">{user?.nombre || 'Mi cuenta'}</p>
+              <p className="text-xs text-gray-400 truncate">{user?.email ?? 'Javier & Mary'}</p>
+            </div>
+            <span className="px-2.5 py-1 rounded-full bg-primary/10 text-primary text-[11px] font-bold">{monedaBase}</span>
+          </motion.div>
+
+          <SectionGroup title="General">
 
           {/* ── Cuenta ── */}
           <Section
             label="Cuenta"
+            icon={<UserRound size={15} />}
+            tint="#5b4fd6"
+            hint="Moneda base y sesión"
             open={openSection === 'cuenta'}
             onToggle={() => toggle('cuenta')}
           >
-            <div className="space-y-4 pt-2">
-              <div className="flex items-center gap-3 px-3 py-2.5 bg-gray-50 rounded-xl border border-gray-100">
-                <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-                  <span className="text-white font-bold text-[11px]">
-                    {(user?.nombre || user?.email || '?').charAt(0).toUpperCase()}
-                  </span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  {user?.nombre && <p className="text-sm font-semibold text-gray-800 leading-tight">{user.nombre}</p>}
-                  <p className="text-xs text-gray-400 truncate">{user?.email}</p>
-                </div>
-              </div>
-
+            <div className="space-y-4 pt-1">
               <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Moneda base</p>
-                <div className="flex gap-1.5">
-                  {(['ARS', 'COP', 'USD'] as Currency[]).map((m) => (
-                    <button
-                      key={m}
-                      onClick={() => handleMonedaBase(m)}
-                      disabled={savingMoneda}
-                      className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-colors ${
-                        monedaBase === m
-                          ? 'bg-primary text-white border-primary'
-                          : 'bg-surface text-gray-500 border-gray-200'
-                      }`}
-                    >
-                      {m}
-                    </button>
-                  ))}
-                </div>
+                <p className="eyebrow mb-2">Moneda base</p>
+                <Segmented
+                  id="moneda-base"
+                  size="lg"
+                  value={monedaBase as Currency}
+                  onChange={(m) => { if (!savingMoneda) handleMonedaBase(m) }}
+                  options={(['ARS', 'COP', 'USD'] as Currency[]).map((m) => ({ value: m, label: m }))}
+                  variant="solid"
+                />
                 <p className="text-[11px] text-gray-400 mt-1.5">Los totales de la app se muestran en esta moneda</p>
               </div>
 
-              <button
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={openOnboarding}
+                className="w-full flex items-center justify-center gap-2 h-11 rounded-2xl bg-primary/10 text-primary text-sm font-semibold"
+              >
+                <Sparkles size={14} /> Ver la introducción
+              </motion.button>
+
+              <motion.button
+                whileTap={{ scale: 0.97 }}
                 onClick={handleSignOut}
                 disabled={signingOut}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-red-200 bg-red-50 text-red-500 text-sm font-semibold disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 h-11 rounded-2xl bg-rose-500/10 text-rose-500 text-sm font-semibold disabled:opacity-50"
               >
                 <LogOut size={14} />
                 {signingOut ? 'Cerrando sesión...' : 'Cerrar sesión'}
-              </button>
+              </motion.button>
+            </div>
+          </Section>
+
+          {/* ── Apariencia ── */}
+          <Section
+            label="Apariencia"
+            icon={<Palette size={15} />}
+            tint="#0ea5e9"
+            hint={theme === 'system' ? 'Según el sistema' : theme === 'dark' ? 'Oscuro' : 'Claro'}
+            open={openSection === 'apariencia'}
+            onToggle={() => toggle('apariencia')}
+          >
+            <div className="space-y-2">
+              <p className="eyebrow mb-2">Tema</p>
+              <Segmented
+                id="tema"
+                size="lg"
+                value={theme}
+                onChange={changeTheme}
+                options={[
+                  { value: 'system', label: 'Sistema' },
+                  { value: 'light', label: 'Claro' },
+                  { value: 'dark', label: 'Oscuro' },
+                ]}
+              />
+              <p className="text-[11px] text-gray-400">Se guarda en este dispositivo.</p>
             </div>
           </Section>
 
           {/* ── Notificaciones ── */}
           <Section
             label="Notificaciones"
+            icon={<Bell size={15} />}
+            tint="#f43f5e"
+            hint="Recordatorios push"
             open={openSection === 'notif'}
             onToggle={() => { toggle('notif'); setPushError(null); checkPushEstado() }}
           >
-            <div className="space-y-3 pt-2">
-              <div className="text-xs text-gray-500 space-y-1">
+            <div className="space-y-3 pt-1">
+              <div className="text-xs text-gray-500 space-y-1.5">
                 <p>📝 <span className="font-medium">Recordatorio diario (21 hs):</span> si ese día no cargaron ningún movimiento</p>
                 <p>💳 <span className="font-medium">Cuotas del mes (día 1):</span> cuántas cuotas vencen y por cuánto</p>
               </div>
 
               {pushEstado === 'no-soportado' ? (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-xs text-amber-700">
+                <div className="bg-amber-500/10 ring-1 ring-amber-500/25 rounded-2xl px-3 py-2.5 text-xs text-amber-700">
                   Este navegador no soporta notificaciones. En iPhone: primero agregá la app a la
                   pantalla de inicio (Compartir → Agregar a inicio) y abrila desde ahí.
                 </div>
@@ -579,10 +566,10 @@ export default function AjustesPage() {
                 <button
                   onClick={handleTogglePush}
                   disabled={pushBusy || pushEstado === 'cargando'}
-                  className={`w-full h-11 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 ${
+                  className={`w-full h-11 rounded-2xl text-sm font-semibold transition-all disabled:opacity-50 ${
                     pushEstado === 'activo'
-                      ? 'bg-green-50 border border-green-300 text-green-600'
-                      : 'bg-primary text-white'
+                      ? 'bg-emerald-500/10 ring-1 ring-emerald-500/30 text-emerald-600'
+                      : 'bg-brand text-white shadow-soft'
                   }`}
                 >
                   {pushBusy || pushEstado === 'cargando'
@@ -594,7 +581,7 @@ export default function AjustesPage() {
               )}
 
               {pushError && (
-                <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-xs text-red-400">
+                <div className="bg-rose-500/10 ring-1 ring-rose-500/25 rounded-2xl px-3 py-2.5 text-xs text-rose-500">
                   {pushError}
                 </div>
               )}
@@ -607,31 +594,34 @@ export default function AjustesPage() {
           {/* ── Tipos de cambio ── */}
           <Section
             label="Tipos de cambio"
+            icon={<ArrowLeftRight size={15} />}
+            tint="#10b981"
+            hint={`ARS ${s.tipoCambio.ARS_USD.toLocaleString('es-AR')} · COP ${s.tipoCambio.COP_USD.toLocaleString('es-AR')}`}
             open={openSection === 'cambio'}
             onToggle={() => { toggle('cambio'); setArsRate(String(s?.tipoCambio.ARS_USD ?? 1200)); setCopRate(String(s?.tipoCambio.COP_USD ?? 4100)) }}
           >
-            <div className="space-y-3 pt-2">
+            <div className="space-y-3 pt-1">
               <RateInput label="1 USD = ? ARS" value={arsRate} onChange={setArsRate} />
               <RateInput label="1 USD = ? COP" value={copRate} onChange={setCopRate} />
               <button
                 onClick={saveRates}
                 disabled={savingRate}
-                className={`w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all ${
-                  rateSaved ? 'bg-green-500 text-white' : 'bg-primary text-white'
+                className={`w-full h-11 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2 transition-all text-white shadow-soft ${
+                  rateSaved ? 'bg-emerald-500' : 'bg-brand'
                 }`}
               >
                 {rateSaved ? <><Check size={14} /> Guardado</> : savingRate ? 'Guardando...' : 'Actualizar tipo de cambio'}
               </button>
               {rateError && (
-                <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-xs text-red-400 font-medium">
+                <div className="bg-rose-500/10 ring-1 ring-rose-500/25 rounded-2xl px-3 py-2 text-xs text-rose-500 font-medium">
                   {rateError}
                 </div>
               )}
               {(s?.historialTipoCambio ?? []).length > 0 && (
                 <div className="space-y-1">
-                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Historial</p>
+                  <p className="eyebrow pt-1">Historial</p>
                   {[...(s?.historialTipoCambio ?? [])].reverse().slice(0, 6).map((h) => (
-                    <div key={h.mes} className="flex justify-between text-xs text-gray-500 py-1 border-b border-gray-50">
+                    <div key={h.mes} className="flex justify-between text-xs text-gray-500 py-1.5 border-b border-hairline tabular-nums">
                       <span className="capitalize">{monthLabel(h.mes)}</span>
                       <span>ARS {h.ARS_USD} · COP {h.COP_USD}</span>
                     </div>
@@ -641,35 +631,46 @@ export default function AjustesPage() {
             </div>
           </Section>
 
+          </SectionGroup>
+
+          <SectionGroup title="Organización">
           {/* ── Categorías de Gasto ── */}
           <Section
-            label="Categorías de Gasto"
+            label="Categorías de gasto"
+            icon={<Tags size={15} />}
+            tint="#f97316"
+            hint={`${s.categoriasGasto.length} grupos`}
             open={openSection === 'categorias'}
             onToggle={() => toggle('categorias')}
           >
-            <CategoryTree tipo="gasto" />
+            {renderCategoryTree('gasto')}
           </Section>
 
           {/* ── Categorías de Ingreso ── */}
           <Section
-            label="Categorías de Ingreso"
+            label="Categorías de ingreso"
+            icon={<Coins size={15} />}
+            tint="#eab308"
+            hint={`${s.categoriasIngreso.length} grupos`}
             open={openSection === 'categorias_ing'}
             onToggle={() => toggle('categorias_ing')}
           >
-            <CategoryTree tipo="ingreso" />
+            {renderCategoryTree('ingreso')}
           </Section>
 
           {/* ── Tipos de activo/pasivo ── */}
           <Section
             label="Tipos de activo / pasivo"
+            icon={<Layers size={15} />}
+            tint="#06b6d4"
             open={openSection === 'tipos'}
             onToggle={() => { toggle('tipos'); setTiposActivo(s?.tiposActivo ?? []); setTiposPasivo(s?.tiposPasivo ?? []) }}
           >
-            <div className="space-y-4 pt-2">
+            <div className="space-y-4 pt-1">
               {/* Activos */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Activos</p>
+                  <p className="eyebrow">Activos</p>
                   {editingTipoActivo
                     ? <button onClick={saveTiposActivo} className="text-xs text-primary font-semibold">Guardar</button>
                     : <button onClick={() => setEditingTipoActivo(true)} className="text-xs text-primary font-semibold flex items-center gap-1"><Pencil size={11} /> Editar</button>
@@ -680,27 +681,27 @@ export default function AjustesPage() {
                     {tiposActivo.map((t, i) => (
                       <div key={i} className="flex gap-2">
                         <input value={t} onChange={(e) => { const c = [...tiposActivo]; c[i] = e.target.value; setTiposActivo(c) }}
-                          className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm" />
+                          className="flex-1 bg-gray-500/[0.06] rounded-xl px-3 h-9 text-sm outline-none focus:ring-2 focus:ring-primary/25" />
                         <button onClick={() => setTiposActivo(tiposActivo.filter((_, j) => j !== i))} className="text-red-400 p-1.5"><Trash2 size={13} /></button>
                       </div>
                     ))}
                     <div className="flex gap-2">
                       <input value={newTipoActivo} onChange={(e) => setNewTipoActivo(e.target.value)} placeholder="Nuevo tipo..."
-                        className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+                        className="flex-1 border border-dashed border-gray-300 rounded-xl px-3 h-9 text-sm bg-transparent outline-none focus:ring-2 focus:ring-primary/25"
                         onKeyDown={(e) => { if (e.key === 'Enter' && newTipoActivo.trim()) { setTiposActivo((p) => [...p, newTipoActivo.trim()]); setNewTipoActivo('') } }} />
                       <button onClick={() => { if (newTipoActivo.trim()) { setTiposActivo((p) => [...p, newTipoActivo.trim()]); setNewTipoActivo('') } }} className="px-3 text-primary font-semibold text-sm"><Plus size={14} /></button>
                     </div>
                   </div>
                 ) : (
                   <div className="flex flex-wrap gap-1.5">
-                    {tiposActivo.map((t) => <span key={t} className="px-2.5 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">{t}</span>)}
+                    {tiposActivo.map((t) => <span key={t} className="px-3 py-1 bg-gray-500/[0.08] text-gray-600 text-xs font-medium rounded-full capitalize">{t}</span>)}
                   </div>
                 )}
               </div>
               {/* Pasivos */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Pasivos</p>
+                  <p className="eyebrow">Pasivos</p>
                   {editingTipoPasivo
                     ? <button onClick={saveTiposPasivo} className="text-xs text-primary font-semibold">Guardar</button>
                     : <button onClick={() => setEditingTipoPasivo(true)} className="text-xs text-primary font-semibold flex items-center gap-1"><Pencil size={11} /> Editar</button>
@@ -711,20 +712,20 @@ export default function AjustesPage() {
                     {tiposPasivo.map((t, i) => (
                       <div key={i} className="flex gap-2">
                         <input value={t} onChange={(e) => { const c = [...tiposPasivo]; c[i] = e.target.value; setTiposPasivo(c) }}
-                          className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm" />
+                          className="flex-1 bg-gray-500/[0.06] rounded-xl px-3 h-9 text-sm outline-none focus:ring-2 focus:ring-primary/25" />
                         <button onClick={() => setTiposPasivo(tiposPasivo.filter((_, j) => j !== i))} className="text-red-400 p-1.5"><Trash2 size={13} /></button>
                       </div>
                     ))}
                     <div className="flex gap-2">
                       <input value={newTipoPasivo} onChange={(e) => setNewTipoPasivo(e.target.value)} placeholder="Nuevo tipo..."
-                        className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+                        className="flex-1 border border-dashed border-gray-300 rounded-xl px-3 h-9 text-sm bg-transparent outline-none focus:ring-2 focus:ring-primary/25"
                         onKeyDown={(e) => { if (e.key === 'Enter' && newTipoPasivo.trim()) { setTiposPasivo((p) => [...p, newTipoPasivo.trim()]); setNewTipoPasivo('') } }} />
                       <button onClick={() => { if (newTipoPasivo.trim()) { setTiposPasivo((p) => [...p, newTipoPasivo.trim()]); setNewTipoPasivo('') } }} className="px-3 text-primary font-semibold text-sm"><Plus size={14} /></button>
                     </div>
                   </div>
                 ) : (
                   <div className="flex flex-wrap gap-1.5">
-                    {tiposPasivo.map((t) => <span key={t} className="px-2.5 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">{t}</span>)}
+                    {tiposPasivo.map((t) => <span key={t} className="px-3 py-1 bg-gray-500/[0.08] text-gray-600 text-xs font-medium rounded-full capitalize">{t}</span>)}
                   </div>
                 )}
               </div>
@@ -734,6 +735,9 @@ export default function AjustesPage() {
           {/* ── Vínculos de ahorro ── */}
           <Section
             label="Vínculos de ahorro"
+            icon={<PiggyBank size={15} />}
+            tint="#8b5cf6"
+            hint={`${(s.ahorroLinks ?? []).length} configurados`}
             open={openSection === 'ahorro_links'}
             onToggle={() => { toggle('ahorro_links'); setNewLinkCatId(''); setNewLinkAssetId('') }}
           >
@@ -772,7 +776,7 @@ export default function AjustesPage() {
               }
 
               return (
-                <div className="space-y-3 pt-2">
+                <div className="space-y-3 pt-1">
                   {ahorroLinks.length === 0 ? (
                     <p className="text-xs text-gray-400 italic">Sin vínculos configurados</p>
                   ) : (
@@ -781,11 +785,11 @@ export default function AjustesPage() {
                         const cat = flatCats.find((c) => c.id === link.categoriaId)
                         const asset = assets.find((a) => a.id === link.assetId)
                         return (
-                          <div key={link.categoriaId} className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-xl border border-gray-100">
+                          <div key={link.categoriaId} className="flex items-center gap-2 pl-3 pr-1 py-1 bg-gray-500/[0.06] rounded-2xl">
                             <span className="flex-1 text-xs text-gray-700 truncate">
                               {cat?.label ?? link.categoriaId} <span className="text-gray-400">→</span> {asset?.nombre ?? link.assetId}
                             </span>
-                            <button onClick={() => removeLink(link.categoriaId)} className="p-1 rounded hover:bg-red-50 text-red-400 flex-shrink-0">
+                            <button onClick={() => removeLink(link.categoriaId)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-rose-500/10 text-rose-500 flex-shrink-0" aria-label="Quitar vínculo">
                               <Trash2 size={12} />
                             </button>
                           </div>
@@ -797,7 +801,7 @@ export default function AjustesPage() {
                     <select
                       value={newLinkCatId}
                       onChange={(e) => setNewLinkCatId(e.target.value)}
-                      className="flex-1 min-w-0 h-9 rounded-xl border border-gray-200 bg-gray-50 px-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      className="flex-1 min-w-0 h-10 rounded-2xl bg-gray-500/[0.06] px-2.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
                     >
                       <option value="">Categoría...</option>
                       {flatCats.map((c) => (
@@ -807,7 +811,7 @@ export default function AjustesPage() {
                     <select
                       value={newLinkAssetId}
                       onChange={(e) => setNewLinkAssetId(e.target.value)}
-                      className="flex-1 min-w-0 h-9 rounded-xl border border-gray-200 bg-gray-50 px-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      className="flex-1 min-w-0 h-10 rounded-2xl bg-gray-500/[0.06] px-2.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
                     >
                       <option value="">Activo...</option>
                       {activoAssets.map((a) => (
@@ -817,7 +821,7 @@ export default function AjustesPage() {
                     <button
                       onClick={addLink}
                       disabled={!newLinkCatId || !newLinkAssetId}
-                      className="h-9 px-3 rounded-xl bg-primary text-white text-xs font-semibold disabled:opacity-40 flex items-center gap-1"
+                      className="h-10 px-3.5 rounded-2xl bg-brand text-white text-xs font-semibold shadow-soft disabled:opacity-40 flex items-center gap-1"
                     >
                       <Plus size={13} /> Agregar
                     </button>
@@ -827,21 +831,26 @@ export default function AjustesPage() {
             })()}
           </Section>
 
+          </SectionGroup>
+
+          <SectionGroup title="Datos">
           {/* ── Acciones del mes ── */}
           <Section
-            label={`Acciones — ${monthLabel(currentMonth)}`}
+            label="Acciones del mes"
+            icon={<CalendarCog size={15} />}
+            tint="#3b82f6"
+            hint={<span className="capitalize">{monthLabel(currentMonth)}{isClosed ? ' · cerrado' : ''}</span>}
             open={openSection === 'mes'}
             onToggle={() => {
               toggle('mes')
               resetMesFeedback()
-              setDeleteMonthConfirm(false)
               setClonarConfirm(null)
               setRecurrentesConfirm(null)
             }}
           >
-            <div className="space-y-2 pt-2">
+            <div className="space-y-2 pt-1">
               {isClosed && (
-                <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
+                <div className="flex items-center gap-2 bg-amber-500/10 ring-1 ring-amber-500/25 rounded-2xl px-3 py-2.5">
                   <Lock size={13} className="text-amber-400 flex-shrink-0" />
                   <p className="text-xs text-amber-700 font-medium">Mes cerrado — tipo de cambio guardado</p>
                 </div>
@@ -867,14 +876,14 @@ export default function AjustesPage() {
                 loading={mesAction === 'creando'}
                 color={recurrentesConfirm ? 'red' : 'green'}
               />
-              <ActionButton icon={<Trash2 size={14} />} label={deleteMonthConfirm ? '¿Confirmar borrado?' : 'Borrar mes'} sublabel="Elimina todos los movimientos del mes actual" onClick={handleBorrarMes} loading={mesAction === 'borrando'} color="red" danger />
+              <ActionButton icon={<Trash2 size={14} />} label="Borrar mes" sublabel="Elimina todos los movimientos del mes actual" onClick={handleBorrarMes} loading={mesAction === 'borrando'} color="red" danger />
               {mesResult && (
-                <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2.5 text-xs text-green-700 font-medium">
+                <div className="bg-emerald-500/10 ring-1 ring-emerald-500/25 rounded-2xl px-3 py-2.5 text-xs text-emerald-700 font-medium">
                   ✓ {mesResult}
                 </div>
               )}
               {mesError && (
-                <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-xs text-red-400 font-medium">
+                <div className="bg-rose-500/10 ring-1 ring-rose-500/25 rounded-2xl px-3 py-2.5 text-xs text-rose-500 font-medium">
                   ✗ {mesError}
                 </div>
               )}
@@ -884,17 +893,20 @@ export default function AjustesPage() {
           {/* ── Importar / Exportar ── */}
           <Section
             label="Importar / Exportar"
+            icon={<DatabaseBackup size={15} />}
+            tint="#64748b"
+            hint="Backup en JSON"
             open={openSection === 'datos'}
             onToggle={() => { toggle('datos'); setBackupResult(null) }}
           >
-            <div className="space-y-2 pt-2">
+            <div className="space-y-2 pt-1">
               <ActionButton icon={<Download size={14} />} label="Exportar backup" sublabel="Descarga todos tus datos como archivo JSON" onClick={handleExport} loading={backupAction === 'exportando'} color="blue" />
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={!!backupAction}
-                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl border border-green-200 bg-green-50 text-green-600 text-left transition-all"
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-2xl bg-emerald-500/[0.08] text-emerald-600 text-left transition-all active:scale-[0.99]"
               >
-                <Upload size={14} className="flex-shrink-0" />
+                <span className="w-8 h-8 rounded-xl bg-emerald-500/15 flex items-center justify-center flex-shrink-0"><Upload size={14} /></span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold leading-tight">{backupAction === 'importando' ? 'Importando...' : 'Importar backup'}</p>
                   <p className="text-[11px] opacity-70 mt-0.5">Restaura desde un archivo JSON exportado</p>
@@ -903,12 +915,13 @@ export default function AjustesPage() {
               </button>
               <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleImportFile} />
               {backupResult && (
-                <div className="bg-blue-50 border border-blue-200 rounded-xl px-3 py-2.5 text-xs text-blue-700 font-medium">
+                <div className="bg-blue-500/10 ring-1 ring-blue-500/25 rounded-2xl px-3 py-2.5 text-xs text-blue-600 font-medium">
                   {backupResult}
                 </div>
               )}
             </div>
           </Section>
+          </SectionGroup>
 
         </div>
       </div>
@@ -917,7 +930,7 @@ export default function AjustesPage() {
       <CategoryModal
         open={groupModal.open}
         category={groupModal.group ? { id: groupModal.group.id, nombre: groupModal.group.nombre, color: groupModal.group.color, activa: groupModal.group.activa } : null}
-        onClose={() => setGroupModal({ open: false, tipo: 'gasto', group: null })}
+        onClose={() => setGroupModal((prev) => ({ ...prev, open: false }))}
         onSave={(cat) => handleSaveGroup(cat, groupModal.tipo)}
         onDelete={groupModal.group ? (id) => handleDeleteGroup(id, groupModal.tipo) : undefined}
         title={groupModal.group ? 'Editar categoría padre' : 'Nueva categoría padre'}
@@ -927,7 +940,7 @@ export default function AjustesPage() {
       <CategoryModal
         open={subModal.open}
         category={subModal.category}
-        onClose={() => setSubModal({ open: false, tipo: 'gasto', groupId: '', category: null })}
+        onClose={() => setSubModal((prev) => ({ ...prev, open: false }))}
         onSave={(cat) => handleSaveSubcat(cat, subModal.tipo, subModal.groupId)}
         onDelete={subModal.category ? (id) => handleDeleteSubcat(id, subModal.tipo, subModal.groupId) : undefined}
         title={subModal.category ? 'Editar subcategoría' : 'Nueva subcategoría'}
@@ -938,14 +951,94 @@ export default function AjustesPage() {
 
 // ── Sub-components ──────────────────────────────────────────────────────────
 
-function Section({ label, open, onToggle, children }: { label: string; open: boolean; onToggle: () => void; children: React.ReactNode }) {
+function SectionGroup({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="border border-gray-100 rounded-2xl overflow-hidden">
-      <button onClick={onToggle} className="w-full flex items-center justify-between px-4 py-4 bg-surface text-left">
-        <span className="text-sm font-semibold text-gray-800">{label}</span>
-        {open ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+    >
+      <p className="eyebrow px-2 mb-2">{title}</p>
+      <div className="glass rounded-[24px] overflow-hidden divide-y divide-[var(--hairline)]">
+        {children}
+      </div>
+    </motion.div>
+  )
+}
+
+function Section({ label, icon, tint, hint, open, onToggle, children }: {
+  label: string
+  icon: React.ReactNode
+  tint: string
+  hint?: React.ReactNode
+  open: boolean
+  onToggle: () => void
+  children: React.ReactNode
+}) {
+  // Deslizar hacia la derecha cierra la sub-página (como el "atrás" de iOS)
+  function handleDragEnd(_: unknown, info: PanInfo) {
+    if (info.offset.x > 90 || info.velocity.x > 500) onToggle()
+  }
+
+  return (
+    <div>
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center gap-3 px-3.5 py-3 text-left active:bg-gray-500/[0.05] transition-colors"
+      >
+        <span
+          className="w-8 h-8 rounded-[10px] flex items-center justify-center flex-shrink-0 text-white shadow-sm"
+          style={{ background: `linear-gradient(135deg, ${tint}cc, ${tint})` }}
+        >
+          {icon}
+        </span>
+        <span className="flex-1 min-w-0">
+          <span className="block text-sm font-semibold text-gray-900 leading-tight">{label}</span>
+          {hint && <span className="block text-[11px] text-gray-400 truncate mt-0.5">{hint}</span>}
+        </span>
+        <ChevronRight size={17} className="text-gray-300" />
       </button>
-      {open && <div className="px-4 pb-4 bg-surface border-t border-gray-50">{children}</div>}
+
+      {/* Sub-página: entra desde la derecha sobre la lista */}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            role="dialog"
+            aria-label={label}
+            className="fixed inset-0 mx-auto w-full max-w-[390px] z-30 flex flex-col bg-[var(--background)]"
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={springSoft}
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={{ left: 0, right: 0.8 }}
+            dragDirectionLock
+            onDragEnd={handleDragEnd}
+          >
+            <header className="flex-shrink-0 px-2 pt-[max(2.75rem,env(safe-area-inset-top))] pb-2">
+              <button
+                onClick={onToggle}
+                className="flex items-center gap-0.5 h-11 pl-1 pr-3 rounded-full text-primary text-sm font-semibold"
+              >
+                <ChevronLeft size={20} /> Ajustes
+              </button>
+              <div className="flex items-center gap-3 px-2 mt-1">
+                <span
+                  className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-white shadow-sm"
+                  style={{ background: `linear-gradient(135deg, ${tint}cc, ${tint})` }}
+                >
+                  {icon}
+                </span>
+                <h2 className="text-[26px] font-bold tracking-tight text-gray-900 leading-tight">{label}</h2>
+              </div>
+            </header>
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain no-scrollbar px-4 pt-3 pb-28">
+              <div className="glass rounded-[24px] p-4">{children}</div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -955,7 +1048,7 @@ function RateInput({ label, value, onChange }: { label: string; value: string; o
     <div className="flex items-center justify-between gap-3">
       <label className="text-sm text-gray-600 flex-1">{label}</label>
       <input type="text" inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)}
-        className="w-28 border border-gray-200 rounded-lg px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary" />
+        className="w-32 h-10 bg-gray-500/[0.06] rounded-2xl px-3 text-sm font-semibold text-right tabular-nums outline-none border border-transparent focus:border-primary/40 focus:bg-surface focus:ring-4 focus:ring-primary/10 transition-all" />
     </div>
   )
 }
@@ -964,20 +1057,20 @@ function ActionButton({ icon, label, sublabel, onClick, loading, color, danger }
   icon: React.ReactNode; label: string; sublabel: string; onClick: () => void; loading: boolean; color: 'purple' | 'blue' | 'green' | 'red'; danger?: boolean
 }) {
   const colorMap = {
-    purple: 'text-primary bg-primary/5 border-primary/20',
-    blue: 'text-blue-600 bg-blue-50 border-blue-200',
-    green: 'text-green-600 bg-green-50 border-green-200',
-    red: 'text-red-400 bg-red-50 border-red-200',
+    purple: { box: 'text-primary bg-primary/[0.07]', icon: 'bg-primary/15' },
+    blue:   { box: 'text-blue-600 bg-blue-500/[0.08]', icon: 'bg-blue-500/15' },
+    green:  { box: 'text-emerald-600 bg-emerald-500/[0.08]', icon: 'bg-emerald-500/15' },
+    red:    { box: 'text-rose-500 bg-rose-500/[0.08]', icon: 'bg-rose-500/15' },
   }
   return (
-    <button onClick={onClick} disabled={loading}
-      className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl border transition-all text-left ${colorMap[color]} ${loading ? 'opacity-50' : ''} ${danger ? 'ring-1 ring-red-300' : ''}`}>
-      <span className="flex-shrink-0">{icon}</span>
+    <motion.button whileTap={{ scale: 0.98 }} onClick={onClick} disabled={loading}
+      className={`w-full flex items-center gap-3 px-3 py-3 rounded-2xl transition-all text-left ${colorMap[color].box} ${loading ? 'opacity-50' : ''} ${danger ? 'ring-1 ring-rose-500/30' : ''}`}>
+      <span className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${colorMap[color].icon}`}>{icon}</span>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold leading-tight">{loading ? 'Procesando...' : label}</p>
         <p className="text-[11px] opacity-70 mt-0.5 leading-tight">{sublabel}</p>
       </div>
-      <ChevronRight size={13} className="opacity-40 flex-shrink-0" />
-    </button>
+      <ChevronRight size={14} className="opacity-40 flex-shrink-0" />
+    </motion.button>
   )
 }

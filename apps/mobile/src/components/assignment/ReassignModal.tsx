@@ -1,10 +1,12 @@
 'use client'
 
-import * as Dialog from '@radix-ui/react-dialog'
-import { X, CheckCircle2 } from 'lucide-react'
+import { motion } from 'motion/react'
+import { CheckCircle2 } from 'lucide-react'
 import { Transaction, Settings, Currency } from '@finanzas/core/types'
 import { getCatFromSettings, formatAmount } from '@finanzas/core/lib/constants'
 import { toBase } from '@finanzas/core/lib/currency'
+import Sheet from '@/components/ui/Sheet'
+import ProgressBar from '@/components/ui/ProgressBar'
 
 interface Props {
   open: boolean
@@ -30,88 +32,68 @@ export default function ReassignModal({
   monedaBase,
 }: Props) {
   return (
-    <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/40 z-50" />
-        <Dialog.Content
-          className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-surface rounded-t-2xl z-50 shadow-2xl outline-none"
-          aria-describedby={undefined}
-        >
-          {/* Handle */}
-          <div className="flex justify-center pt-3 pb-1">
-            <div className="w-10 h-1 bg-gray-200 rounded-full" />
-          </div>
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title={`Reasignar ${selectedCount} egreso${selectedCount !== 1 ? 's' : ''}`}
+      subtitle="Elegí el ingreso al que querés asignarlos"
+      bodyClassName="px-4 pb-6"
+    >
+      {ingresos.length === 0 ? (
+        <p className="text-sm text-gray-400 text-center py-8">
+          No hay ingresos en este mes
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {ingresos.map((inc, i) => {
+            const cat = getCatFromSettings(inc.categoria, settings)
+            const dateStr = inc.fecha.toDate().toLocaleDateString('es-AR', {
+              day: 'numeric',
+              month: 'short',
+            })
+            const incBase = toBase(inc.monto, inc.moneda, monedaBase, settings)
+            const totalAsignado = egresos.reduce((sum, e) => sum + e.asignaciones
+              .filter((a) => a.ingresoId === inc.id)
+              .reduce((x, a) => x + toBase(a.monto, e.moneda, monedaBase, settings), 0), 0)
+            const disponible = incBase - totalAsignado
+            const isOver = disponible < 0
+            const used = incBase > 0 ? Math.min((totalAsignado / incBase) * 100, 100) : 0
 
-          {/* Header */}
-          <div className="flex items-center justify-between px-5 py-3 border-b border-gray-50">
-            <Dialog.Title className="text-base font-semibold text-gray-900">
-              Reasignar {selectedCount} egreso{selectedCount !== 1 ? 's' : ''}
-            </Dialog.Title>
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
-            >
-              <X size={16} className="text-gray-500" />
-            </button>
-          </div>
-
-          <div className="px-4 py-3 overflow-y-auto max-h-[60vh]">
-            <p className="text-xs text-gray-400 mb-3">Seleccioná el ingreso al que querés asignarlos</p>
-
-            {ingresos.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-8">
-                No hay ingresos en este mes
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {ingresos.map((inc) => {
-                  const cat = getCatFromSettings(inc.categoria, settings)
-                  const dateStr = inc.fecha.toDate().toLocaleDateString('es-AR', {
-                    day: 'numeric',
-                    month: 'short',
-                  })
-
-                  return (
-                    <button
-                      key={inc.id}
-                      onClick={() => onReassign(inc.id!)}
-                      className="w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-primary/40 hover:bg-primary/5 transition-colors text-left"
-                    >
-                      <div className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {inc.descripcion || cat?.nombre || inc.categoria}
-                        </p>
-                        <p className="text-xs text-gray-400 mt-0.5">
-                          {dateStr}
-                          {userNames[inc.creadoPor] && ` · ${userNames[inc.creadoPor]}`}
-                        </p>
-                      </div>
-                      <div className="flex-shrink-0 text-right">
-                        {(() => {
-                          const totalAsignado = egresos.reduce((sum, e) => sum + e.asignaciones
-                            .filter((a) => a.ingresoId === inc.id)
-                            .reduce((x, a) => x + toBase(a.monto, e.moneda, monedaBase, settings), 0), 0)
-                          const disponible = toBase(inc.monto, inc.moneda, monedaBase, settings) - totalAsignado
-                          const isOver = disponible < 0
-                          return (
-                            <p className={`text-sm font-semibold ${isOver ? 'text-red-400' : 'text-green-600'}`}>
-                              {isOver ? 'Excedido' : 'Disponible'}: {formatAmount(Math.abs(disponible), monedaBase)}
-                            </p>
-                          )
-                        })()}
-                        {inc.ejecutado && (
-                          <CheckCircle2 size={12} className="text-green-400 ml-auto" />
-                        )}
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+            return (
+              <motion.button
+                key={inc.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.04 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => onReassign(inc.id!)}
+                className="w-full p-3 rounded-2xl bg-gray-500/[0.06] hover:bg-primary/[0.07] hover:ring-1 hover:ring-primary/30 transition-colors text-left"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/12 flex items-center justify-center flex-shrink-0">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 truncate flex items-center gap-1">
+                      {inc.descripcion || cat?.nombre || inc.categoria}
+                      {inc.ejecutado && <CheckCircle2 size={12} className="text-emerald-500 flex-shrink-0" />}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {dateStr}
+                      {userNames[inc.creadoPor] && ` · ${userNames[inc.creadoPor]}`}
+                    </p>
+                  </div>
+                  <p className={`text-xs font-semibold text-right flex-shrink-0 ${isOver ? 'text-rose-500' : 'text-emerald-600'}`}>
+                    {isOver ? 'Excedido' : 'Disponible'}<br />
+                    <span className="tabular-nums">{formatAmount(Math.abs(disponible), monedaBase)}</span>
+                  </p>
+                </div>
+                <ProgressBar value={used} color={isOver ? '#f43f5e' : used >= 85 ? '#f59e0b' : '#10b981'} height={4} className="mt-2.5" />
+              </motion.button>
+            )
+          })}
+        </div>
+      )}
+    </Sheet>
   )
 }

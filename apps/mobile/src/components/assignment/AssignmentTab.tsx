@@ -1,21 +1,25 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { createPortal } from 'react-dom'
+import { AnimatePresence, motion } from 'motion/react'
 import { Zap, X, Unlink2, Sparkles, AlertCircle, CheckCircle2, Trash2 } from 'lucide-react'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
-import { updateTransaction, deleteTransaction } from '@finanzas/core/lib/transactions'
-import { adjustAssetSaldo } from '@finanzas/core/lib/assets'
+import { updateTransaction } from '@finanzas/core/lib/transactions'
+import { deleteTransactionsWithUndo, updateAsignacionesWithUndo, offerUndo } from '@/lib/undo'
+import { haptic } from '@/lib/haptics'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { SHARED_USERS } from '@finanzas/core/lib/constants'
 import { toBase } from '@finanzas/core/lib/currency'
 import { Transaction, Currency } from '@finanzas/core/types'
 import AssignmentGroup, { GroupItem } from './AssignmentGroup'
 import ReassignModal from './ReassignModal'
+import { springSoft, stagger } from '@/components/ui/motion'
 
-export default function AssignmentTab() {
+export default function AssignmentTab({ onScrollY }: { onScrollY?: (y: number) => void }) {
   const { transactions } = useTransactionStore()
   const { settings } = useSettingsStore()
   const { monedaBase } = useAuthStore()
@@ -28,8 +32,6 @@ export default function AssignmentTab() {
   const [reassignOpen, setReassignOpen]     = useState(false)
   const [autoLoading, setAutoLoading]       = useState(false)
   const [unassignLoading, setUnassignLoading] = useState(false)
-  const [unassignConfirm, setUnassignConfirm] = useState(false)
-  const [deleteConfirm, setDeleteConfirm]   = useState(false)
   const [deleteLoading, setDeleteLoading]   = useState(false)
   const userNames = Object.fromEntries(SHARED_USERS.map((u) => [u.id, u.nombre]))
 
@@ -99,6 +101,7 @@ export default function AssignmentTab() {
       (a, b) => toBase(b.monto, b.moneda, base, s) - toBase(a.monto, a.moneda, base, s)
     )
 
+    const previas = ordered.map((e) => ({ id: e.id!, asignaciones: e.asignaciones }))
     try {
       for (const exp of ordered) {
         const expBase = toBase(exp.monto, exp.moneda, base, s)
@@ -130,6 +133,10 @@ export default function AssignmentTab() {
           asignaciones: [{ ingresoId: target.id!, monto: exp.monto }],
         })
       }
+      haptic('success')
+      offerUndo(`${ordered.length} egreso${ordered.length !== 1 ? 's' : ''} asignado${ordered.length !== 1 ? 's' : ''}`, async () => {
+        await Promise.allSettled(previas.map(({ id, asignaciones }) => updateTransaction(id, { asignaciones })))
+      })
     } finally {
       setAutoLoading(false)
     }
@@ -137,16 +144,13 @@ export default function AssignmentTab() {
 
   // Desasignar todos
   async function desassignAll() {
-    if (!unassignConfirm) {
-      setUnassignConfirm(true)
-      setTimeout(() => setUnassignConfirm(false), 4000)
-      return
-    }
     setUnassignLoading(true)
-    setUnassignConfirm(false)
     try {
       const assigned = egresos.filter((e) => e.asignaciones.length > 0)
-      await Promise.allSettled(assigned.map((e) => updateTransaction(e.id!, { asignaciones: [] })))
+      await updateAsignacionesWithUndo(
+        assigned.map((tx) => ({ tx, asignaciones: [] })),
+        `${assigned.length} egreso${assigned.length !== 1 ? 's' : ''} desasignado${assigned.length !== 1 ? 's' : ''}`,
+      )
     } finally {
       setUnassignLoading(false)
     }
@@ -157,39 +161,26 @@ export default function AssignmentTab() {
     if (!group) return
     // Quita solo el vínculo con ESTE ingreso; si el egreso estaba dividido,
     // conserva la parte asignada al otro ingreso.
-    await Promise.allSettled(group.items.map(({ exp }) => updateTransaction(exp.id!, {
-      asignaciones: exp.asignaciones.filter((a) => a.ingresoId !== incomeId),
-    })))
+    await updateAsignacionesWithUndo(
+      group.items.map(({ exp }) => ({ tx: exp, asignaciones: exp.asignaciones.filter((a) => a.ingresoId !== incomeId) })),
+      'Grupo desasignado',
+    )
   }
 
   async function reassignSelected(newIncomeId: string) {
-    const byId = new Map(egresos.map((e) => [e.id!, e]))
-    await Promise.allSettled([...selectedIds].map((id) => {
-      const exp = byId.get(id)
-      if (!exp) return Promise.resolve()
-      return updateTransaction(id, {
-        asignaciones: [{ ingresoId: newIncomeId, monto: exp.monto }],
-      })
-    }))
+    const elegidos = egresos.filter((e) => selectedIds.has(e.id!))
+    await updateAsignacionesWithUndo(
+      elegidos.map((tx) => ({ tx, asignaciones: [{ ingresoId: newIncomeId, monto: tx.monto }] })),
+      `${elegidos.length} egreso${elegidos.length !== 1 ? 's' : ''} reasignado${elegidos.length !== 1 ? 's' : ''}`,
+    )
     setSelectedIds(new Set())
     setReassignOpen(false)
   }
 
   async function deleteSelected() {
-    if (!deleteConfirm) { setDeleteConfirm(true); setTimeout(() => setDeleteConfirm(false), 4000); return }
     setDeleteLoading(true)
-    setDeleteConfirm(false)
     try {
-      const toDelete = egresos.filter((e) => selectedIds.has(e.id!))
-      for (const tx of toDelete) {
-        if (tx.ahorroAssetId) {
-          try {
-            const txMonth = tx.fecha.toDate().toISOString().slice(0, 7)
-            await adjustAssetSaldo(tx.ahorroAssetId, -tx.monto, txMonth)
-          } catch { /* non-blocking */ }
-        }
-        await deleteTransaction(tx.id!)
-      }
+      await deleteTransactionsWithUndo(egresos.filter((e) => selectedIds.has(e.id!)))
       setSelectedIds(new Set())
     } finally {
       setDeleteLoading(false)
@@ -221,136 +212,170 @@ export default function AssignmentTab() {
   ]
 
   const barGradient = allAssigned
-    ? 'linear-gradient(90deg, #22c55e, #10b981)'
+    ? 'linear-gradient(90deg, #6ee7b7, #34d399)'
     : progressPercent >= 50
-      ? 'linear-gradient(90deg, #3b82f6, #6366f1)'
-      : 'linear-gradient(90deg, #fbbf24, #f87171)'
+      ? 'linear-gradient(90deg, #a5b4fc, #e0e7ff)'
+      : 'linear-gradient(90deg, #fcd34d, #fda4af)'
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-gray-50/60">
+    <div className="flex-1 flex flex-col overflow-hidden">
 
       {/* ── Header — hero card ── */}
-      <div className="px-3 pt-2 pb-2 bg-surface">
-        <div className="relative rounded-xl overflow-hidden px-3 py-2.5 bg-gradient-to-r from-primary to-[#8b5cf6] shadow-sm">
-          <div className="absolute -top-6 -right-6 w-20 h-20 bg-surface/10 rounded-full blur-xl" />
+      <div className="px-3 pt-1 pb-2 flex-shrink-0">
+        <div className="relative rounded-[22px] overflow-hidden px-3.5 py-3 bg-brand shadow-soft text-white">
+          <div className="absolute -top-8 -right-8 w-24 h-24 bg-white/15 rounded-full blur-2xl" />
 
           {/* Fila 1: número · badge · spacer · botón auto-asignar */}
-          <div className="relative flex items-center gap-2 mb-2">
-            <p className="text-lg font-black text-white tabular-nums leading-none flex-shrink-0">
+          <div className="relative flex items-center gap-2 mb-2.5">
+            <p className="text-xl font-bold tabular-nums leading-none flex-shrink-0">
               {assignedCount}
-              <span className="text-white/50 text-sm font-bold">/{totalEgresos}</span>
+              <span className="text-white/50 text-sm font-semibold">/{totalEgresos}</span>
             </p>
 
-            {allAssigned ? (
-              <div className="flex items-center gap-1">
-                <CheckCircle2 size={10} className="text-emerald-300 flex-shrink-0" />
-                <span className="text-[11px] text-emerald-200 font-semibold whitespace-nowrap">Todo asignado</span>
-              </div>
-            ) : unassignedExpenses.length > 0 ? (
-              <div className="flex items-center gap-1">
-                <AlertCircle size={10} className="text-amber-300 flex-shrink-0" />
-                <span className="text-[11px] text-amber-200 font-semibold whitespace-nowrap">{unassignedExpenses.length} sin asignar</span>
-              </div>
-            ) : null}
+            <AnimatePresence mode="wait" initial={false}>
+              {allAssigned ? (
+                <motion.div key="ok" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-400/20">
+                  <CheckCircle2 size={11} className="text-emerald-200 flex-shrink-0" />
+                  <span className="text-[11px] text-emerald-100 font-semibold whitespace-nowrap">Todo asignado</span>
+                </motion.div>
+              ) : unassignedExpenses.length > 0 ? (
+                <motion.div key="pending" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-400/20">
+                  <AlertCircle size={11} className="text-amber-200 flex-shrink-0" />
+                  <span className="text-[11px] text-amber-100 font-semibold whitespace-nowrap">{unassignedExpenses.length} sin asignar</span>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
 
             <div className="flex-1" />
 
-            <button
+            <motion.button
+              whileTap={{ scale: 0.94 }}
               onClick={autoAssign}
               disabled={autoLoading || unassignedExpenses.length === 0 || ingresos.length === 0}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface text-primary text-[11px] font-bold shadow-sm disabled:opacity-40 active:scale-95 transition-all whitespace-nowrap flex-shrink-0"
+              className="flex items-center gap-1 px-3 h-8 rounded-full bg-white text-primary text-[11px] font-bold shadow-sm disabled:opacity-40 whitespace-nowrap flex-shrink-0"
             >
               {autoLoading
-                ? <><Sparkles size={10} className="animate-pulse" /> Asignando…</>
-                : <><Zap size={10} /> Auto-asignar</>
+                ? <><Sparkles size={12} className="animate-pulse" /> Asignando…</>
+                : <><Zap size={12} /> Auto-asignar</>
               }
-            </button>
+            </motion.button>
           </div>
 
           {/* Fila 2: barra de progreso · % · desasignar */}
           <div className="relative flex items-center gap-2">
-            <div className="flex-1 min-w-0">
-              <div className="h-1 bg-surface/20 rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-700"
-                  style={{ width: `${progressPercent}%`, background: barGradient }}
-                />
-              </div>
+            <div className="flex-1 min-w-0 h-1.5 bg-white/20 rounded-full overflow-hidden">
+              <motion.div
+                className="h-full rounded-full"
+                style={{ background: barGradient }}
+                initial={{ width: 0 }}
+                animate={{ width: `${progressPercent}%` }}
+                transition={{ type: 'spring', stiffness: 120, damping: 22 }}
+              />
             </div>
-            <span className="text-[11px] text-white/70 font-semibold tabular-nums flex-shrink-0">
+            <span className="text-[11px] text-white/75 font-semibold tabular-nums flex-shrink-0">
               {Math.round(progressPercent)}%
             </span>
             {assignedCount > 0 && (
-              <button
+              <motion.button
+                whileTap={{ scale: 0.94 }}
                 onClick={desassignAll}
                 disabled={unassignLoading}
-                className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-semibold transition-all active:scale-95 flex-shrink-0 whitespace-nowrap ${
-                  unassignConfirm ? 'bg-red-400 text-white' : 'bg-surface/15 text-white/90'
-                }`}
+                className="hit-44 flex items-center gap-1 px-2.5 h-6 rounded-full text-[11px] font-semibold transition-colors flex-shrink-0 whitespace-nowrap bg-white/15 text-white/90"
               >
-                <Unlink2 size={9} />
-                {unassignConfirm ? '¿Confirmar?' : 'Desasignar todo'}
-              </button>
+                <Unlink2 size={10} />
+                Desasignar todo
+              </motion.button>
             )}
           </div>
         </div>
       </div>
 
       {/* ── Groups ── */}
-      <div className="flex-1 overflow-y-auto pt-2 pb-24">
+      <div
+        className="flex-1 overflow-y-auto overscroll-contain pt-1 pb-28 no-scrollbar"
+        onScroll={(e) => onScrollY?.(e.currentTarget.scrollTop)}
+      >
         {egresos.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center px-6">
-            <p className="text-gray-400 text-sm">No hay egresos este mes</p>
-            <p className="text-gray-300 text-xs mt-1">Agregá egresos con el botón +</p>
+            <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-2.5">
+              <Zap size={20} className="text-primary" />
+            </div>
+            <p className="text-gray-500 text-sm font-semibold">No hay egresos este mes</p>
+            <p className="text-gray-400 text-xs mt-1">Agregá egresos con el botón +</p>
           </div>
         ) : (
-          groupEntries.map(({ key, group }) => {
+          groupEntries.map(({ key, group }, i) => {
             return (
-              <AssignmentGroup
+              <motion.div
                 key={key}
-                income={group.income}
-                items={group.items}
-                selectedIds={selectedIds}
-                onToggleSelect={toggleSelect}
-                onEdit={openEditModal}
-                onDesassign={() => desassignGroup(key)}
-                isExpanded={expandedGroups.has(key)}
-                onToggleExpand={() => toggleGroup(key)}
-                userNames={userNames}
-                settings={s}
-                monedaBase={base}
-              />
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: stagger(i, 0.04), ease: [0.22, 1, 0.36, 1] }}
+              >
+                <AssignmentGroup
+                  income={group.income}
+                  items={group.items}
+                  selectedIds={selectedIds}
+                  onToggleSelect={toggleSelect}
+                  onEdit={openEditModal}
+                  onDesassign={() => desassignGroup(key)}
+                  isExpanded={expandedGroups.has(key)}
+                  onToggleExpand={() => toggleGroup(key)}
+                  userNames={userNames}
+                  settings={s}
+                  monedaBase={base}
+                />
+              </motion.div>
             )
           })
         )}
       </div>
 
-      {/* ── Multi-select action bar ── */}
-      {selectedIds.size > 0 && (
-        <div className="fixed bottom-[72px] left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-surface border-t border-gray-100 shadow-lg z-30 px-4 py-3 flex items-center gap-2">
-          <button onClick={() => { setSelectedIds(new Set()); setDeleteConfirm(false) }} className="p-2 rounded-full hover:bg-gray-100">
-            <X size={18} className="text-gray-500" />
-          </button>
-          <span className="flex-1 text-sm font-semibold text-gray-700">
-            {selectedIds.size} seleccionado{selectedIds.size !== 1 ? 's' : ''}
-          </span>
-          <button
-            onClick={deleteSelected}
-            disabled={deleteLoading}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all ${
-              deleteConfirm ? 'bg-red-400 text-white' : 'bg-red-50 text-red-400'
-            }`}
-          >
-            <Trash2 size={14} />
-            {deleteConfirm ? '¿Confirmar?' : 'Eliminar'}
-          </button>
-          <button
-            onClick={() => setReassignOpen(true)}
-            className="px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold active:scale-95 transition-transform"
-          >
-            Reasignar
-          </button>
-        </div>
+      {/* ── Multi-select action bar (portal: queda fuera de los contenedores animados) ── */}
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {selectedIds.size > 0 && (
+            <motion.div
+              initial={{ y: 40, opacity: 0, scale: 0.96 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 40, opacity: 0, scale: 0.96 }}
+              transition={springSoft}
+              className="fixed bottom-[calc(max(12px,env(safe-area-inset-bottom))+76px)] inset-x-0 mx-auto w-[calc(100%-24px)] max-w-[366px] glass-strong rounded-[22px] z-30 pl-2 pr-2 py-2 flex items-center gap-2"
+            >
+              <button onClick={() => setSelectedIds(new Set())} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-500/10" aria-label="Cancelar selección">
+                <X size={18} className="text-gray-500" />
+              </button>
+              <span className="flex-1 min-w-0 flex items-center gap-1.5 text-[13px] font-semibold text-gray-700 whitespace-nowrap">
+                <motion.span
+                  key={selectedIds.size}
+                  initial={{ scale: 0.6 }}
+                  animate={{ scale: 1 }}
+                  className="min-w-6 h-6 px-1.5 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center tabular-nums"
+                >
+                  {selectedIds.size}
+                </motion.span>
+                <span className="truncate">selecc.</span>
+              </span>
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={deleteSelected}
+                disabled={deleteLoading}
+                className="flex items-center gap-1.5 px-3 h-10 rounded-2xl text-[13px] font-semibold transition-colors whitespace-nowrap bg-rose-500/10 text-rose-500"
+              >
+                <Trash2 size={14} />
+                Eliminar
+              </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setReassignOpen(true)}
+                className="px-3.5 h-10 rounded-2xl bg-brand text-white text-[13px] font-semibold shadow-soft whitespace-nowrap"
+              >
+                Reasignar
+              </motion.button>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
       )}
 
       <ReassignModal

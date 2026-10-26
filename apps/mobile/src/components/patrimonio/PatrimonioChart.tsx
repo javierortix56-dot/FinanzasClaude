@@ -1,5 +1,8 @@
 'use client'
 
+import { motion } from 'motion/react'
+import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
+
 interface DataPoint {
   label: string
   /** Saldo total (neto) USD a fin del mes */
@@ -29,12 +32,14 @@ function fmt(n: number): string {
   return `${sign}${abs.toFixed(0)}`
 }
 
-const COLOR_APORTES = '#534AB7' // violeta
-const COLOR_REVAL_POS = '#22c55e' // verde
-const COLOR_REVAL_NEG = '#f87171' // rojo
+const COLOR_APORTES = 'var(--primary)' // violeta
+const COLOR_REVAL_POS = '#10b981' // verde
+const COLOR_REVAL_NEG = '#f43f5e' // rojo
 
 export default function PatrimonioChart({ data, currency }: Props) {
+  const hideAmounts = useSettingsStore((st) => st.hideAmounts)
   if (data.length === 0) return null
+  const blur = hideAmounts ? 'blur-[4px] select-none' : ''
 
   // Para escalar las barras usamos el mayor neto absoluto de la serie
   const maxAbs = Math.max(
@@ -46,48 +51,52 @@ export default function PatrimonioChart({ data, currency }: Props) {
   const last = data[data.length - 1]
 
   return (
-    <div className="px-4 pt-2 pb-2">
+    <div className="px-4 pt-3.5 pb-3">
       {/* Título + leyenda en una sola fila */}
-      <div className="flex items-center justify-between mb-1.5">
-        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">
-          Evolución del neto ({currency})
-        </p>
-        <div className="flex items-center gap-2 text-[10px]">
-          <span className="flex items-center gap-0.5">
-            <span className="w-1.5 h-1.5 rounded-sm inline-block" style={{ backgroundColor: COLOR_APORTES }} />
+      <div className="flex items-center justify-between mb-2">
+        <p className="eyebrow">Evolución del neto · {currency}</p>
+        <div className="flex items-center gap-2.5 text-[10px]">
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-[3px] inline-block" style={{ backgroundColor: COLOR_APORTES }} />
             <span className="text-gray-400">Aportes</span>
           </span>
-          <span className="flex items-center gap-0.5">
-            <span className="w-1.5 h-1.5 rounded-sm inline-block" style={{ backgroundColor: COLOR_REVAL_POS }} />
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-[3px] inline-block" style={{ backgroundColor: COLOR_REVAL_POS }} />
             <span className="text-gray-400">Reval.</span>
           </span>
         </div>
       </div>
 
       {/* Barras apiladas */}
-      <div className="flex items-end gap-1 justify-around" style={{ height: `${BAR_H + 24}px` }}>
-        {data.map((d) => {
+      <div className="flex items-end gap-1 justify-around" style={{ height: `${BAR_H + 28}px` }}>
+        {data.map((d, i) => {
           const aportH = Math.round((Math.abs(d.aportes) / maxAbs) * BAR_H)
           const revalH = Math.round((Math.abs(d.reval)   / maxAbs) * BAR_H)
           const revalColor = d.reval >= 0 ? COLOR_REVAL_POS : COLOR_REVAL_NEG
-          const opacity = d.current ? 1 : 0.5
+          const opacity = d.current ? 1 : 0.45
 
           return (
-            <div key={d.label} className="flex flex-col items-center gap-0.5 flex-1 min-w-0">
+            <div key={d.label} className="flex flex-col items-center gap-1 flex-1 min-w-0">
               <div className="w-full flex justify-center items-end" style={{ height: `${BAR_H}px` }}>
-                <div className="w-5 rounded-t overflow-hidden flex flex-col-reverse" style={{ height: `${Math.max(3, aportH + revalH)}px` }}>
+                <motion.div
+                  className="w-6 rounded-[7px] overflow-hidden flex flex-col-reverse origin-bottom"
+                  style={{ height: `${Math.max(3, aportH + revalH)}px` }}
+                  initial={{ scaleY: 0 }}
+                  animate={{ scaleY: 1 }}
+                  transition={{ type: 'spring', stiffness: 140, damping: 18, delay: i * 0.05 }}
+                >
                   {aportH > 0 && (
                     <div style={{ height: `${aportH}px`, backgroundColor: COLOR_APORTES, opacity }} />
                   )}
                   {revalH > 0 && (
                     <div style={{ height: `${revalH}px`, backgroundColor: revalColor, opacity }} />
                   )}
-                </div>
+                </motion.div>
               </div>
-              <p className={`text-[10px] font-semibold tabular-nums ${d.neto >= 0 ? 'text-primary' : 'text-red-400'}`}>
+              <p className={`text-[10px] font-semibold tabular-nums ${d.neto >= 0 ? 'text-primary' : 'text-rose-500'} ${blur}`}>
                 {fmt(d.neto)}
               </p>
-              <p className={`text-[10px] ${d.current ? 'text-gray-700 font-semibold' : 'text-gray-400'}`}>
+              <p className={`text-[10px] leading-none ${d.current ? 'text-gray-800 font-bold' : 'text-gray-400'}`}>
                 {d.label}
               </p>
             </div>
@@ -97,17 +106,16 @@ export default function PatrimonioChart({ data, currency }: Props) {
 
       {/* Resumen delta del último mes */}
       {data.length > 1 && (last.deltaAportes !== 0 || last.deltaReval !== 0) && (
-        <div className="mt-1.5 flex items-center justify-around text-[10px] bg-gray-50 rounded-lg py-1.5 px-3">
-          <div className="text-center">
+        <div className="mt-2.5 grid grid-cols-2 gap-2 text-[10px]">
+          <div className="rounded-xl bg-gray-500/[0.06] px-3 py-2">
             <p className="text-gray-400">Aportes este mes</p>
-            <p className="font-bold tabular-nums" style={{ color: COLOR_APORTES }}>
+            <p className={`text-xs font-bold tabular-nums mt-0.5 ${blur}`} style={{ color: COLOR_APORTES }}>
               {last.deltaAportes >= 0 ? '+' : ''}{fmt(last.deltaAportes)}
             </p>
           </div>
-          <div className="w-px h-5 bg-gray-200" />
-          <div className="text-center">
+          <div className="rounded-xl bg-gray-500/[0.06] px-3 py-2">
             <p className="text-gray-400">Revalorización</p>
-            <p className="font-bold tabular-nums" style={{ color: last.deltaReval >= 0 ? COLOR_REVAL_POS : COLOR_REVAL_NEG }}>
+            <p className={`text-xs font-bold tabular-nums mt-0.5 ${blur}`} style={{ color: last.deltaReval >= 0 ? COLOR_REVAL_POS : COLOR_REVAL_NEG }}>
               {last.deltaReval >= 0 ? '+' : ''}{fmt(last.deltaReval)}
             </p>
           </div>

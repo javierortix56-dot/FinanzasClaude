@@ -3,6 +3,8 @@ import { GeistSans } from 'geist/font/sans'
 import { GeistMono } from 'geist/font/mono'
 import AuthProvider from '@/components/AuthProvider'
 import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar'
+import AmbientBackground from '@/components/ui/AmbientBackground'
+import { THEME_BOOT_SCRIPT } from '@/lib/theme'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -16,10 +18,12 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
+  // La barra de estado se funde con el fondo ambiental en vez de un bloque violeta
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#534AB7' },
-    { media: '(prefers-color-scheme: dark)',  color: '#101218' },
+    { media: '(prefers-color-scheme: light)', color: '#f3f2fa' },
+    { media: '(prefers-color-scheme: dark)',  color: '#0c0d14' },
   ],
+  viewportFit: 'cover',
 }
 
 export default function RootLayout({
@@ -28,8 +32,13 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="es" className={`${GeistSans.variable} ${GeistMono.variable} h-full antialiased`}>
-      <body className="min-h-full bg-gray-50">
+    <html lang="es" className={`${GeistSans.variable} ${GeistMono.variable} h-full antialiased`} suppressHydrationWarning>
+      <head>
+        {/* Tema manual guardado: se aplica antes del primer pintado */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
+      <body className="min-h-full">
+        <AmbientBackground />
         <AuthProvider>{children}</AuthProvider>
         <ServiceWorkerRegistrar />
       </body>

@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { ChevronLeft, SlidersHorizontal } from 'lucide-react'
+import { AnimatePresence, motion } from 'motion/react'
+import { ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react'
 import { Transaction, Settings, Currency, CategoryGroup } from '@finanzas/core/types'
 import {
   getCatFromSettings, formatAmount,
@@ -11,6 +12,11 @@ import { toBase, toUSD } from '@finanzas/core/lib/currency'
 import { useBudgetStore } from '@finanzas/core/store/useBudgetStore'
 import DonutChart, { DonutSlice } from './DonutChart'
 import BudgetModal from './BudgetModal'
+import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
+import Segmented from '@/components/ui/Segmented'
+import ProgressBar from '@/components/ui/ProgressBar'
+import { Money } from '@/components/ui/AnimatedNumber'
+import { CategoryIcon } from '@/lib/categoryIcons'
 
 // High-contrast palette: colours spaced across the full hue wheel
 const PALETTE = [
@@ -44,10 +50,13 @@ type Slice = DonutSlice & { nombre: string; amount: number; percent: number }
 
 export default function CategoryDonut({ transactions, settings, monedaBase, mes }: Props) {
   const { getBudget } = useBudgetStore()
+  const hideAmounts = useSettingsStore((st) => st.hideAmounts)
+  const blur = hideAmounts ? 'blur-[4px] select-none' : ''
   const [tipoTab,        setTipoTab]        = useState<TipoTab>('egreso')
   const [selectedGroup,  setSelectedGroup]  = useState<string | null>(null)
   const [selectedSub,    setSelectedSub]    = useState<string | null>(null)
   const [budgetCat,      setBudgetCat]      = useState<string | null>(null)
+  const [budgetOpen,     setBudgetOpen]     = useState(false)
 
   const filtered = transactions.filter((t) => t.tipo === tipoTab)
 
@@ -140,11 +149,12 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
   const groupSlice = selectedGroup && !selectedSub
     ? { amount: total, nombre: groups.find((g) => g.id === selectedGroup)?.nombre ?? '' }
     : null
-  const centerLabel = centerSlice
-    ? formatAmount(centerSlice.amount, monedaBase)
-    : groupSlice
-      ? formatAmount(groupSlice.amount, monedaBase)
-      : formatAmount(total, monedaBase)
+  const centerLabel = (
+    <Money
+      value={centerSlice ? centerSlice.amount : groupSlice ? groupSlice.amount : total}
+      currency={monedaBase}
+    />
+  )
   const centerSub = centerSlice
     ? centerSlice.nombre
     : groupSlice
@@ -161,172 +171,189 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
     ? groups.find((g) => g.id === selectedGroup)?.nombre ?? ''
     : ''
 
+  const level = selectedSub ? 2 : selectedGroup ? 1 : 0
+  const levelKey = `${tipoTab}-${selectedGroup ?? 'root'}-${selectedSub ?? ''}`
+
   return (
-    <div>
+    <div className="px-4 pb-4">
       {/* Inner tabs */}
-      <div className="flex gap-1 px-4 pt-2.5 border-b border-gray-50">
-        {(['egreso', 'ingreso'] as TipoTab[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => { setTipoTab(t); setSelectedGroup(null); setSelectedSub(null) }}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-t-lg transition-colors ${
-              tipoTab === t
-                ? t === 'egreso'
-                  ? 'text-red-400 border-b-2 border-red-400'
-                  : 'text-green-600 border-b-2 border-green-500'
-                : 'text-gray-400'
-            }`}
-          >
-            {t === 'egreso' ? 'Gastos' : 'Ingresos'}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        id="donut-tipo"
+        size="sm"
+        value={tipoTab}
+        onChange={(t) => { setTipoTab(t); setSelectedGroup(null); setSelectedSub(null) }}
+        options={[
+          { value: 'egreso',  label: 'Gastos',   activeColor: '#f43f5e' },
+          { value: 'ingreso', label: 'Ingresos', activeColor: '#10b981' },
+        ]}
+        className="mt-2"
+      />
 
       {/* Donut */}
-      <div className="flex justify-center py-3">
+      <div className="flex justify-center py-4">
         <DonutChart
           slices={slices}
           total={total}
           centerLabel={centerLabel}
           centerSub={centerSub}
-          size={140}
+          size={164}
+          animationKey={`${tipoTab}-${selectedGroup ?? 'root'}`}
         />
       </div>
 
       {/* Breadcrumb / back navigation */}
-      {(selectedGroup || selectedSub) && (
-        <div className="px-4 pb-1">
-          <button
+      <AnimatePresence initial={false}>
+        {(selectedGroup || selectedSub) && (
+          <motion.button
+            initial={{ opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -8 }}
             onClick={() => {
               if (selectedSub) setSelectedSub(null)
               else setSelectedGroup(null)
             }}
-            className="flex items-center gap-1 text-xs font-semibold text-primary"
+            className="flex items-center gap-1 h-8 pl-1.5 pr-3 mb-1 rounded-full bg-primary/10 text-xs font-semibold text-primary"
           >
             <ChevronLeft size={14} />
             {selectedSub ? `Volver a ${breadcrumb}` : 'Volver a categorías'}
-          </button>
-        </div>
-      )}
+          </motion.button>
+        )}
+      </AnimatePresence>
 
       {/* Legend / Detail */}
-      <div className="px-4 pb-3">
-        {selectedSub ? (
-          /* ── Nivel 2: transacciones ── */
-          <div className="space-y-2 mt-2">
-            {detailTxs.length === 0 ? (
-              <p className="text-xs text-gray-400">Sin movimientos en esta categoría</p>
-            ) : (
-              detailTxs.map((tx) => {
-                const amt = toBase(tx.monto, tx.moneda, monedaBase, settings)
-                const pct = detailTotal > 0 ? (amt / detailTotal) * 100 : 0
-                const cat = getCatFromSettings(tx.categoria, settings)
-                return (
-                  <div key={tx.id} className="flex items-center gap-2">
-                    <div
-                      className="w-2 h-2 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: cat?.color ?? DEFAULT_GRAY }}
-                    />
-                    <span className="flex-1 text-sm text-gray-700 truncate">
-                      {tx.descripcion || cat?.nombre || tx.categoria}
-                    </span>
-                    <span className="text-xs text-gray-400">{pct.toFixed(0)}%</span>
-                    <span className="text-sm font-semibold text-gray-800 text-right">
-                      {formatAmount(amt, monedaBase)}
-                    </span>
-                  </div>
-                )
-              })
-            )}
-          </div>
-        ) : (
-          /* ── Nivel 0 (grupos) o Nivel 1 (subcategorías) ── */
-          <div className="space-y-1 mt-2">
-            {slices.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-3">
-                No hay movimientos en este período
-              </p>
-            ) : (
-              slices.map((slice) => {
-                const budget = getBudget(slice.id)
-                let budgetPct = 0
-                let spentInBudgetMoneda = 0
-                if (budget) {
-                  const spentUSD   = toUSD(slice.amount, monedaBase, settings)
-                  const limiteUSD  = toUSD(budget.limite, budget.moneda as Currency, settings)
-                  budgetPct        = limiteUSD > 0 ? Math.min((spentUSD / limiteUSD) * 100, 100) : 0
-                  spentInBudgetMoneda = toBase(spentUSD, 'USD', budget.moneda as Currency, settings)
-                }
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={levelKey}
+          initial={{ opacity: 0, x: level > 0 ? 16 : -16 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: level > 0 ? -16 : 16 }}
+          transition={{ duration: 0.2 }}
+        >
+          {selectedSub ? (
+            /* ── Nivel 2: transacciones ── */
+            <div className="space-y-1 mt-1">
+              {detailTxs.length === 0 ? (
+                <p className="text-xs text-gray-400">Sin movimientos en esta categoría</p>
+              ) : (
+                detailTxs.map((tx) => {
+                  const amt = toBase(tx.monto, tx.moneda, monedaBase, settings)
+                  const pct = detailTotal > 0 ? (amt / detailTotal) * 100 : 0
+                  const cat = getCatFromSettings(tx.categoria, settings)
+                  return (
+                    <div key={tx.id} className="flex items-center gap-2 px-2 py-2 rounded-xl bg-gray-500/[0.05]">
+                      <div
+                        className="w-2 h-2 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: cat?.color ?? DEFAULT_GRAY }}
+                      />
+                      <span className="flex-1 text-xs font-medium text-gray-700 truncate">
+                        {tx.descripcion || cat?.nombre || tx.categoria}
+                      </span>
+                      <span className="text-[11px] text-gray-400 tabular-nums">{pct.toFixed(0)}%</span>
+                      <span className={`text-xs font-bold text-gray-800 text-right tabular-nums ${blur}`}>
+                        {formatAmount(amt, monedaBase)}
+                      </span>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          ) : (
+            /* ── Nivel 0 (grupos) o Nivel 1 (subcategorías) ── */
+            <div className="space-y-1 mt-1">
+              {slices.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-3">
+                  No hay movimientos en este período
+                </p>
+              ) : (
+                slices.map((slice, i) => {
+                  const budget = getBudget(slice.id)
+                  let budgetPct = 0
+                  let spentInBudgetMoneda = 0
+                  if (budget) {
+                    const spentUSD   = toUSD(slice.amount, monedaBase, settings)
+                    const limiteUSD  = toUSD(budget.limite, budget.moneda as Currency, settings)
+                    budgetPct        = limiteUSD > 0 ? Math.min((spentUSD / limiteUSD) * 100, 100) : 0
+                    spentInBudgetMoneda = toBase(spentUSD, 'USD', budget.moneda as Currency, settings)
+                  }
+                  const budgetColor = budgetPct >= 100 ? '#f43f5e' : budgetPct >= 80 ? '#f59e0b' : '#10b981'
 
-                return (
-                  <div key={slice.id}>
-                    <button
-                      className="w-full flex items-center gap-2 hover:bg-gray-50 rounded-lg px-1 py-1.5 transition-colors"
-                      onClick={() => {
-                        if (selectedGroup === null) setSelectedGroup(slice.id)
-                        else setSelectedSub(slice.id)
-                      }}
+                  return (
+                    <motion.div
+                      key={slice.id}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.03 }}
+                      className="rounded-xl hover:bg-gray-500/[0.05] transition-colors"
                     >
                       <div
-                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: slice.color }}
-                      />
-                      <span className="flex-1 text-xs font-medium text-gray-700 text-left truncate">
-                        {slice.nombre}
-                      </span>
-                      <span className="text-[11px] text-gray-400 tabular-nums w-7 text-right">
-                        {slice.percent.toFixed(0)}%
-                      </span>
-                      <span className="text-xs font-semibold text-gray-800 tabular-nums w-12 text-right">
-                        {fmtShort(slice.amount)}
-                      </span>
-                      {tipoTab === 'egreso' && !budget && (
-                        <button
-                          className="text-gray-300 hover:text-primary transition-colors ml-0.5"
-                          onClick={(e) => { e.stopPropagation(); setBudgetCat(slice.id) }}
-                          title="Agregar presupuesto"
+                        role="button"
+                        tabIndex={0}
+                        className="w-full flex items-center gap-2 px-2 py-2 cursor-pointer"
+                        onClick={() => {
+                          if (selectedGroup === null) setSelectedGroup(slice.id)
+                          else setSelectedSub(slice.id)
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter') return
+                          if (selectedGroup === null) setSelectedGroup(slice.id)
+                          else setSelectedSub(slice.id)
+                        }}
+                      >
+                        <span
+                          className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0"
+                          style={{ backgroundColor: slice.color + '22', color: slice.color }}
                         >
-                          <SlidersHorizontal size={11} />
-                        </button>
-                      )}
-                    </button>
-
-                    {/* Budget bar (only when budget exists) */}
-                    {budget && (
-                      <div className="ml-4 mb-0.5">
-                        <div className="flex justify-between text-[10px] text-gray-400 mb-0.5">
-                          <span>{budget.moneda} {fmtShort(spentInBudgetMoneda)} / {fmtShort(budget.limite)}</span>
-                          <span className={`font-semibold ${
-                            budgetPct >= 100 ? 'text-red-400' : budgetPct >= 80 ? 'text-orange-400' : 'text-green-600'
-                          }`}>{Math.round(budgetPct)}%</span>
-                        </div>
-                        <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all ${
-                              budgetPct >= 100 ? 'bg-red-400' : budgetPct >= 80 ? 'bg-orange-300' : 'bg-green-500'
-                            }`}
-                            style={{ width: `${budgetPct}%` }}
-                          />
-                        </div>
+                          <CategoryIcon cat={getCatFromSettings(slice.id, settings) ?? { id: slice.id }} size={12} />
+                        </span>
+                        <span className="flex-1 text-xs font-semibold text-gray-700 text-left truncate">
+                          {slice.nombre}
+                        </span>
+                        <span className="text-[11px] text-gray-400 tabular-nums w-8 text-right">
+                          {slice.percent.toFixed(0)}%
+                        </span>
+                        <span className={`text-xs font-bold text-gray-800 tabular-nums w-12 text-right ${blur}`}>
+                          {fmtShort(slice.amount)}
+                        </span>
+                        {tipoTab === 'egreso' && !budget ? (
+                          <button
+                            className="w-6 h-6 flex items-center justify-center rounded-full text-gray-300 hover:text-primary hover:bg-primary/10 transition-colors"
+                            onClick={(e) => { e.stopPropagation(); setBudgetCat(slice.id); setBudgetOpen(true) }}
+                            title="Agregar presupuesto"
+                            aria-label="Agregar presupuesto"
+                          >
+                            <SlidersHorizontal size={12} />
+                          </button>
+                        ) : (
+                          <ChevronRight size={14} className="text-gray-300 w-6" />
+                        )}
                       </div>
-                    )}
-                  </div>
-                )
-              })
-            )}
-          </div>
-        )}
-      </div>
+
+                      {/* Budget bar (only when budget exists) */}
+                      {budget && (
+                        <div className="pl-6 pr-2 pb-2">
+                          <ProgressBar value={budgetPct} color={budgetColor} height={4} />
+                          <div className="flex justify-between text-[10px] text-gray-400 mt-1">
+                            <span className={blur}>{budget.moneda} {fmtShort(spentInBudgetMoneda)} / {fmtShort(budget.limite)}</span>
+                            <span className="font-bold" style={{ color: budgetColor }}>{Math.round(budgetPct)}%</span>
+                          </div>
+                        </div>
+                      )}
+                    </motion.div>
+                  )
+                })
+              )}
+            </div>
+          )}
+        </motion.div>
+      </AnimatePresence>
 
       {/* Budget modal */}
-      {budgetCat && (
-        <BudgetModal
-          open={true}
-          onClose={() => setBudgetCat(null)}
-          categoria={budgetCat}
-          mes={mes}
-        />
-      )}
+      <BudgetModal
+        open={budgetOpen}
+        onClose={() => setBudgetOpen(false)}
+        categoria={budgetCat ?? ''}
+        mes={mes}
+      />
     </div>
   )
 }

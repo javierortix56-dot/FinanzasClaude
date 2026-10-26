@@ -1,12 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import * as Dialog from '@radix-ui/react-dialog'
-import { X, Trash2 } from 'lucide-react'
+import { motion } from 'motion/react'
+import { Trash2 } from 'lucide-react'
+import { offerUndo } from '@/lib/undo'
 import { useBudgetStore } from '@finanzas/core/store/useBudgetStore'
 import { upsertBudget, deleteBudget } from '@finanzas/core/lib/budgets'
-import { getCategoryById } from '@finanzas/core/lib/constants'
-import { Button } from '@/components/ui/button'
+import { getCatFromSettings } from '@finanzas/core/lib/constants'
+import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
+import Sheet, { FieldLabel, amountFieldClass } from '@/components/ui/Sheet'
+import Segmented from '@/components/ui/Segmented'
 
 interface Props {
   open: boolean
@@ -20,7 +23,9 @@ const CURRENCIES = ['ARS', 'COP', 'USD']
 export default function BudgetModal({ open, onClose, categoria, mes }: Props) {
   const { getBudget } = useBudgetStore()
   const existing = getBudget(categoria)
-  const cat = getCategoryById(categoria)
+  const settings = useSettingsStore((st) => st.settings)
+  // Busca también en categorías custom (antes solo en los defaults)
+  const cat = getCatFromSettings(categoria, settings)
 
   const [limite,  setLimite]  = useState('')
   const [moneda,  setMoneda]  = useState('ARS')
@@ -48,89 +53,68 @@ export default function BudgetModal({ open, onClose, categoria, mes }: Props) {
 
   async function handleDelete() {
     if (!existing?.id) return
+    const borrado = existing
     setSaving(true)
-    try { await deleteBudget(existing.id); onClose() }
+    try {
+      await deleteBudget(borrado.id!)
+      onClose()
+      offerUndo('Presupuesto eliminado', () => upsertBudget(borrado.mes, borrado.categoria, borrado.limite, borrado.moneda))
+    }
     finally { setSaving(false) }
   }
 
   return (
-    <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/40 z-[60]" />
-        <Dialog.Content
-          className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-surface rounded-t-2xl z-[60] shadow-2xl outline-none"
-          aria-describedby={undefined}
-        >
-          <div className="flex justify-center pt-3 pb-1">
-            <div className="w-10 h-1 bg-gray-200 rounded-full" />
-          </div>
-          <div className="flex items-center justify-between px-5 py-3 border-b border-gray-50">
-            <div>
-              <Dialog.Title className="text-base font-semibold text-gray-900">
-                Presupuesto
-              </Dialog.Title>
-              {cat && (
-                <p className="text-xs font-medium mt-0.5" style={{ color: cat.color }}>
-                  {cat.nombre}
-                </p>
-              )}
-            </div>
-            <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100">
-              <X size={16} className="text-gray-500" />
-            </button>
-          </div>
-
-          <div className="px-5 pt-4 pb-8 space-y-4">
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                Límite mensual
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="0"
-                  value={limite}
-                  onChange={(e) => setLimite(e.target.value)}
-                  className="flex-1 text-2xl font-bold text-gray-900 bg-gray-50 rounded-xl px-4 py-3 border-0 outline-none focus:ring-2 focus:ring-primary"
-                />
-                <div className="flex flex-col gap-1">
-                  {CURRENCIES.map((c) => (
-                    <button
-                      key={c}
-                      onClick={() => setMoneda(c)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                        moneda === c ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500'
-                      }`}
-                    >
-                      {c}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              {existing && (
-                <button
-                  onClick={handleDelete}
-                  disabled={saving}
-                  className="w-11 h-11 flex-shrink-0 flex items-center justify-center rounded-xl border-2 border-red-100 text-red-400 hover:bg-red-50"
-                >
-                  <Trash2 size={17} />
-                </button>
-              )}
-              <Button
-                onClick={handleSave}
-                disabled={saving || !limite}
-                className="flex-1 h-11 font-semibold"
-              >
-                {saving ? 'Guardando...' : existing ? 'Actualizar' : 'Guardar presupuesto'}
-              </Button>
-            </div>
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title="Presupuesto"
+      subtitle={cat && <span className="font-semibold" style={{ color: cat.color }}>{cat.nombre}</span>}
+      bodyClassName="px-5 pb-4 space-y-4"
+      zIndex={60}
+      footer={
+        <div className="flex gap-2">
+          {existing && (
+            <motion.button
+              whileTap={{ scale: 0.92 }}
+              onClick={handleDelete}
+              disabled={saving}
+              className="w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-2xl bg-rose-500/10 text-rose-500 hover:bg-rose-500/15"
+              aria-label="Eliminar presupuesto"
+            >
+              <Trash2 size={17} />
+            </motion.button>
+          )}
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={handleSave}
+            disabled={saving || !limite}
+            className="flex-1 h-12 rounded-2xl bg-brand text-white text-sm font-bold shadow-soft disabled:opacity-40"
+          >
+            {saving ? 'Guardando...' : existing ? 'Actualizar' : 'Guardar presupuesto'}
+          </motion.button>
+        </div>
+      }
+    >
+      <div>
+        <FieldLabel>Límite mensual</FieldLabel>
+        <input
+          type="text"
+          inputMode="decimal"
+          placeholder="0"
+          value={limite}
+          onChange={(e) => setLimite(e.target.value)}
+          className={amountFieldClass}
+        />
+        <Segmented
+          id="budget-moneda"
+          size="sm"
+          value={moneda}
+          onChange={setMoneda}
+          options={CURRENCIES.map((c) => ({ value: c, label: c }))}
+          variant="solid"
+          className="mt-2"
+        />
+      </div>
+    </Sheet>
   )
 }

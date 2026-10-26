@@ -180,6 +180,22 @@ export async function deleteTransaction(id: string) {
   if (error) throw error
 }
 
+/** Deshace un soft delete (botón "Deshacer"): vuelve a mostrar el movimiento. */
+export async function restoreTransaction(tx: Transaction) {
+  useTransactionStore.getState().upsertTransaction(tx)
+  const { error } = await supabase.from('movimientos').update({ deleted_at: null }).eq('id', tx.id!)
+  if (error) throw error
+}
+
+/** Igual que restoreTransaction, para varios movimientos a la vez. */
+export async function restoreTransactions(txs: Transaction[]) {
+  if (txs.length === 0) return
+  const store = useTransactionStore.getState()
+  txs.forEach((t) => store.upsertTransaction(t))
+  const { error } = await supabase.from('movimientos').update({ deleted_at: null }).in('id', txs.map((t) => t.id!))
+  if (error) throw error
+}
+
 export async function markEjecutado(id: string, ejecutado: boolean) {
   // Optimista: el check cambia al instante
   useTransactionStore.getState().patchTransaction(id, { ejecutado })

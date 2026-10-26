@@ -1,12 +1,12 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import * as Dialog from '@radix-ui/react-dialog'
-import { X, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { motion } from 'motion/react'
+import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { Asset } from '@finanzas/core/types'
 import { upsertSnapshot } from '@finanzas/core/lib/assets'
 import { formatAmount, getCurrentMonth, monthLabel } from '@finanzas/core/lib/constants'
-import { Button } from '@/components/ui/button'
+import Sheet, { FieldLabel, fieldClass, amountFieldClass } from '@/components/ui/Sheet'
 
 interface Props {
   open: boolean
@@ -104,113 +104,101 @@ export default function SnapshotModal({ open, onClose, asset }: Props) {
     }
   }
 
-  if (!asset) return null
-
   const revalIcon = reval > 0 ? <TrendingUp size={12} /> : reval < 0 ? <TrendingDown size={12} /> : <Minus size={12} />
-  const revalColor = reval > 0 ? 'text-green-600' : reval < 0 ? 'text-red-400' : 'text-gray-400'
+  const revalColor = reval > 0 ? 'text-emerald-600' : reval < 0 ? 'text-rose-500' : 'text-gray-400'
 
   return (
-    <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/40 z-50" />
-        <Dialog.Content
-          className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-surface rounded-t-2xl z-50 shadow-2xl outline-none"
-          aria-describedby={undefined}
+    <Sheet
+      open={open && !!asset}
+      onClose={onClose}
+      title="Actualizar mes"
+      subtitle={asset?.nombre}
+      bodyClassName="px-5 pb-4 space-y-5"
+      footer={
+        <motion.button
+          whileTap={{ scale: 0.97 }}
+          onClick={handleSave}
+          disabled={saving || saldo === ''}
+          className="w-full h-12 rounded-2xl bg-brand text-white text-sm font-bold shadow-soft disabled:opacity-40"
         >
-          <div className="flex justify-center pt-3 pb-1">
-            <div className="w-10 h-1 bg-gray-200 rounded-full" />
+          {saving ? 'Guardando...' : 'Guardar snapshot'}
+        </motion.button>
+      }
+    >
+      {asset && (
+        <>
+          {/* Selector de mes */}
+          <div>
+            <FieldLabel>Mes</FieldLabel>
+            <select
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+              className={`${fieldClass} capitalize`}
+            >
+              {monthOptions.map((m) => (
+                <option key={m} value={m}>{monthLabel(m)}</option>
+              ))}
+            </select>
           </div>
 
-          <div className="flex items-center justify-between px-5 py-3 border-b border-gray-50">
-            <div>
-              <Dialog.Title className="text-base font-semibold text-gray-900">
-                Actualizar mes
-              </Dialog.Title>
-              <p className="text-xs text-gray-400">{asset.nombre}</p>
-            </div>
-            <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100">
-              <X size={16} className="text-gray-500" />
-            </button>
+          {/* Aporte / retiro */}
+          <div>
+            <FieldLabel>Aporte / retiro del mes ({asset.moneda})</FieldLabel>
+            <input
+              type="text"
+              inputMode="decimal"
+              placeholder="0"
+              value={aporte}
+              onChange={(e) => setAporte(e.target.value)}
+              className={amountFieldClass}
+            />
+            <p className="text-xs text-gray-400 mt-1.5">
+              Positivo si compraste / depositaste, negativo si vendiste / retiraste
+            </p>
           </div>
 
-          <div className="px-5 pt-4 pb-8 space-y-5">
-            {/* Selector de mes */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                Mes
-              </label>
-              <select
-                value={month}
-                onChange={(e) => setMonth(e.target.value)}
-                className="w-full h-11 px-3 bg-gray-50 rounded-xl border border-gray-200 text-gray-700 outline-none focus:ring-2 focus:ring-primary/30 capitalize"
-              >
-                {monthOptions.map((m) => (
-                  <option key={m} value={m}>{monthLabel(m)}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Aporte / retiro */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                Aporte / retiro del mes ({asset.moneda})
-              </label>
-              <input
-                type="text"
-                inputMode="decimal"
-                placeholder="0"
-                value={aporte}
-                onChange={(e) => setAporte(e.target.value)}
-                className="w-full text-2xl font-bold text-gray-900 bg-gray-50 rounded-xl px-4 py-3 border-0 outline-none focus:ring-2 focus:ring-primary"
-              />
-              <p className="text-xs text-gray-400">
-                Positivo si compraste / depositaste, negativo si vendiste / retiraste
-              </p>
-            </div>
-
-            {/* Saldo al cierre */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                Saldo al cierre del mes ({asset.moneda})
-              </label>
-              <input
-                type="text"
-                inputMode="decimal"
-                placeholder="0"
-                value={saldo}
-                onChange={(e) => setSaldo(e.target.value)}
-                className="w-full text-2xl font-bold text-gray-900 bg-gray-50 rounded-xl px-4 py-3 border-0 outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
-
-            {/* Resumen calculado */}
-            <div className="rounded-xl bg-primary/5 border border-primary/10 p-3 space-y-1.5">
-              <div className="flex justify-between text-xs text-gray-500">
-                <span>Saldo previo</span>
-                <span className="tabular-nums">{formatAmount(saldoPrev, asset.moneda)}</span>
-              </div>
-              <div className="flex justify-between text-xs text-gray-500">
-                <span>Aporte / retiro</span>
-                <span className="tabular-nums">
-                  {aporteNum >= 0 ? '+' : ''}{formatAmount(aporteNum, asset.moneda)}
-                </span>
-              </div>
-              <div className={`flex justify-between text-xs font-semibold ${revalColor}`}>
-                <span className="flex items-center gap-1">
-                  {revalIcon} Revalorización
-                </span>
-                <span className="tabular-nums">
-                  {reval >= 0 ? '+' : ''}{formatAmount(reval, asset.moneda)}
-                </span>
-              </div>
-            </div>
-
-            <Button onClick={handleSave} disabled={saving || saldo === ''} className="w-full h-11">
-              {saving ? 'Guardando...' : 'Guardar snapshot'}
-            </Button>
+          {/* Saldo al cierre */}
+          <div>
+            <FieldLabel>Saldo al cierre del mes ({asset.moneda})</FieldLabel>
+            <input
+              type="text"
+              inputMode="decimal"
+              placeholder="0"
+              value={saldo}
+              onChange={(e) => setSaldo(e.target.value)}
+              className={amountFieldClass}
+            />
           </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+
+          {/* Resumen calculado */}
+          <div className="rounded-[20px] bg-primary/[0.06] ring-1 ring-primary/15 p-3.5 space-y-2">
+            <div className="flex justify-between text-xs text-gray-500">
+              <span>Saldo previo</span>
+              <span className="tabular-nums">{formatAmount(saldoPrev, asset.moneda)}</span>
+            </div>
+            <div className="flex justify-between text-xs text-gray-500">
+              <span>Aporte / retiro</span>
+              <span className="tabular-nums">
+                {aporteNum >= 0 ? '+' : ''}{formatAmount(aporteNum, asset.moneda)}
+              </span>
+            </div>
+            <div className="h-px bg-primary/15" />
+            <motion.div
+              key={Math.sign(reval)}
+              initial={{ opacity: 0.4, y: 2 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`flex justify-between text-sm font-bold ${revalColor}`}
+            >
+              <span className="flex items-center gap-1">
+                {revalIcon} Revalorización
+              </span>
+              <span className="tabular-nums">
+                {reval >= 0 ? '+' : ''}{formatAmount(reval, asset.moneda)}
+              </span>
+            </motion.div>
+          </div>
+        </>
+      )}
+    </Sheet>
   )
 }

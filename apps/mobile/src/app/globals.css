@@ -1,14 +1,32 @@
 @import "tailwindcss";
 
+/* ── Tokens de marca ──────────────────────────────────────────────────────────
+   Superficies "glass" (translúcidas + blur) sobre un fondo ambiental con
+   gradientes suaves. Todo color de superficie sale de estas variables para
+   que el modo oscuro sea un simple cambio de tokens. */
 :root {
-  --background: #f9fafb;
-  --foreground: #171717;
+  --background: #f3f2fa;
+  --foreground: #14131c;
   --surface: #ffffff;
-  --primary: #534AB7;
+  --primary: #5b4fd6;
+  --primary-2: #8b7bff;
   --primary-foreground: #ffffff;
-  --income: #22c55e;
-  --expense: #ef4444;
-  --unassigned: #f97316;
+  --income: #10b981;
+  --expense: #f43f5e;
+  --unassigned: #f59e0b;
+
+  --glass: rgba(255, 255, 255, 0.62);
+  --glass-strong: rgba(255, 255, 255, 0.86);
+  --sheet: rgba(250, 250, 255, 0.94);
+  --glass-border: rgba(255, 255, 255, 0.75);
+  --hairline: rgba(20, 19, 28, 0.06);
+  --shadow-soft: 0 1px 2px rgba(20, 19, 28, 0.04), 0 10px 30px -12px rgba(83, 74, 183, 0.22);
+  --shadow-lift: 0 2px 6px rgba(20, 19, 28, 0.06), 0 22px 44px -16px rgba(83, 74, 183, 0.35);
+
+  color-scheme: light;
+  --blob-1: #a99cff;
+  --blob-2: #7dd3fc;
+  --blob-3: #f9a8d4;
 }
 
 @theme inline {
@@ -16,10 +34,15 @@
   --color-foreground: var(--foreground);
   --color-surface: var(--surface);
   --color-primary: var(--primary);
+  --color-primary-2: var(--primary-2);
   --color-primary-foreground: var(--primary-foreground);
   --color-income: var(--income);
   --color-expense: var(--expense);
   --color-unassigned: var(--unassigned);
+  --color-glass: var(--glass);
+  --color-glass-strong: var(--glass-strong);
+  --color-glass-border: var(--glass-border);
+  --color-hairline: var(--hairline);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -29,11 +52,28 @@
    var(--color-*). Redefinir esas variables acá invierte toda la UI sin tocar
    clases. text-white y los tonos 400-700 saturados no se tocan: siguen
    legibles sobre fondos oscuros. */
+/* Dos caminos al tema oscuro: el sistema (si el usuario no forzó "claro") o
+   la elección manual en Ajustes (data-theme="dark" en <html>). */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #101218;
+  :root:not([data-theme="light"]) {
+    --background: #0c0d14;
     --foreground: #f2f4f8;
-    --surface: #1a1d26;
+    --surface: #171923;
+    --primary: #7b6ff0;
+    --primary-2: #a59bff;
+
+    --glass: rgba(28, 30, 42, 0.55);
+    --glass-strong: rgba(30, 32, 46, 0.86);
+    --sheet: rgba(22, 24, 34, 0.95);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --hairline: rgba(255, 255, 255, 0.06);
+    --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px -14px rgba(0, 0, 0, 0.6);
+    --shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.35), 0 24px 48px -16px rgba(0, 0, 0, 0.7);
+
+    color-scheme: dark;
+    --blob-1: #4c3fb8;
+    --blob-2: #0e5a78;
+    --blob-3: #6b1f4f;
 
     /* Rampa de grises invertida (50 = fondos, 900 = texto principal) */
     --color-gray-50:  #151823;
@@ -51,27 +91,196 @@
     --color-green-50:  #122a1c;
     --color-green-100: #1a3d28;
     --color-green-200: #245538;
+    --color-emerald-50: #0f2a22;
     --color-red-50:    #2c1519;
     --color-red-100:   #401e24;
     --color-red-200:   #57282f;
+    --color-rose-50:   #2c1520;
     --color-amber-50:  #2c2312;
+    --color-amber-100: #3a2e14;
+    --color-amber-200: #4d3c18;
     --color-blue-50:   #14203a;
     --color-blue-200:  #274572;
     --color-orange-50: #2d1d10;
   }
 }
 
+:root[data-theme="dark"] {
+  --background: #0c0d14;
+  --foreground: #f2f4f8;
+  --surface: #171923;
+  --primary: #7b6ff0;
+  --primary-2: #a59bff;
+
+  --glass: rgba(28, 30, 42, 0.55);
+  --glass-strong: rgba(30, 32, 46, 0.86);
+  --sheet: rgba(22, 24, 34, 0.95);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --hairline: rgba(255, 255, 255, 0.06);
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px -14px rgba(0, 0, 0, 0.6);
+  --shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.35), 0 24px 48px -16px rgba(0, 0, 0, 0.7);
+
+  color-scheme: dark;
+  --blob-1: #4c3fb8;
+  --blob-2: #0e5a78;
+  --blob-3: #6b1f4f;
+
+  /* Rampa de grises invertida (50 = fondos, 900 = texto principal) */
+  --color-gray-50:  #151823;
+  --color-gray-100: #232734;
+  --color-gray-200: #2f3444;
+  --color-gray-300: #434a5e;
+  --color-gray-400: #8f97ab;
+  --color-gray-500: #a6adc0;
+  --color-gray-600: #bac1d2;
+  --color-gray-700: #cfd4e2;
+  --color-gray-800: #e3e7f0;
+  --color-gray-900: #f2f4f8;
+
+  /* Tintes suaves (solo tonos 50-200 usados como fondos/bordes) */
+  --color-green-50:  #122a1c;
+  --color-green-100: #1a3d28;
+  --color-green-200: #245538;
+  --color-emerald-50: #0f2a22;
+  --color-red-50:    #2c1519;
+  --color-red-100:   #401e24;
+  --color-red-200:   #57282f;
+  --color-rose-50:   #2c1520;
+  --color-amber-50:  #2c2312;
+  --color-amber-100: #3a2e14;
+  --color-amber-200: #4d3c18;
+  --color-blue-50:   #14203a;
+  --color-blue-200:  #274572;
+  --color-orange-50: #2d1d10;
+}
+
+/* ── Utilidades de superficie ─────────────────────────────────────────────── */
+@utility glass {
+  background-color: var(--glass);
+  backdrop-filter: blur(22px) saturate(170%);
+  -webkit-backdrop-filter: blur(22px) saturate(170%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-soft);
+}
+
+@utility glass-strong {
+  background-color: var(--glass-strong);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-lift);
+}
+
+/* Superficie de bottom sheets: casi opaca para que el fondo no compita */
+@utility sheet-surface {
+  background-color: var(--sheet);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  border-top: 1px solid var(--glass-border);
+  box-shadow: 0 -12px 40px -12px rgba(20, 19, 28, 0.25);
+}
+
+@utility shadow-soft {
+  box-shadow: var(--shadow-soft);
+}
+
+@utility shadow-lift {
+  box-shadow: var(--shadow-lift);
+}
+
+/* Gradiente de marca para héroes y CTA */
+@utility bg-brand {
+  background-image:
+    radial-gradient(120% 140% at 100% 0%, rgba(255, 255, 255, 0.22) 0%, transparent 45%),
+    linear-gradient(135deg, var(--primary-2) 0%, var(--primary) 55%, #3b2fa0 100%);
+}
+
+/* Etiqueta de sección (sobre-título en mayúsculas) */
+@utility eyebrow {
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-gray-500);
+}
+
+/* Zona táctil mínima de 44×44 px sin cambiar el tamaño visual */
+@utility hit-44 {
+  position: relative;
+  &::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
+
+/* ── Fondo ambiental ──────────────────────────────────────────────────────── */
+@keyframes drift-a {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50%      { transform: translate3d(30px, 40px, 0) scale(1.08); }
+}
+@keyframes drift-b {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50%      { transform: translate3d(-40px, -20px, 0) scale(1.12); }
+}
+
+.ambient-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(70px);
+  opacity: 0.55;
+  will-change: transform;
+}
+.ambient-blob.a { animation: drift-a 22s ease-in-out infinite; }
+.ambient-blob.b { animation: drift-b 26s ease-in-out infinite; }
+.ambient-blob.c { animation: drift-a 30s ease-in-out infinite reverse; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-blob { animation: none !important; }
+}
+
+/* Skeleton con brillo en barrido */
+@keyframes shimmer {
+  100% { transform: translateX(100%); }
+}
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--color-gray-100);
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  animation: shimmer 1.4s infinite;
+}
+
+/* ── Base ─────────────────────────────────────────────────────────────────── */
 html {
   background: var(--background);
 }
 
 body {
-  background: var(--background);
+  /* Transparente: el fondo ambiental (fixed, z negativo) se ve a través */
+  background: transparent;
   color: var(--foreground);
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   max-width: 390px;
   margin: 0 auto;
   overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
 }
 
 * {
@@ -83,7 +292,23 @@ input, select, textarea {
   font-size: max(16px, 1em);
 }
 
+/* Inputs de monto: la clase es más específica que el selector de elemento
+   de arriba (ambos fuera de capas), así que el tamaño grande gana. */
+.amount-input { font-size: 30px; }
+.amount-input-xl { font-size: 40px; }
+
 .blur-amount {
   filter: blur(8px);
   user-select: none;
+}
+
+/* Accesibilidad: con "Reducir transparencia" las superficies glass pasan a
+   ser sólidas (también alivia el costo del blur en equipos modestos). */
+@media (prefers-reduced-transparency: reduce) {
+  .glass, .glass-strong, .sheet-surface {
+    background-color: var(--surface);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .ambient-blob { display: none; }
 }

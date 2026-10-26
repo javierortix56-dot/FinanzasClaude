@@ -139,6 +139,15 @@ export async function updateAsset(id: string, data: Partial<Omit<Asset, 'id'>>) 
   }
 }
 
+/** Re-crea una cuenta borrada con su mismo id (botón "Deshacer"). */
+export async function restoreAsset(asset: Asset) {
+  const { error } = await supabase
+    .from('cuentas')
+    .insert({ id: asset.id, ...assetToRow(asset), snapshots: asset.snapshots ?? [] })
+  if (error) throw error
+  useAssetStore.getState().upsertAsset(asset)
+}
+
 export async function deleteAsset(id: string) {
   const { error } = await supabase.from('cuentas').delete().eq('id', id)
   if (error) throw error
