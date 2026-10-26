@@ -3,6 +3,7 @@
 // (cobros que se repiten mes a mes), gastos hormiga, comercios principales,
 // cuotas en curso, cargos bancarios y consumos que no están cargados en la app.
 import { toBase } from './currency'
+import { shiftMonth } from './constants'
 import { Currency, Resumen, ResumenItem, Settings, Transaction } from '../types'
 
 /** Clave estable para agrupar un comercio entre meses */
@@ -51,9 +52,18 @@ export interface Hormiga {
 export interface CuotaEnCurso {
   comercio: string; emisor: string; moneda: Currency
   actual: number; total: number; montoCuota: number; restantes: number; restante: number
+  /** Mes 'YYYY-MM' en que vence la última cuota */
+  finMes: string
+  /** id de categoría sugerida (null si no hay una razonable) */
+  categoria: string | null
 }
 
-export interface Cargo { tipo: 'impuesto' | 'interes' | 'comision'; descripcion: string; montoBase: number }
+/** Cuánto de los próximos resúmenes ya está comprometido por cuotas */
+export interface CompromisoMes { mes: string; totalBase: number; cantidad: number }
+
+export type TipoCargo = 'impuesto' | 'interes' | 'comision'
+export interface Cargo { tipo: TipoCargo; descripcion: string; montoBase: number }
+export interface CargoPorTipo { tipo: TipoCargo; cantidad: number; totalBase: number }
 
 export interface AnalisisPeriodo {
   periodo: string
@@ -63,7 +73,17 @@ export interface AnalisisPeriodo {
   hormiga: Hormiga
   topComercios: ComercioTotal[]
   cuotas: CuotaEnCurso[]
-  cargos: { totalBase: number; items: Cargo[] }
+  /** Cuotas que siguen cayendo en los meses siguientes (hasta que terminan) */
+  compromiso: CompromisoMes[]
+  /** Último mes con cuotas pendientes (null si no hay) */
+  libreDesde: string | null
+  cargos: {
+    totalBase: number
+    /** % sobre el gasto total del resumen */
+    pctDelTotal: number
+    porTipo: CargoPorTipo[]
+    items: Cargo[]
+  }
 }
 
 /**
@@ -186,15 +206,42 @@ export function analizarPeriodo(todos: Resumen[], periodo: string, base: Currenc
         comercio: i.comercio, emisor: i.emisor, moneda: i.moneda,
         actual: i.cuotaActual!, total: i.cuotaTotal!, montoCuota: i.monto,
         restantes, restante: restantes * i.monto,
+        finMes: shiftMonth(periodo, restantes),
+        categoria: i.categoria,
       }
     })
-    .sort((a, b) => b.restante - a.restante)
+    // Primero las que terminan más tarde (las que más pesan en el tiempo)
+    .sort((a, b) => b.finMes.localeCompare(a.finMes) || b.restante - a.restante)
+
+  // Compromiso mes a mes: cada cuota vuelve a caer en los `restantes` meses
+  // siguientes. Los meses futuros se convierten con la cotización actual.
+  const compromisoPorMes = new Map<string, CompromisoMes>()
+  for (const c of cuotas) {
+    for (let k = 1; k <= c.restantes; k++) {
+      const mes = shiftMonth(periodo, k)
+      const m = compromisoPorMes.get(mes) ?? { mes, totalBase: 0, cantidad: 0 }
+      m.totalBase += toBase(c.montoCuota, c.moneda, base, s)
+      m.cantidad += 1
+      compromisoPorMes.set(mes, m)
+    }
+  }
+  const compromiso = [...compromisoPorMes.values()].sort((a, b) => a.mes.localeCompare(b.mes))
+  const libreDesde = compromiso.length > 0 ? compromiso[compromiso.length - 1].mes : null
 
   // ── Cargos bancarios (impuestos, intereses, comisiones)
   const cargosItems: Cargo[] = items
     .filter((i) => i.monto > 0 && (i.tipo === 'impuesto' || i.tipo === 'interes' || i.tipo === 'comision'))
     .map((i) => ({ tipo: i.tipo as Cargo['tipo'], descripcion: i.descripcion, montoBase: enBase(i) }))
     .sort((a, b) => b.montoBase - a.montoBase)
+
+  const cargosTotal = cargosItems.reduce((a, c) => a + c.montoBase, 0)
+  const porTipo: CargoPorTipo[] = (['impuesto', 'interes', 'comision'] as TipoCargo[])
+    .map((tipo) => {
+      const xs = cargosItems.filter((c) => c.tipo === tipo)
+      return { tipo, cantidad: xs.length, totalBase: xs.reduce((a, c) => a + c.montoBase, 0) }
+    })
+    .filter((t) => t.cantidad > 0)
+    .sort((a, b) => b.totalBase - a.totalBase)
 
   return {
     periodo,
@@ -204,7 +251,14 @@ export function analizarPeriodo(todos: Resumen[], periodo: string, base: Currenc
     hormiga,
     topComercios,
     cuotas,
-    cargos: { totalBase: cargosItems.reduce((a, c) => a + c.montoBase, 0), items: cargosItems },
+    compromiso,
+    libreDesde,
+    cargos: {
+      totalBase: cargosTotal,
+      pctDelTotal: totalGastosBase + cargosTotal > 0 ? (cargosTotal / (totalGastosBase + cargosTotal)) * 100 : 0,
+      porTipo,
+      items: cargosItems,
+    },
   }
 }
 
@@ -248,4 +302,17 @@ export function noCargados(items: ResumenItem[], transacciones: Transaction[]): 
     else faltan.push(i)
   }
   return faltan.sort((a, b) => a.fecha.localeCompare(b.fecha))
+}
+
+export const ETIQUETA_CARGO: Record<TipoCargo, { singular: string; plural: string }> = {
+  impuesto: { singular: 'Impuesto', plural: 'Impuestos' },
+  interes: { singular: 'Interés', plural: 'Intereses' },
+  comision: { singular: 'Comisión', plural: 'Comisiones' },
+}
+
+/** 'YYYY-MM' → "Oct 26" */
+export function mesCorto(mes: string): string {
+  const nombres = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+  const [y, m] = mes.split('-').map(Number)
+  return `${nombres[m - 1]} ${String(y).slice(2)}`
 }

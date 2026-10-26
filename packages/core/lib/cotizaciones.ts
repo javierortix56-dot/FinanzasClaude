@@ -37,15 +37,27 @@ const redondear = (n: number) => Math.round(n * 100) / 100
 
 export interface CotizacionesHoy { ARS_USD: number; COP_USD: number }
 
-/** Cotización del día para la fuente elegida */
-export async function fetchCotizacionesHoy(fuente: Exclude<FuenteCambio, 'manual'>): Promise<CotizacionesHoy> {
-  const [ars, cop] = await Promise.all([
+/**
+ * Cotización del día para la fuente elegida. Si una de las dos fuentes falla
+ * (son servicios públicos y pueden caerse un rato), se conserva el valor
+ * anterior de esa moneda en lugar de descartar también la otra; `completa`
+ * indica si las dos respondieron.
+ */
+export async function fetchCotizacionesHoy(
+  fuente: Exclude<FuenteCambio, 'manual'>,
+  previo?: CotizacionesHoy,
+): Promise<CotizacionesHoy & { completa: boolean }> {
+  const [ars, cop] = await Promise.allSettled([
     getJSON<{ venta: number }>(`https://dolarapi.com/v1/dolares/${CASA[fuente]}`),
     getJSON<{ valor: string }[]>('https://www.datos.gov.co/resource/32sa-8pi3.json?$limit=1&$order=vigenciadesde%20DESC'),
   ])
-  const COP_USD = parseFloat(cop[0]?.valor ?? '')
-  if (!(ars.venta > 0) || !(COP_USD > 0)) throw new Error('cotización inválida')
-  return { ARS_USD: ars.venta, COP_USD: redondear(COP_USD) }
+  const arsNuevo = ars.status === 'fulfilled' && ars.value.venta > 0 ? ars.value.venta : null
+  const copRaw = cop.status === 'fulfilled' ? parseFloat(cop.value[0]?.valor ?? '') : NaN
+  const copNuevo = copRaw > 0 ? redondear(copRaw) : null
+  const ARS_USD = arsNuevo ?? previo?.ARS_USD
+  const COP_USD = copNuevo ?? previo?.COP_USD
+  if (!(ARS_USD && ARS_USD > 0) || !(COP_USD && COP_USD > 0)) throw new Error('cotización no disponible')
+  return { ARS_USD, COP_USD, completa: arsNuevo !== null && copNuevo !== null }
 }
 
 /** Promedio mensual de los meses pedidos (los que falten en la fuente no se devuelven) */
@@ -55,12 +67,17 @@ export async function fetchPromediosMensuales(
 ): Promise<ExchangeRateRecord[]> {
   if (meses.length === 0) return []
   const desde = [...meses].sort()[0]
-  const [ars, cop] = await Promise.all([
+  const [arsRes, copRes] = await Promise.allSettled([
     getJSON<{ fecha: string; venta: number }[]>(`https://api.argentinadatos.com/v1/cotizaciones/dolares/${CASA[fuente]}`),
     getJSON<{ valor: string; vigenciadesde: string }[]>(
       `https://www.datos.gov.co/resource/32sa-8pi3.json?$limit=5000&$where=vigenciadesde%20%3E%3D%20'${desde}-01T00:00:00'`,
     ),
   ])
+  // Sin las dos fuentes no se puede armar ningún promedio: los meses quedan
+  // pendientes y se reintentan en la próxima sincronización.
+  if (arsRes.status !== 'fulfilled' || copRes.status !== 'fulfilled') return []
+  const ars = arsRes.value
+  const cop = copRes.value
   const arsPorMes = new Map<string, number[]>()
   for (const r of ars) {
     const m = r.fecha?.slice(0, 7)
@@ -103,7 +120,7 @@ export function syncCotizaciones(s: Settings, { force = false } = {}): Promise<b
     if (!force && reciente) return false
 
     const [hoy, nuevos] = await Promise.all([
-      fetchCotizacionesHoy(fuente),
+      fetchCotizacionesHoy(fuente, s.tipoCambio),
       fetchPromediosMensuales(fuente, faltantes),
     ])
     const porMes = new Map((s.historialTipoCambio ?? []).map((h) => [h.mes, h]))
@@ -111,11 +128,12 @@ export function syncCotizaciones(s: Settings, { force = false } = {}): Promise<b
     const historialTipoCambio = [...porMes.values()].sort((a, b) => a.mes.localeCompare(b.mes))
 
     await updateSettings('shared', {
-      tipoCambio: hoy,
+      tipoCambio: { ARS_USD: hoy.ARS_USD, COP_USD: hoy.COP_USD },
       historialTipoCambio,
-      cambioActualizado: new Date().toISOString(),
+      // Si una fuente falló no se marca como actualizada: se reintenta al próximo arranque
+      ...(hoy.completa ? { cambioActualizado: new Date().toISOString() } : {}),
     })
-    return true
+    return hoy.completa
   })()
     .catch((err) => {
       console.warn('[cotizaciones] no se pudo sincronizar:', err)

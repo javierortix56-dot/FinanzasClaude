@@ -14,6 +14,8 @@ import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { getCatFromSettings, monthLabel } from '@finanzas/core/lib/constants'
 import { CategoryIcon } from '@/lib/categoryIcons'
 import { Currency, Resumen, ResumenItem, Settings } from '@finanzas/core/types'
+import { ETIQUETA_CARGO, mesCorto } from '@finanzas/core/lib/resumenAnalisis'
+import { toBase } from '@finanzas/core/lib/currency'
 import Card from '@/components/ui/Card'
 import Sheet from '@/components/ui/Sheet'
 import ProgressBar from '@/components/ui/ProgressBar'
@@ -187,20 +189,60 @@ export default function ResumenesTab() {
                   <Plus size={12} /> Agregar {r.cuotasNuevas.length} a Cuotas
                 </button>
               ) : undefined}>
-              {a.cuotas.map((c, k) => (
-                <Fila key={k} titulo={c.comercio} meta={`${c.emisor} · ${c.actual}/${c.total}`}
-                  derecha={<>
-                    <p className="text-[13px] font-bold text-gray-900"><Money value={c.montoCuota} currency={c.moneda} /></p>
-                    <p className="text-[10.5px] text-gray-400">restan <Money value={c.restante} currency={c.moneda} animated={false} /></p>
-                  </>} />
-              ))}
+              <p className="mb-2 text-xs text-gray-500 leading-relaxed">
+                Falta pagar <b className="text-gray-900"><Money value={a.cuotas.reduce((t, c) => t + toBase(c.restante, c.moneda, base, s), 0)} currency={base} /></b>
+                {a.libreDesde && <> · la última cuota vence en <b className="text-gray-900">{monthLabel(a.libreDesde)}</b></>}
+              </p>
+              {a.compromiso.length > 0 && (
+                <div className="mb-3 rounded-2xl bg-gray-500/[0.06] px-3 py-3">
+                  <p className="eyebrow mb-2">Ya comprometido en los próximos resúmenes</p>
+                  <div className="flex items-end gap-1 h-20">
+                    {a.compromiso.slice(0, 8).map((m) => {
+                      const max = Math.max(...a.compromiso.slice(0, 8).map((x) => x.totalBase))
+                      return (
+                        <div key={m.mes} className="h-full flex-1 min-w-0 flex flex-col items-center justify-end gap-1">
+                          <div className="w-full rounded-t-md bg-primary/70" style={{ height: `${Math.max((m.totalBase / max) * 100, 6)}%` }} />
+                          <span className="text-[9.5px] text-gray-400">{mesCorto(m.mes)}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <p className="mt-2 text-[11px] text-gray-500">
+                    Próximo mes: <b className="text-gray-900"><Money value={a.compromiso[0].totalBase} currency={base} /></b> en {a.compromiso[0].cantidad} cuota{a.compromiso[0].cantidad !== 1 ? 's' : ''}
+                  </p>
+                </div>
+              )}
+              {a.cuotas.map((c, k) => {
+                const cat = c.categoria ? getCatFromSettings(c.categoria, s) : undefined
+                return (
+                  <Fila key={k} titulo={c.comercio} meta={`${c.emisor} · ${c.actual}/${c.total} · ${cat?.nombre ?? 'sin categoría'}`}
+                    derecha={<>
+                      <p className="text-[13px] font-bold text-gray-900"><Money value={c.montoCuota} currency={c.moneda} /></p>
+                      <p className="text-[10.5px] text-gray-400">
+                        {c.restantes === 0 ? 'última cuota' : <>hasta {mesCorto(c.finMes)} · restan <Money value={c.restante} currency={c.moneda} animated={false} /></>}
+                      </p>
+                    </>} />
+                )
+              })}
             </Card>
           )}
 
           {a.cargos.items.length > 0 && (
             <Card title="Impuestos, intereses y comisiones" delay={0.24}>
-              {a.cargos.items.slice(0, 8).map((c, k) => (
-                <Fila key={k} titulo={c.descripcion} meta={c.tipo === 'impuesto' ? 'Impuesto' : c.tipo === 'interes' ? 'Interés' : 'Comisión'}
+              <p className="mb-2 text-xs text-gray-500 leading-relaxed">
+                <b className="text-gray-900"><Money value={a.cargos.totalBase} currency={base} /></b> además de los consumos ({a.cargos.pctDelTotal.toFixed(1)}% de lo cobrado)
+              </p>
+              <div className="mb-2 grid grid-cols-3 gap-1.5">
+                {a.cargos.porTipo.map((t) => (
+                  <div key={t.tipo} className="rounded-2xl bg-gray-500/[0.06] px-2.5 py-2">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{ETIQUETA_CARGO[t.tipo].plural}</p>
+                    <p className="mt-1 text-[12.5px] font-bold text-gray-900 truncate"><Money value={t.totalBase} currency={base} /></p>
+                    <p className="text-[10px] text-gray-400">{t.cantidad} {t.cantidad === 1 ? 'renglón' : 'renglones'}</p>
+                  </div>
+                ))}
+              </div>
+              {a.cargos.items.map((c, k) => (
+                <Fila key={k} titulo={c.descripcion} meta={ETIQUETA_CARGO[c.tipo].singular}
                   derecha={<p className="text-[13px] font-bold text-rose-500"><Money value={c.montoBase} currency={base} /></p>} />
               ))}
             </Card>

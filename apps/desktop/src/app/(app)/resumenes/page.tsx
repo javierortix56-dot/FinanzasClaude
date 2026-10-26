@@ -14,6 +14,8 @@ import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { getCatFromSettings, monthLabel } from '@finanzas/core/lib/constants'
 import { CategoryIcon } from '@finanzas/core/lib/categoryIcons'
 import { Currency, Resumen, ResumenItem, Settings } from '@finanzas/core/types'
+import { toBase } from '@finanzas/core/lib/currency'
+import { ETIQUETA_CARGO, mesCorto } from '@finanzas/core/lib/resumenAnalisis'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
@@ -195,27 +197,64 @@ export default function ResumenesPage() {
             </Seccion>
 
             {a.cuotas.length > 0 && (
-              <Seccion icon={CreditCard} titulo="Cuotas en curso" sub={<>Falta pagar <MoneyText amount={a.cuotas.reduce((t, c) => t + c.restante, 0)} currency={base} /> (aprox., moneda del resumen)</>} delay={0.2}>
+              <Seccion icon={CreditCard} titulo="Cuotas en curso"
+                sub={<>Falta pagar <MoneyText amount={a.cuotas.reduce((t, c) => t + toBase(c.restante, c.moneda, base, s), 0)} currency={base} />
+                  {a.libreDesde && <> · la última cuota vence en <b className="text-foreground">{monthLabel(a.libreDesde)}</b></>}</>} delay={0.2}>
                 {r.cuotasNuevas.length > 0 && (
                   <div className="mb-2 flex items-center justify-between gap-3 rounded-xl bg-primary/8 px-3 py-2 text-xs">
                     <span>{r.cuotasNuevas.length} {r.cuotasNuevas.length === 1 ? 'compra no está' : 'compras no están'} en Cuotas.</span>
                     <Button size="sm" variant="secondary" onClick={r.registrarCuotas}><Plus className="h-3.5 w-3.5" /> Agregar a Cuotas</Button>
                   </div>
                 )}
-                {a.cuotas.map((c, k) => (
-                  <Fila key={k} titulo={c.comercio} meta={`${c.emisor} · cuota ${c.actual} de ${c.total}`}
-                    derecha={<>
-                      <div className="font-semibold tnum"><MoneyText amount={c.montoCuota} currency={c.moneda} /></div>
-                      <div className="text-[11px] text-muted tnum">restan <MoneyText amount={c.restante} currency={c.moneda} /></div>
-                    </>} />
-                ))}
+                {a.compromiso.length > 0 && (
+                  <div className="mb-3 rounded-xl bg-surface-2 px-3 py-3">
+                    <div className="eyebrow !text-[10px] mb-2">Ya comprometido en los próximos resúmenes</div>
+                    <div className="flex items-end gap-1.5 h-24">
+                      {a.compromiso.slice(0, 12).map((m) => {
+                        const max = Math.max(...a.compromiso.slice(0, 12).map((x) => x.totalBase))
+                        return (
+                          <div key={m.mes} className="h-full flex-1 min-w-0 flex flex-col items-center justify-end gap-1" title={`${monthLabel(m.mes)}: ${m.cantidad} cuota${m.cantidad !== 1 ? 's' : ''}`}>
+                            <div className="w-full rounded-t-md bg-primary/70" style={{ height: `${Math.max((m.totalBase / max) * 100, 6)}%` }} />
+                            <span className="text-[10px] text-muted-2">{mesCorto(m.mes)}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                    <div className="mt-2 text-[11px] text-muted">
+                      Próximo mes: <b className="text-foreground tnum"><MoneyText amount={a.compromiso[0].totalBase} currency={base} /></b> en {a.compromiso[0].cantidad} cuota{a.compromiso[0].cantidad !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+                )}
+                {a.cuotas.map((c, k) => {
+                  const cat = c.categoria ? getCatFromSettings(c.categoria, s) : undefined
+                  return (
+                    <Fila key={k} titulo={c.comercio}
+                      meta={<>{c.emisor} · cuota {c.actual} de {c.total} · {cat?.nombre ?? 'sin categoría'}</>}
+                      derecha={<>
+                        <div className="font-semibold tnum"><MoneyText amount={c.montoCuota} currency={c.moneda} /></div>
+                        <div className="text-[11px] text-muted tnum">
+                          {c.restantes === 0 ? 'última cuota' : <>termina {monthLabel(c.finMes)} · restan <MoneyText amount={c.restante} currency={c.moneda} /></>}
+                        </div>
+                      </>} />
+                  )
+                })}
               </Seccion>
             )}
 
             {a.cargos.items.length > 0 && (
-              <Seccion icon={Landmark} titulo="Impuestos, intereses y comisiones" sub="Lo que cobra el banco además de los consumos" delay={0.24}>
-                {a.cargos.items.slice(0, 10).map((c, k) => (
-                  <Fila key={k} titulo={c.descripcion} meta={c.tipo === 'impuesto' ? 'Impuesto' : c.tipo === 'interes' ? 'Interés' : 'Comisión'}
+              <Seccion icon={Landmark} titulo="Impuestos, intereses y comisiones"
+                sub={<>Lo que cobra el banco además de los consumos: <MoneyText amount={a.cargos.totalBase} currency={base} /> ({a.cargos.pctDelTotal.toFixed(1)}% de lo cobrado)</>} delay={0.24}>
+                <div className="mb-2 grid grid-cols-3 gap-2">
+                  {a.cargos.porTipo.map((t) => (
+                    <div key={t.tipo} className="rounded-xl bg-surface-2 px-3 py-2">
+                      <div className="eyebrow !text-[10px]">{ETIQUETA_CARGO[t.tipo].plural}</div>
+                      <div className="mt-1.5 text-sm font-semibold tnum"><MoneyText amount={t.totalBase} currency={base} /></div>
+                      <div className="text-[11px] text-muted">{t.cantidad} {t.cantidad === 1 ? 'renglón' : 'renglones'}</div>
+                    </div>
+                  ))}
+                </div>
+                {a.cargos.items.map((c, k) => (
+                  <Fila key={k} titulo={c.descripcion} meta={ETIQUETA_CARGO[c.tipo].singular}
                     derecha={<div className="font-semibold tnum text-expense"><MoneyText amount={c.montoBase} currency={base} /></div>} />
                 ))}
               </Seccion>
