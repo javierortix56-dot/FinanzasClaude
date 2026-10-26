@@ -5,6 +5,7 @@ import { motion } from 'motion/react'
 import { Trash2, Check } from 'lucide-react'
 import Sheet, { FieldLabel, fieldClass } from '@/components/ui/Sheet'
 import { springPop } from '@/components/ui/motion'
+import { CATEGORY_ICONS, categoryIconName } from '@/lib/categoryIcons'
 import { Category } from '@finanzas/core/types'
 
 const PRESET_COLORS = [
@@ -46,7 +47,7 @@ function ModalBody({ category, onSave, onDelete }: Pick<Props, 'category' | 'onS
   const [nombre, setNombre] = useState(category?.nombre ?? '')
   const [color, setColor] = useState(category?.color ?? PRESET_COLORS[0])
   const [activa, setActiva] = useState(category?.activa ?? true)
-  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [icono, setIcono] = useState(category ? categoryIconName(category) : 'package')
 
   function handleSave() {
     if (!nombre.trim()) return
@@ -55,6 +56,7 @@ function ModalBody({ category, onSave, onDelete }: Pick<Props, 'category' | 'onS
       nombre: nombre.trim(),
       color,
       activa,
+      icono,
     })
   }
 
@@ -97,19 +99,43 @@ function ModalBody({ category, onSave, onDelete }: Pick<Props, 'category' | 'onS
         {nombre.trim() && (
           <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="mt-3 flex gap-2">
             <span
-              className="inline-block px-3.5 py-1.5 rounded-full text-xs font-semibold text-white"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold text-white"
               style={{ backgroundColor: color }}
             >
-              {nombre}
+              <PreviewIcon name={icono} />{nombre}
             </span>
             <span
-              className="inline-block px-3.5 py-1.5 rounded-full text-xs font-semibold"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold"
               style={{ backgroundColor: color + '18', color }}
             >
-              {nombre}
+              <PreviewIcon name={icono} />{nombre}
             </span>
           </motion.div>
         )}
+      </div>
+
+      {/* Ícono */}
+      <div>
+        <FieldLabel>Ícono</FieldLabel>
+        <div className="grid grid-cols-8 gap-1.5">
+          {Object.entries(CATEGORY_ICONS).map(([name, Icon]) => {
+            const sel = icono === name
+            return (
+              <motion.button
+                key={name}
+                type="button"
+                whileTap={{ scale: 0.85 }}
+                onClick={() => setIcono(name)}
+                aria-label={`Ícono ${name}`}
+                aria-pressed={sel}
+                className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors"
+                style={sel ? { backgroundColor: color, color: '#fff' } : { backgroundColor: color + '14', color }}
+              >
+                <Icon size={16} />
+              </motion.button>
+            )
+          })}
+        </div>
       </div>
 
       {/* Toggle activa */}
@@ -128,25 +154,14 @@ function ModalBody({ category, onSave, onDelete }: Pick<Props, 'category' | 'onS
         </span>
       </button>
 
-      {deleteConfirm && (
-        <p className="text-xs text-rose-500 text-center">
-          Tocá el ícono rojo de nuevo para confirmar
-        </p>
-      )}
-
       {/* Acciones */}
       <div className="flex gap-2">
         {category && onDelete && (
           <motion.button
             whileTap={{ scale: 0.92 }}
-            onClick={() => {
-              if (!deleteConfirm) { setDeleteConfirm(true); return }
-              onDelete(category.id)
-            }}
-            className={`w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-2xl transition-colors ${
-              deleteConfirm ? 'bg-rose-500 text-white' : 'bg-rose-500/10 text-rose-500 hover:bg-rose-500/15'
-            }`}
-            aria-label={deleteConfirm ? 'Confirmar eliminación' : 'Eliminar categoría'}
+            onClick={() => onDelete(category.id)}
+            className="w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-2xl transition-colors bg-rose-500/10 text-rose-500 hover:bg-rose-500/15"
+            aria-label="Eliminar categoría"
           >
             <Trash2 size={17} />
           </motion.button>
@@ -162,4 +177,9 @@ function ModalBody({ category, onSave, onDelete }: Pick<Props, 'category' | 'onS
       </div>
     </div>
   )
+}
+
+function PreviewIcon({ name }: { name: string }) {
+  const Icon = CATEGORY_ICONS[name] ?? CATEGORY_ICONS.package
+  return <Icon size={12} />
 }

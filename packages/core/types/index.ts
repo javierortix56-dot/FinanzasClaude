@@ -86,6 +86,8 @@ export interface Category {
   nombre: string
   color: string
   activa: boolean
+  /** Nombre del ícono (catálogo de la app mobile). Opcional: sin ícono se usa uno por defecto. */
+  icono?: string
 }
 
 export interface CategoryGroup {
@@ -93,6 +95,7 @@ export interface CategoryGroup {
   nombre: string
   color: string
   activa: boolean
+  icono?: string
   subcategorias: Category[]
 }
 

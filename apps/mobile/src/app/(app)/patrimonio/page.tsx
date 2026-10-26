@@ -12,6 +12,7 @@ import { Asset } from '@finanzas/core/types'
 import AssetCard from '@/components/patrimonio/AssetCard'
 import AssetModal from '@/components/patrimonio/AssetModal'
 import SnapshotModal from '@/components/patrimonio/SnapshotModal'
+import AssetDetail from '@/components/patrimonio/AssetDetail'
 import PatrimonioChart from '@/components/patrimonio/PatrimonioChart'
 import PageHeader, { HeaderButton, PrivacyToggle } from '@/components/ui/PageHeader'
 import Segmented from '@/components/ui/Segmented'
@@ -30,6 +31,9 @@ export default function PatrimonioPage() {
   const [editing,     setEditing]     = useState<Asset | null>(null)
   const [snapAsset,   setSnapAsset]   = useState<Asset | null>(null)
   const [snapOpen,    setSnapOpen]    = useState(false)
+  const [detailId,    setDetailId]    = useState<string | null>(null)
+  // El detalle se lee del store para reflejar cambios en vivo (realtime)
+  const detailAsset = detailId ? assets.find((a) => a.id === detailId) ?? null : null
 
   const activos = assets.filter((a) => a.clase === 'activo')
   const pasivos = assets.filter((a) => a.clase === 'pasivo')
@@ -256,7 +260,7 @@ export default function PatrimonioPage() {
                         <AssetCard
                           asset={a}
                           settings={s}
-                          onClick={() => openEdit(a)}
+                          onClick={() => setDetailId(a.id ?? null)}
                           onUpdateSnapshot={() => openSnap(a)}
                         />
                       </motion.div>
@@ -274,6 +278,13 @@ export default function PatrimonioPage() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         editing={editing}
+      />
+      <AssetDetail
+        asset={detailAsset}
+        settings={s}
+        onClose={() => setDetailId(null)}
+        onEdit={(a) => { setDetailId(null); openEdit(a) }}
+        onSnapshot={(a) => openSnap(a)}
       />
       <SnapshotModal
         open={snapOpen}

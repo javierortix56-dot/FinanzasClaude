@@ -23,6 +23,7 @@
   --shadow-soft: 0 1px 2px rgba(20, 19, 28, 0.04), 0 10px 30px -12px rgba(83, 74, 183, 0.22);
   --shadow-lift: 0 2px 6px rgba(20, 19, 28, 0.06), 0 22px 44px -16px rgba(83, 74, 183, 0.35);
 
+  color-scheme: light;
   --blob-1: #a99cff;
   --blob-2: #7dd3fc;
   --blob-3: #f9a8d4;
@@ -51,8 +52,10 @@
    var(--color-*). Redefinir esas variables acá invierte toda la UI sin tocar
    clases. text-white y los tonos 400-700 saturados no se tocan: siguen
    legibles sobre fondos oscuros. */
+/* Dos caminos al tema oscuro: el sistema (si el usuario no forzó "claro") o
+   la elección manual en Ajustes (data-theme="dark" en <html>). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --background: #0c0d14;
     --foreground: #f2f4f8;
     --surface: #171923;
@@ -67,6 +70,7 @@
     --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px -14px rgba(0, 0, 0, 0.6);
     --shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.35), 0 24px 48px -16px rgba(0, 0, 0, 0.7);
 
+    color-scheme: dark;
     --blob-1: #4c3fb8;
     --blob-2: #0e5a78;
     --blob-3: #6b1f4f;
@@ -99,6 +103,55 @@
     --color-blue-200:  #274572;
     --color-orange-50: #2d1d10;
   }
+}
+
+:root[data-theme="dark"] {
+  --background: #0c0d14;
+  --foreground: #f2f4f8;
+  --surface: #171923;
+  --primary: #7b6ff0;
+  --primary-2: #a59bff;
+
+  --glass: rgba(28, 30, 42, 0.55);
+  --glass-strong: rgba(30, 32, 46, 0.86);
+  --sheet: rgba(22, 24, 34, 0.95);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --hairline: rgba(255, 255, 255, 0.06);
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px -14px rgba(0, 0, 0, 0.6);
+  --shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.35), 0 24px 48px -16px rgba(0, 0, 0, 0.7);
+
+  color-scheme: dark;
+  --blob-1: #4c3fb8;
+  --blob-2: #0e5a78;
+  --blob-3: #6b1f4f;
+
+  /* Rampa de grises invertida (50 = fondos, 900 = texto principal) */
+  --color-gray-50:  #151823;
+  --color-gray-100: #232734;
+  --color-gray-200: #2f3444;
+  --color-gray-300: #434a5e;
+  --color-gray-400: #8f97ab;
+  --color-gray-500: #a6adc0;
+  --color-gray-600: #bac1d2;
+  --color-gray-700: #cfd4e2;
+  --color-gray-800: #e3e7f0;
+  --color-gray-900: #f2f4f8;
+
+  /* Tintes suaves (solo tonos 50-200 usados como fondos/bordes) */
+  --color-green-50:  #122a1c;
+  --color-green-100: #1a3d28;
+  --color-green-200: #245538;
+  --color-emerald-50: #0f2a22;
+  --color-red-50:    #2c1519;
+  --color-red-100:   #401e24;
+  --color-red-200:   #57282f;
+  --color-rose-50:   #2c1520;
+  --color-amber-50:  #2c2312;
+  --color-amber-100: #3a2e14;
+  --color-amber-200: #4d3c18;
+  --color-blue-50:   #14203a;
+  --color-blue-200:  #274572;
+  --color-orange-50: #2d1d10;
 }
 
 /* ── Utilidades de superficie ─────────────────────────────────────────────── */
@@ -149,7 +202,21 @@
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--color-gray-400);
+  color: var(--color-gray-500);
+}
+
+/* Zona táctil mínima de 44×44 px sin cambiar el tamaño visual */
+@utility hit-44 {
+  position: relative;
+  &::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
 }
 
 @utility no-scrollbar {
@@ -233,4 +300,15 @@ input, select, textarea {
 .blur-amount {
   filter: blur(8px);
   user-select: none;
+}
+
+/* Accesibilidad: con "Reducir transparencia" las superficies glass pasan a
+   ser sólidas (también alivia el costo del blur en equipos modestos). */
+@media (prefers-reduced-transparency: reduce) {
+  .glass, .glass-strong, .sheet-surface {
+    background-color: var(--surface);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .ambient-blob { display: none; }
 }

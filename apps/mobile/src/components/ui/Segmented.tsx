@@ -2,6 +2,7 @@
 
 import { motion } from 'motion/react'
 import { spring } from './motion'
+import { haptic } from '@/lib/haptics'
 
 export interface SegmentOption<T extends string> {
   value: T
@@ -51,7 +52,7 @@ export default function Segmented<T extends string>({
             type="button"
             role="tab"
             aria-selected={active}
-            onClick={() => onChange(opt.value)}
+            onClick={() => { if (!active) haptic('light'); onChange(opt.value) }}
             className={`relative flex-1 ${vertical ? 'px-3' : 'px-2'} ${SIZES[size]} rounded-[11px] font-semibold whitespace-nowrap transition-colors duration-200 ${
               active
                 ? solid ? 'text-white' : 'text-gray-900'

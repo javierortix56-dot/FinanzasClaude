@@ -99,7 +99,7 @@ function getCatIndex(settings: Settings | null): Map<string, Category> {
     ]
     // Mismo orden de precedencia que el scan original: grupo, luego sus subs
     for (const g of allGroups) {
-      if (!index.has(g.id)) index.set(g.id, { id: g.id, nombre: g.nombre, color: g.color, activa: g.activa })
+      if (!index.has(g.id)) index.set(g.id, { id: g.id, nombre: g.nombre, color: g.color, activa: g.activa, icono: g.icono })
       for (const sub of g.subcategorias) {
         if (!index.has(sub.id)) index.set(sub.id, sub)
       }

@@ -71,42 +71,31 @@ Hallazgos verificados en el código, ordenados por impacto.
 
 ---
 
-## 3. Propuestas (no implementadas)
+## 3. Propuestas — estado
 
-Priorizadas por impacto / esfuerzo. Esfuerzo: S ≈ horas, M ≈ 1-2 días, L ≈ más.
+Todas las propuestas quedaron implementadas excepto una, descartada a pedido: la **vista de lista cronológica** como alternativa a la cuenta T. El esquema de cuentas T (columnas Ingresos | Egresos) se mantiene sin cambios; solo se le sumaron gestos e íconos a las filas.
 
-### Prioridad alta
-
-| Propuesta | Por qué | Esfuerzo |
+| Propuesta | Estado | Dónde |
 |---|---|---|
-| **Swipe en filas** (derecha = ejecutado, izquierda = eliminar) con `drag="x"` de Motion | Las dos acciones más frecuentes sin abrir el sheet. El README menciona swipe, pero hoy no existe en el código. | M |
-| **Deshacer en lugar de doble toque** (toast con "Deshacer" 5 s) | Patrón más rápido y seguro que "tocá de nuevo para confirmar", que hoy aparece en 7 lugares. | M |
-| **Hero colapsable** al scrollear la lista | Recupera ~120 px de lista en pantallas chicas sin perder el balance de vista. | S |
-| **Teclado de monto con calculadora** (`1500+320`) | Carga más rápida de tickets divididos; evita usar la calculadora del teléfono. | M |
-| **Tamaños táctiles ≥ 44 px** en chevrons de mes, checks de fila y acciones del árbol de categorías (hoy 16–32 px) | Accesibilidad y menos errores de toque. | S |
-
-### Prioridad media
-
-| Propuesta | Por qué | Esfuerzo |
-|---|---|---|
-| **Vista de lista cronológica** como alternativa a la cuenta T (toggle), agrupada por día con encabezados fijos | La cuenta T en 390 px deja columnas de ~180 px: las descripciones largas se cortan. Mantener la T como opción. | M |
-| **Ajustes como sub-páginas** (navegación push) en vez de acordeones | Las secciones de Categorías y Vínculos crecen mucho dentro de un acordeón; una página propia permite buscar y reordenar. | M |
-| **Reordenar categorías por arrastre** (`Reorder` de Motion) | Hoy el orden es el de creación. | S |
-| **Icono por categoría** (además del color) | Escaneo más rápido de la lista; el color solo no alcanza para daltonismo. | M |
-| **Sparkline en cada cuenta** de Patrimonio usando los snapshots | Muestra la tendencia sin ir al gráfico general. | S |
-| **Cuotas agrupadas por tarjeta** + total por tarjeta del mes | Coincide con cómo llega el resumen del banco. | S |
-| **Insights en lenguaje natural** en Análisis ("Gastaste 23 % más en Variable que en septiembre") | Convierte los gráficos en conclusiones accionables. | M |
-| **Presupuestos visibles en Resumen** (anillos por categoría con límite) | Hoy solo se ven dentro de Análisis → Por categoría. | M |
-
-### Prioridad baja / exploratorias
-
-| Propuesta | Por qué | Esfuerzo |
-|---|---|---|
-| **Selector de tema manual** (claro / oscuro / sistema) | Hoy solo sigue al sistema. Los tokens ya lo permiten. | S |
-| **View Transitions** entre pantallas con elemento compartido (p. ej. tarjeta de cuenta → detalle) | Continuidad espacial; requiere pantalla de detalle de cuenta. | L |
-| **Vibración háptica** en acciones clave (`navigator.vibrate`) | Solo funciona en Android; iOS Safari no lo soporta. | S |
-| **Onboarding corto** de 3 pantallas (asignación, cuotas, privacidad) | Útil si se suma otro usuario. | M |
+| Swipe en filas (derecha = ejecutado, izquierda = eliminar) | ✅ | `TAccountView` (dentro de cada columna; la estructura T no cambia) |
+| "Deshacer" en lugar de doble toque | ✅ | `lib/undo.ts` + toast con acción. Cubre: eliminar movimiento, selección múltiple, cuenta, cuota, categoría/subcategoría, presupuesto, borrar mes, desasignar (todo y por grupo), reasignar y auto-asignar. Restaura el mismo registro (mismo id). |
+| Hero colapsable al scrollear | ✅ | `dashboard/page` (se compacta al desplazar cualquiera de las listas; tocarlo lo expande) |
+| Monto con calculadora | ✅ | `lib/calc.ts` (parser propio, sin `eval`) + fila de operadores en el sheet de movimiento |
+| Zonas táctiles ≥ 44 px | ✅ | Utilidad `hit-44` (amplía el área sin cambiar el tamaño visual) en checks, chevrons de mes, header y árbol de categorías |
+| ~~Vista de lista cronológica~~ | ❌ Descartada | Se conserva la cuenta T |
+| Ajustes como sub-páginas | ✅ | Navegación push con deslizar-para-volver |
+| Reordenar categorías por arrastre | ✅ | `CategoryTree` (grupos y subcategorías, `Reorder` de Motion) |
+| Ícono por categoría | ✅ | Campo opcional `icono` en `Category` (se guarda en el JSON de configuración, sin migración) + selector en el sheet de categoría; defaults por id |
+| Sparkline en cada cuenta | ✅ | `AssetCard` |
+| Cuotas agrupadas por tarjeta + total del mes | ✅ | `CuotasTab` |
+| Insights en lenguaje natural | ✅ | `HistoricoTab` → "Lo más importante" (variación por grupo, ahorro, proyección de cierre, presupuestos superados, pagos pendientes) |
+| Presupuestos visibles en Resumen | ✅ | `BudgetRings` (anillos bajo el hero, solo si hay presupuestos) |
+| Selector de tema manual | ✅ | Ajustes → Apariencia (`data-theme` + script anti-parpadeo) |
+| Transición con elemento compartido | ✅ | Detalle de cuenta: la tarjeta se expande (`layoutId`) con evolución, meta e historial |
+| Vibración háptica | ✅ | `lib/haptics.ts` (Android; en iOS no hace nada) |
+| Introducción de 4 pasos | ✅ | Primera vez por dispositivo; se reabre en Ajustes → Cuenta |
 
 ### Riesgos a vigilar
-- **Rendimiento del blur**: `backdrop-filter` es costoso en Android de gama baja. Si se nota lag, bajar el blur de `glass` (22 px → 12 px) o reemplazarlo por un fondo sólido en `@media (prefers-reduced-transparency)`.
-- **Contraste**: `text-gray-400` sobre superficies glass queda cerca de 3:1. Vale para texto secundario grande, pero conviene revisar los textos de 10–11 px.
+- **Rendimiento del blur**: `backdrop-filter` es costoso en Android de gama baja. Ya hay fallback sólido con "Reducir transparencia" del sistema; si igual se nota lag, bajar el blur de `glass` (22 px → 12 px).
+- **Contraste**: los sobretítulos pasaron a `gray-500`; algunos textos secundarios de 10–11 px siguen en `gray-400` (≈ 3:1).
+- **"Borrar mes" + Deshacer**: restaura los movimientos que estaban cargados en pantalla para ese mes (los que trae el realtime), que en la práctica son todos.

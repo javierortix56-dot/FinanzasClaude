@@ -16,6 +16,7 @@ import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import Segmented from '@/components/ui/Segmented'
 import ProgressBar from '@/components/ui/ProgressBar'
 import { Money } from '@/components/ui/AnimatedNumber'
+import { CategoryIcon } from '@/lib/categoryIcons'
 
 // High-contrast palette: colours spaced across the full hue wheel
 const PALETTE = [
@@ -298,10 +299,12 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
                           else setSelectedSub(slice.id)
                         }}
                       >
-                        <div
-                          className="w-2.5 h-2.5 rounded-[4px] flex-shrink-0"
-                          style={{ backgroundColor: slice.color }}
-                        />
+                        <span
+                          className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0"
+                          style={{ backgroundColor: slice.color + '22', color: slice.color }}
+                        >
+                          <CategoryIcon cat={getCatFromSettings(slice.id, settings) ?? { id: slice.id }} size={12} />
+                        </span>
                         <span className="flex-1 text-xs font-semibold text-gray-700 text-left truncate">
                           {slice.nombre}
                         </span>

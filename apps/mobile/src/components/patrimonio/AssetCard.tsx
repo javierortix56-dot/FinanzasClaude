@@ -11,8 +11,9 @@ import { getCurrentMonth, monthLabel } from '@finanzas/core/lib/constants'
 import { motion } from 'motion/react'
 import { Money } from '@/components/ui/AnimatedNumber'
 import ProgressBar from '@/components/ui/ProgressBar'
+import Sparkline from '@/components/ui/Sparkline'
 
-const TIPO_ICONS: Record<string, React.ReactNode> = {
+export const TIPO_ICONS: Record<string, React.ReactNode> = {
   banco:        <Landmark     size={18} />,
   efectivo:     <Banknote     size={18} />,
   cripto:       <Bitcoin      size={18} />,
@@ -57,8 +58,12 @@ export default function AssetCard({ asset, settings, onClick, onUpdateSnapshot }
     ? asset.snapshots[asset.snapshots.length - 1]
     : null
 
+  // Tendencia del saldo según los snapshots mensuales
+  const serie = (asset.snapshots ?? []).map((sn) => sn.saldo)
+
   return (
     <motion.div
+      layoutId={asset.id ? `asset-${asset.id}` : undefined}
       role="button"
       tabIndex={0}
       onClick={onClick}
@@ -80,9 +85,12 @@ export default function AssetCard({ asset, settings, onClick, onUpdateSnapshot }
               {isActivo ? '' : '-'}<Money value={asset.saldo} currency={asset.moneda} />
             </p>
           </div>
-          <div className="flex items-center justify-between mt-0.5">
+          <div className="flex items-center justify-between gap-2 mt-0.5">
             <span className="text-xs text-gray-400 capitalize">{asset.tipo}</span>
-            <span className="text-xs text-gray-400">≈ <Money value={usdValue} currency="USD" animated={false} /></span>
+            <Sparkline values={serie} color={isActivo ? '#10b981' : '#f43f5e'} width={56} height={18} className="flex-shrink-0 opacity-90" />
+            {asset.moneda !== 'USD' && (
+              <span className="text-xs text-gray-400">≈ <Money value={usdValue} currency="USD" animated={false} /></span>
+            )}
           </div>
         </div>
       </div>

@@ -8,8 +8,9 @@ import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
-import { updateTransaction, deleteTransaction } from '@finanzas/core/lib/transactions'
-import { adjustAssetSaldo } from '@finanzas/core/lib/assets'
+import { updateTransaction } from '@finanzas/core/lib/transactions'
+import { deleteTransactionsWithUndo, updateAsignacionesWithUndo, offerUndo } from '@/lib/undo'
+import { haptic } from '@/lib/haptics'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { SHARED_USERS } from '@finanzas/core/lib/constants'
 import { toBase } from '@finanzas/core/lib/currency'
@@ -18,7 +19,7 @@ import AssignmentGroup, { GroupItem } from './AssignmentGroup'
 import ReassignModal from './ReassignModal'
 import { springSoft, stagger } from '@/components/ui/motion'
 
-export default function AssignmentTab() {
+export default function AssignmentTab({ onScrollY }: { onScrollY?: (y: number) => void }) {
   const { transactions } = useTransactionStore()
   const { settings } = useSettingsStore()
   const { monedaBase } = useAuthStore()
@@ -31,8 +32,6 @@ export default function AssignmentTab() {
   const [reassignOpen, setReassignOpen]     = useState(false)
   const [autoLoading, setAutoLoading]       = useState(false)
   const [unassignLoading, setUnassignLoading] = useState(false)
-  const [unassignConfirm, setUnassignConfirm] = useState(false)
-  const [deleteConfirm, setDeleteConfirm]   = useState(false)
   const [deleteLoading, setDeleteLoading]   = useState(false)
   const userNames = Object.fromEntries(SHARED_USERS.map((u) => [u.id, u.nombre]))
 
@@ -102,6 +101,7 @@ export default function AssignmentTab() {
       (a, b) => toBase(b.monto, b.moneda, base, s) - toBase(a.monto, a.moneda, base, s)
     )
 
+    const previas = ordered.map((e) => ({ id: e.id!, asignaciones: e.asignaciones }))
     try {
       for (const exp of ordered) {
         const expBase = toBase(exp.monto, exp.moneda, base, s)
@@ -133,6 +133,10 @@ export default function AssignmentTab() {
           asignaciones: [{ ingresoId: target.id!, monto: exp.monto }],
         })
       }
+      haptic('success')
+      offerUndo(`${ordered.length} egreso${ordered.length !== 1 ? 's' : ''} asignado${ordered.length !== 1 ? 's' : ''}`, async () => {
+        await Promise.allSettled(previas.map(({ id, asignaciones }) => updateTransaction(id, { asignaciones })))
+      })
     } finally {
       setAutoLoading(false)
     }
@@ -140,16 +144,13 @@ export default function AssignmentTab() {
 
   // Desasignar todos
   async function desassignAll() {
-    if (!unassignConfirm) {
-      setUnassignConfirm(true)
-      setTimeout(() => setUnassignConfirm(false), 4000)
-      return
-    }
     setUnassignLoading(true)
-    setUnassignConfirm(false)
     try {
       const assigned = egresos.filter((e) => e.asignaciones.length > 0)
-      await Promise.allSettled(assigned.map((e) => updateTransaction(e.id!, { asignaciones: [] })))
+      await updateAsignacionesWithUndo(
+        assigned.map((tx) => ({ tx, asignaciones: [] })),
+        `${assigned.length} egreso${assigned.length !== 1 ? 's' : ''} desasignado${assigned.length !== 1 ? 's' : ''}`,
+      )
     } finally {
       setUnassignLoading(false)
     }
@@ -160,39 +161,26 @@ export default function AssignmentTab() {
     if (!group) return
     // Quita solo el vínculo con ESTE ingreso; si el egreso estaba dividido,
     // conserva la parte asignada al otro ingreso.
-    await Promise.allSettled(group.items.map(({ exp }) => updateTransaction(exp.id!, {
-      asignaciones: exp.asignaciones.filter((a) => a.ingresoId !== incomeId),
-    })))
+    await updateAsignacionesWithUndo(
+      group.items.map(({ exp }) => ({ tx: exp, asignaciones: exp.asignaciones.filter((a) => a.ingresoId !== incomeId) })),
+      'Grupo desasignado',
+    )
   }
 
   async function reassignSelected(newIncomeId: string) {
-    const byId = new Map(egresos.map((e) => [e.id!, e]))
-    await Promise.allSettled([...selectedIds].map((id) => {
-      const exp = byId.get(id)
-      if (!exp) return Promise.resolve()
-      return updateTransaction(id, {
-        asignaciones: [{ ingresoId: newIncomeId, monto: exp.monto }],
-      })
-    }))
+    const elegidos = egresos.filter((e) => selectedIds.has(e.id!))
+    await updateAsignacionesWithUndo(
+      elegidos.map((tx) => ({ tx, asignaciones: [{ ingresoId: newIncomeId, monto: tx.monto }] })),
+      `${elegidos.length} egreso${elegidos.length !== 1 ? 's' : ''} reasignado${elegidos.length !== 1 ? 's' : ''}`,
+    )
     setSelectedIds(new Set())
     setReassignOpen(false)
   }
 
   async function deleteSelected() {
-    if (!deleteConfirm) { setDeleteConfirm(true); setTimeout(() => setDeleteConfirm(false), 4000); return }
     setDeleteLoading(true)
-    setDeleteConfirm(false)
     try {
-      const toDelete = egresos.filter((e) => selectedIds.has(e.id!))
-      for (const tx of toDelete) {
-        if (tx.ahorroAssetId) {
-          try {
-            const txMonth = tx.fecha.toDate().toISOString().slice(0, 7)
-            await adjustAssetSaldo(tx.ahorroAssetId, -tx.monto, txMonth)
-          } catch { /* non-blocking */ }
-        }
-        await deleteTransaction(tx.id!)
-      }
+      await deleteTransactionsWithUndo(egresos.filter((e) => selectedIds.has(e.id!)))
       setSelectedIds(new Set())
     } finally {
       setDeleteLoading(false)
@@ -292,12 +280,10 @@ export default function AssignmentTab() {
                 whileTap={{ scale: 0.94 }}
                 onClick={desassignAll}
                 disabled={unassignLoading}
-                className={`flex items-center gap-1 px-2.5 h-6 rounded-full text-[11px] font-semibold transition-colors flex-shrink-0 whitespace-nowrap ${
-                  unassignConfirm ? 'bg-rose-500 text-white' : 'bg-white/15 text-white/90'
-                }`}
+                className="hit-44 flex items-center gap-1 px-2.5 h-6 rounded-full text-[11px] font-semibold transition-colors flex-shrink-0 whitespace-nowrap bg-white/15 text-white/90"
               >
                 <Unlink2 size={10} />
-                {unassignConfirm ? '¿Confirmar?' : 'Desasignar todo'}
+                Desasignar todo
               </motion.button>
             )}
           </div>
@@ -305,7 +291,10 @@ export default function AssignmentTab() {
       </div>
 
       {/* ── Groups ── */}
-      <div className="flex-1 overflow-y-auto overscroll-contain pt-1 pb-28 no-scrollbar">
+      <div
+        className="flex-1 overflow-y-auto overscroll-contain pt-1 pb-28 no-scrollbar"
+        onScroll={(e) => onScrollY?.(e.currentTarget.scrollTop)}
+      >
         {egresos.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center px-6">
             <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-2.5">
@@ -353,7 +342,7 @@ export default function AssignmentTab() {
               transition={springSoft}
               className="fixed bottom-[calc(max(12px,env(safe-area-inset-bottom))+76px)] inset-x-0 mx-auto w-[calc(100%-24px)] max-w-[366px] glass-strong rounded-[22px] z-30 pl-2 pr-2 py-2 flex items-center gap-2"
             >
-              <button onClick={() => { setSelectedIds(new Set()); setDeleteConfirm(false) }} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-500/10" aria-label="Cancelar selección">
+              <button onClick={() => setSelectedIds(new Set())} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-500/10" aria-label="Cancelar selección">
                 <X size={18} className="text-gray-500" />
               </button>
               <span className="flex-1 min-w-0 flex items-center gap-1.5 text-[13px] font-semibold text-gray-700 whitespace-nowrap">
@@ -371,12 +360,10 @@ export default function AssignmentTab() {
                 whileTap={{ scale: 0.95 }}
                 onClick={deleteSelected}
                 disabled={deleteLoading}
-                className={`flex items-center gap-1.5 px-3 h-10 rounded-2xl text-[13px] font-semibold transition-colors whitespace-nowrap ${
-                  deleteConfirm ? 'bg-rose-500 text-white' : 'bg-rose-500/10 text-rose-500'
-                }`}
+                className="flex items-center gap-1.5 px-3 h-10 rounded-2xl text-[13px] font-semibold transition-colors whitespace-nowrap bg-rose-500/10 text-rose-500"
               >
                 <Trash2 size={14} />
-                {deleteConfirm ? '¿Confirmar?' : 'Eliminar'}
+                Eliminar
               </motion.button>
               <motion.button
                 whileTap={{ scale: 0.95 }}

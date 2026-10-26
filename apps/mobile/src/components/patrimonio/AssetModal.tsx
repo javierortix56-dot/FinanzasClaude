@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react'
 import { motion } from 'motion/react'
 import { Trash2 } from 'lucide-react'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
-import { addAsset, updateAsset, deleteAsset } from '@finanzas/core/lib/assets'
+import { addAsset, updateAsset, deleteAsset, restoreAsset } from '@finanzas/core/lib/assets'
+import { offerUndo } from '@/lib/undo'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { SHARED_USER_ID, toLocalDateString } from '@finanzas/core/lib/constants'
 import { Asset, Currency } from '@finanzas/core/types'
@@ -36,12 +37,11 @@ export default function AssetModal({ open, onClose, editing }: Props) {
   const [metaObjVal,   setMetaObjVal]   = useState('')
   const [metaMoneda,   setMetaMoneda]   = useState<Currency>('USD')
   const [saving,       setSaving]       = useState(false)
-  const [deleteConfirm,setDeleteConfirm]= useState(false)
 
   const tiposActuales = clase === 'activo' ? ACTIVO_TIPOS : pasivoTipos
 
   useEffect(() => {
-    if (!open) { setDeleteConfirm(false); return }
+    if (!open) return
     if (editing) {
       setNombre(editing.nombre)
       setClase(editing.clase)
@@ -107,9 +107,13 @@ export default function AssetModal({ open, onClose, editing }: Props) {
 
   async function handleDelete() {
     if (!editing?.id) return
-    if (!deleteConfirm) { setDeleteConfirm(true); return }
+    const borrada = editing
     setSaving(true)
-    try { await deleteAsset(editing.id); onClose() }
+    try {
+      await deleteAsset(borrada.id!)
+      onClose()
+      offerUndo(`"${borrada.nombre}" eliminada`, () => restoreAsset(borrada))
+    }
     finally { setSaving(false) }
   }
 
@@ -123,22 +127,15 @@ export default function AssetModal({ open, onClose, editing }: Props) {
       bodyClassName="px-5 pb-4 space-y-5"
       footer={
         <>
-          {deleteConfirm && (
-            <p className="text-xs text-rose-500 text-center pb-2">
-              Tocá el ícono rojo de nuevo para confirmar
-            </p>
-          )}
           <div className="flex gap-2">
             {editing && (
               <motion.button
                 whileTap={{ scale: 0.92 }}
                 onClick={handleDelete}
                 disabled={saving}
-                className={`w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-2xl transition-colors ${
-                  deleteConfirm ? 'bg-rose-500 text-white' : 'bg-rose-500/10 text-rose-500 hover:bg-rose-500/15'
-                }`}
-                title={deleteConfirm ? 'Confirmar eliminación' : 'Eliminar cuenta'}
-                aria-label={deleteConfirm ? 'Confirmar eliminación' : 'Eliminar cuenta'}
+                className="w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-2xl transition-colors bg-rose-500/10 text-rose-500 hover:bg-rose-500/15"
+                title="Eliminar cuenta"
+                aria-label="Eliminar cuenta"
               >
                 <Trash2 size={17} />
               </motion.button>

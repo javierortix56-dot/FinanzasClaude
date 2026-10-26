@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'motion/react'
 import { Trash2 } from 'lucide-react'
+import { offerUndo } from '@/lib/undo'
 import { useBudgetStore } from '@finanzas/core/store/useBudgetStore'
 import { upsertBudget, deleteBudget } from '@finanzas/core/lib/budgets'
 import { getCatFromSettings } from '@finanzas/core/lib/constants'
@@ -52,8 +53,13 @@ export default function BudgetModal({ open, onClose, categoria, mes }: Props) {
 
   async function handleDelete() {
     if (!existing?.id) return
+    const borrado = existing
     setSaving(true)
-    try { await deleteBudget(existing.id); onClose() }
+    try {
+      await deleteBudget(borrado.id!)
+      onClose()
+      offerUndo('Presupuesto eliminado', () => upsertBudget(borrado.mes, borrado.categoria, borrado.limite, borrado.moneda))
+    }
     finally { setSaving(false) }
   }
 

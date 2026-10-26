@@ -2,15 +2,20 @@
 
 import { useState, useRef } from 'react'
 import {
-  ChevronRight, Plus, Pencil, ChevronDown,
+  ChevronRight, ChevronLeft, Plus, Pencil,
   Copy, RotateCcw, Lock, Trash2, Check, Download, Upload, LogOut,
   UserRound, Bell, ArrowLeftRight, Tags, Coins, Layers, PiggyBank, CalendarCog, DatabaseBackup,
+  Palette, Sparkles,
 } from 'lucide-react'
-import { motion } from 'motion/react'
+import { AnimatePresence, motion, type PanInfo } from 'motion/react'
 import PageHeader from '@/components/ui/PageHeader'
 import Segmented from '@/components/ui/Segmented'
-import Collapse from '@/components/ui/Collapse'
-import { spring } from '@/components/ui/motion'
+import { springSoft } from '@/components/ui/motion'
+import CategoryTree from '@/components/ajustes/CategoryTree'
+import { offerUndo } from '@/lib/undo'
+import { getThemePref, setThemePref, ThemePref } from '@/lib/theme'
+import { openOnboarding } from '@/lib/onboarding'
+import { useTransactionStore as txStore } from '@finanzas/core/store/useTransactionStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useAssetStore } from '@finanzas/core/store/useAssetStore'
@@ -20,6 +25,7 @@ import { pushSoportado, getSuscripcionActual, activarPush, desactivarPush } from
 import { updateSettings } from '@finanzas/core/lib/settings'
 import {
   deleteMonthTransactions,
+  restoreTransactions,
   cloneMonthTransactions,
   createRecurringTransactions,
   countMonthTransactions,
@@ -31,7 +37,7 @@ import { Category, CategoryGroup, AhorroLink, Currency } from '@finanzas/core/ty
 
 const CategoryModal = dynamic(() => import('@/components/ajustes/CategoryModal'), { ssr: false })
 
-type Section = 'cuenta' | 'notif' | 'cambio' | 'categorias' | 'categorias_ing' | 'tipos' | 'ahorro_links' | 'mes' | 'datos' | null
+type Section = 'cuenta' | 'apariencia' | 'notif' | 'cambio' | 'categorias' | 'categorias_ing' | 'tipos' | 'ahorro_links' | 'mes' | 'datos' | null
 
 // ── Modal state types ─────────────────────────────────────────────────────────
 type GroupModalState = {
@@ -69,8 +75,8 @@ export default function AjustesPage() {
   const [rateSaved, setRateSaved] = useState(false)
   const [rateError, setRateError] = useState<string | null>(null)
 
-  // Category tree: expanded groups
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  // Apariencia (por dispositivo)
+  const [theme, setTheme] = useState<ThemePref>(() => getThemePref())
 
   // Modal for top-level groups
   const [groupModal, setGroupModal] = useState<GroupModalState>({
@@ -94,7 +100,6 @@ export default function AjustesPage() {
   const [mesAction, setMesAction] = useState<string | null>(null)
   const [mesResult, setMesResult] = useState<string | null>(null)
   const [mesError, setMesError] = useState<string | null>(null)
-  const [deleteMonthConfirm, setDeleteMonthConfirm] = useState(false)
   // Confirmaciones cuando el mes destino ya tiene movimientos
   const [clonarConfirm, setClonarConfirm] = useState<{ existing: number; next: string } | null>(null)
   const [recurrentesConfirm, setRecurrentesConfirm] = useState<{ existing: number; next: string } | null>(null)
@@ -103,9 +108,6 @@ export default function AjustesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [backupAction, setBackupAction] = useState<string | null>(null)
   const [backupResult, setBackupResult] = useState<string | null>(null)
-
-  // Confirmación de borrado en el árbol de categorías (id pendiente de 2º toque)
-  const [pendingDelete, setPendingDelete] = useState<string | null>(null)
 
   // Ahorro links
   const [newLinkCatId, setNewLinkCatId] = useState('')
@@ -128,13 +130,9 @@ export default function AjustesPage() {
     setOpenSection((prev) => (prev === section ? null : section))
   }
 
-  function toggleGroup(id: string) {
-    setExpandedGroups((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+  function changeTheme(t: ThemePref) {
+    setTheme(t)
+    setThemePref(t)
   }
 
   // ── Tipos de cambio ──────────────────────────────────────────────────────────
@@ -166,9 +164,9 @@ export default function AjustesPage() {
     const list = [...(tipo === 'gasto' ? s.categoriasGasto : s.categoriasIngreso)]
     const idx  = list.findIndex((g) => g.id === cat.id)
     if (idx >= 0) {
-      list[idx] = { ...list[idx], nombre: cat.nombre, color: cat.color, activa: cat.activa }
+      list[idx] = { ...list[idx], nombre: cat.nombre, color: cat.color, activa: cat.activa, icono: cat.icono }
     } else {
-      list.push({ id: cat.id, nombre: cat.nombre, color: cat.color, activa: cat.activa, subcategorias: [] })
+      list.push({ id: cat.id, nombre: cat.nombre, color: cat.color, activa: cat.activa, icono: cat.icono, subcategorias: [] })
     }
     const partial = { [key]: list }
     await updateSettings(SHARED_USER_ID, partial)
@@ -176,13 +174,35 @@ export default function AjustesPage() {
     setGroupModal((prev) => ({ ...prev, open: false }))
   }
 
-  async function handleDeleteGroup(id: string, tipo: 'gasto' | 'ingreso') {
+  // Guarda una lista de grupos y ofrece "Deshacer" restaurando la anterior
+  async function saveGroupsWithUndo(tipo: 'gasto' | 'ingreso', list: CategoryGroup[], message: string) {
     const key  = tipo === 'gasto' ? 'categoriasGasto' : 'categoriasIngreso'
-    const list = (tipo === 'gasto' ? s.categoriasGasto : s.categoriasIngreso).filter((g) => g.id !== id)
-    const partial = { [key]: list }
-    await updateSettings(SHARED_USER_ID, partial)
-    setSettings({ ...s, ...partial })
+    const prev = tipo === 'gasto' ? s.categoriasGasto : s.categoriasIngreso
+    await updateSettings(SHARED_USER_ID, { [key]: list })
+    setSettings({ ...s, [key]: list })
+    offerUndo(message, async () => {
+      await updateSettings(SHARED_USER_ID, { [key]: prev })
+      const actual = useSettingsStore.getState().settings ?? s
+      setSettings({ ...actual, [key]: prev })
+    })
+  }
+
+  async function handleDeleteGroup(id: string, tipo: 'gasto' | 'ingreso') {
+    const groups = tipo === 'gasto' ? s.categoriasGasto : s.categoriasIngreso
+    const nombre = groups.find((g) => g.id === id)?.nombre ?? 'Categoría'
     setGroupModal((prev) => ({ ...prev, open: false }))
+    await saveGroupsWithUndo(tipo, groups.filter((g) => g.id !== id), `"${nombre}" eliminada`)
+  }
+
+  // Orden nuevo desde el árbol (arrastrar y soltar)
+  async function handleReorder(tipo: 'gasto' | 'ingreso', list: CategoryGroup[]) {
+    const key = tipo === 'gasto' ? 'categoriasGasto' : 'categoriasIngreso'
+    setSettings({ ...s, [key]: list })
+    try {
+      await updateSettings(SHARED_USER_ID, { [key]: list })
+    } catch (err) {
+      console.error('[ajustes] reorder error:', err)
+    }
   }
 
   // ── CRUD Subcategorías ───────────────────────────────────────────────────────
@@ -203,15 +223,13 @@ export default function AjustesPage() {
   }
 
   async function handleDeleteSubcat(id: string, tipo: 'gasto' | 'ingreso', groupId: string) {
-    const key  = tipo === 'gasto' ? 'categoriasGasto' : 'categoriasIngreso'
     const list = (tipo === 'gasto' ? [...s.categoriasGasto] : [...s.categoriasIngreso])
     const gIdx = list.findIndex((g) => g.id === groupId)
     if (gIdx < 0) return
+    const nombre = list[gIdx].subcategorias.find((c) => c.id === id)?.nombre ?? 'Subcategoría'
     list[gIdx] = { ...list[gIdx], subcategorias: list[gIdx].subcategorias.filter((c) => c.id !== id) }
-    const partial = { [key]: list }
-    await updateSettings(SHARED_USER_ID, partial)
-    setSettings({ ...s, ...partial })
     setSubModal((prev) => ({ ...prev, open: false }))
+    await saveGroupsWithUndo(tipo, list, `"${nombre}" eliminada`)
   }
 
   // ── Tipos activo/pasivo ──────────────────────────────────────────────────────
@@ -306,13 +324,16 @@ export default function AjustesPage() {
   }
 
   async function handleBorrarMes() {
-    if (!deleteMonthConfirm) { setDeleteMonthConfirm(true); return }
     resetMesFeedback()
     setMesAction('borrando')
+    // Se guardan los movimientos visibles del mes para poder restaurarlos
+    const previos = txStore.getState().currentMonth === currentMonth ? txStore.getState().transactions : []
     try {
       const count = await deleteMonthTransactions(currentMonth)
       setMesResult(`${count} movimiento(s) eliminados de ${monthLabel(currentMonth)}.`)
-      setDeleteMonthConfirm(false)
+      if (previos.length > 0) {
+        offerUndo(`${count} movimiento${count !== 1 ? 's' : ''} eliminado${count !== 1 ? 's' : ''}`, () => restoreTransactions(previos))
+      }
     } catch (err) {
       setMesError('Error al borrar mes: ' + (err instanceof Error ? err.message : String(err)))
     } finally { setMesAction(null) }
@@ -407,125 +428,21 @@ export default function AjustesPage() {
     }
   }
 
-  // ── Category tree helper ─────────────────────────────────────────────────────
-  // Se invoca como función (no como <Componente/>): definida dentro del render,
-  // como componente se remontaba en cada render y perdía estado/animaciones.
-  function confirmDelete(key: string, action: () => void) {
-    if (pendingDelete !== key) {
-      setPendingDelete(key)
-      setTimeout(() => setPendingDelete((p) => (p === key ? null : p)), 3000)
-      return
-    }
-    setPendingDelete(null)
-    action()
-  }
-
+  // ── Árbol de categorías ───────────────────────────────────────────────────────
+  // Se invoca como función (no como <Componente/> definido acá adentro): así
+  // no se remonta en cada render.
   function renderCategoryTree(tipo: 'gasto' | 'ingreso') {
-    const groups = tipo === 'gasto' ? s.categoriasGasto : s.categoriasIngreso
     return (
-      <div className="space-y-1.5 pt-1">
-        {/* Botón nuevo grupo */}
-        <button
-          onClick={() => setGroupModal({ open: true, tipo, group: null })}
-          className="w-full flex items-center justify-center gap-2 h-10 rounded-2xl border border-dashed border-primary/35 text-primary text-xs font-semibold hover:bg-primary/5 transition-colors"
-        >
-          <Plus size={13} /> Nueva categoría padre
-        </button>
-
-        {groups.map((group) => {
-          const isOpen = expandedGroups.has(group.id)
-          return (
-            <div key={group.id} className="rounded-2xl bg-gray-500/[0.05] overflow-hidden">
-              {/* Header del grupo */}
-              <div className="flex items-center gap-1.5 pl-3 pr-1.5 py-2">
-                <button
-                  onClick={() => toggleGroup(group.id)}
-                  className="flex items-center gap-2 flex-1 min-w-0 text-left"
-                >
-                  <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: group.color }} />
-                  <span className={`text-sm font-semibold truncate ${!group.activa ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
-                    {group.nombre}
-                  </span>
-                  <span className="text-[11px] text-gray-400 ml-1">({group.subcategorias.length})</span>
-                  <motion.span
-                    animate={{ rotate: isOpen ? 0 : -90 }}
-                    transition={spring}
-                    className="text-gray-400 flex-shrink-0 ml-auto inline-flex"
-                  >
-                    <ChevronDown size={14} />
-                  </motion.span>
-                </button>
-
-                {/* Acciones grupo */}
-                <button
-                  onClick={() => setSubModal({ open: true, tipo, groupId: group.id, category: null })}
-                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-primary/10 text-primary flex-shrink-0"
-                  title="Nueva subcategoría"
-                >
-                  <Plus size={13} />
-                </button>
-                <button
-                  onClick={() => setGroupModal({ open: true, tipo, group })}
-                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-500/10 text-gray-400 flex-shrink-0"
-                  title="Editar grupo"
-                >
-                  <Pencil size={13} />
-                </button>
-                <button
-                  onClick={() => confirmDelete(`g:${group.id}`, () => handleDeleteGroup(group.id, tipo))}
-                  className={`h-8 flex items-center justify-center gap-1 rounded-full flex-shrink-0 transition-all ${
-                    pendingDelete === `g:${group.id}`
-                      ? 'px-2.5 bg-rose-500 text-white text-[11px] font-semibold'
-                      : 'w-8 hover:bg-rose-500/10 text-rose-500'
-                  }`}
-                  title="Eliminar grupo"
-                  aria-label={pendingDelete === `g:${group.id}` ? 'Confirmar eliminación del grupo' : 'Eliminar grupo'}
-                >
-                  <Trash2 size={13} />
-                  {pendingDelete === `g:${group.id}` && '¿Eliminar?'}
-                </button>
-              </div>
-
-              {/* Subcategorías expandibles */}
-              <Collapse open={isOpen}>
-                <div className="border-t border-hairline px-1.5 py-1">
-                  {group.subcategorias.length === 0 ? (
-                    <p className="text-xs text-gray-400 px-4 py-2.5 italic">Sin subcategorías</p>
-                  ) : (
-                    group.subcategorias.map((sub) => (
-                      <div key={sub.id} className="flex items-center gap-2 pl-4 pr-1 py-1 rounded-xl hover:bg-gray-500/[0.05]">
-                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: sub.color }} />
-                        <span className={`flex-1 text-xs truncate ${!sub.activa ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
-                          {sub.nombre}
-                        </span>
-                        <button
-                          onClick={() => setSubModal({ open: true, tipo, groupId: group.id, category: sub })}
-                          className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-500/10 text-gray-400"
-                          aria-label="Editar subcategoría"
-                        >
-                          <Pencil size={12} />
-                        </button>
-                        <button
-                          onClick={() => confirmDelete(`s:${sub.id}`, () => handleDeleteSubcat(sub.id, tipo, group.id))}
-                          className={`h-8 flex items-center justify-center gap-1 rounded-full transition-all ${
-                            pendingDelete === `s:${sub.id}`
-                              ? 'px-2.5 bg-rose-500 text-white text-[11px] font-semibold'
-                              : 'w-8 hover:bg-rose-500/10 text-rose-500'
-                          }`}
-                          aria-label={pendingDelete === `s:${sub.id}` ? 'Confirmar eliminación' : 'Eliminar subcategoría'}
-                        >
-                          <Trash2 size={12} />
-                          {pendingDelete === `s:${sub.id}` && '¿Eliminar?'}
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </Collapse>
-            </div>
-          )
-        })}
-      </div>
+      <CategoryTree
+        groups={tipo === 'gasto' ? s.categoriasGasto : s.categoriasIngreso}
+        onReorder={(list) => handleReorder(tipo, list)}
+        onAddGroup={() => setGroupModal({ open: true, tipo, group: null })}
+        onEditGroup={(group) => setGroupModal({ open: true, tipo, group })}
+        onDeleteGroup={(group) => handleDeleteGroup(group.id, tipo)}
+        onAddSub={(group) => setSubModal({ open: true, tipo, groupId: group.id, category: null })}
+        onEditSub={(group, sub) => setSubModal({ open: true, tipo, groupId: group.id, category: sub })}
+        onDeleteSub={(group, sub) => handleDeleteSubcat(sub.id, tipo, group.id)}
+      />
     )
   }
 
@@ -581,6 +498,14 @@ export default function AjustesPage() {
 
               <motion.button
                 whileTap={{ scale: 0.97 }}
+                onClick={openOnboarding}
+                className="w-full flex items-center justify-center gap-2 h-11 rounded-2xl bg-primary/10 text-primary text-sm font-semibold"
+              >
+                <Sparkles size={14} /> Ver la introducción
+              </motion.button>
+
+              <motion.button
+                whileTap={{ scale: 0.97 }}
                 onClick={handleSignOut}
                 disabled={signingOut}
                 className="w-full flex items-center justify-center gap-2 h-11 rounded-2xl bg-rose-500/10 text-rose-500 text-sm font-semibold disabled:opacity-50"
@@ -588,6 +513,32 @@ export default function AjustesPage() {
                 <LogOut size={14} />
                 {signingOut ? 'Cerrando sesión...' : 'Cerrar sesión'}
               </motion.button>
+            </div>
+          </Section>
+
+          {/* ── Apariencia ── */}
+          <Section
+            label="Apariencia"
+            icon={<Palette size={15} />}
+            tint="#0ea5e9"
+            hint={theme === 'system' ? 'Según el sistema' : theme === 'dark' ? 'Oscuro' : 'Claro'}
+            open={openSection === 'apariencia'}
+            onToggle={() => toggle('apariencia')}
+          >
+            <div className="space-y-2">
+              <p className="eyebrow mb-2">Tema</p>
+              <Segmented
+                id="tema"
+                size="lg"
+                value={theme}
+                onChange={changeTheme}
+                options={[
+                  { value: 'system', label: 'Sistema' },
+                  { value: 'light', label: 'Claro' },
+                  { value: 'dark', label: 'Oscuro' },
+                ]}
+              />
+              <p className="text-[11px] text-gray-400">Se guarda en este dispositivo.</p>
             </div>
           </Section>
 
@@ -893,7 +844,6 @@ export default function AjustesPage() {
             onToggle={() => {
               toggle('mes')
               resetMesFeedback()
-              setDeleteMonthConfirm(false)
               setClonarConfirm(null)
               setRecurrentesConfirm(null)
             }}
@@ -926,7 +876,7 @@ export default function AjustesPage() {
                 loading={mesAction === 'creando'}
                 color={recurrentesConfirm ? 'red' : 'green'}
               />
-              <ActionButton icon={<Trash2 size={14} />} label={deleteMonthConfirm ? '¿Confirmar borrado?' : 'Borrar mes'} sublabel="Elimina todos los movimientos del mes actual" onClick={handleBorrarMes} loading={mesAction === 'borrando'} color="red" danger />
+              <ActionButton icon={<Trash2 size={14} />} label="Borrar mes" sublabel="Elimina todos los movimientos del mes actual" onClick={handleBorrarMes} loading={mesAction === 'borrando'} color="red" danger />
               {mesResult && (
                 <div className="bg-emerald-500/10 ring-1 ring-emerald-500/25 rounded-2xl px-3 py-2.5 text-xs text-emerald-700 font-medium">
                   ✓ {mesResult}
@@ -1025,11 +975,15 @@ function Section({ label, icon, tint, hint, open, onToggle, children }: {
   onToggle: () => void
   children: React.ReactNode
 }) {
+  // Deslizar hacia la derecha cierra la sub-página (como el "atrás" de iOS)
+  function handleDragEnd(_: unknown, info: PanInfo) {
+    if (info.offset.x > 90 || info.velocity.x > 500) onToggle()
+  }
+
   return (
     <div>
       <button
         onClick={onToggle}
-        aria-expanded={open}
         className="w-full flex items-center gap-3 px-3.5 py-3 text-left active:bg-gray-500/[0.05] transition-colors"
       >
         <span
@@ -1042,13 +996,49 @@ function Section({ label, icon, tint, hint, open, onToggle, children }: {
           <span className="block text-sm font-semibold text-gray-900 leading-tight">{label}</span>
           {hint && <span className="block text-[11px] text-gray-400 truncate mt-0.5">{hint}</span>}
         </span>
-        <motion.span animate={{ rotate: open ? 90 : 0 }} transition={spring} className="text-gray-300 inline-flex">
-          <ChevronRight size={17} />
-        </motion.span>
+        <ChevronRight size={17} className="text-gray-300" />
       </button>
-      <Collapse open={open}>
-        <div className="px-3.5 pb-4">{children}</div>
-      </Collapse>
+
+      {/* Sub-página: entra desde la derecha sobre la lista */}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            role="dialog"
+            aria-label={label}
+            className="fixed inset-0 mx-auto w-full max-w-[390px] z-30 flex flex-col bg-[var(--background)]"
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={springSoft}
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={{ left: 0, right: 0.8 }}
+            dragDirectionLock
+            onDragEnd={handleDragEnd}
+          >
+            <header className="flex-shrink-0 px-2 pt-[max(2.75rem,env(safe-area-inset-top))] pb-2">
+              <button
+                onClick={onToggle}
+                className="flex items-center gap-0.5 h-11 pl-1 pr-3 rounded-full text-primary text-sm font-semibold"
+              >
+                <ChevronLeft size={20} /> Ajustes
+              </button>
+              <div className="flex items-center gap-3 px-2 mt-1">
+                <span
+                  className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-white shadow-sm"
+                  style={{ background: `linear-gradient(135deg, ${tint}cc, ${tint})` }}
+                >
+                  {icon}
+                </span>
+                <h2 className="text-[26px] font-bold tracking-tight text-gray-900 leading-tight">{label}</h2>
+              </div>
+            </header>
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain no-scrollbar px-4 pt-3 pb-28">
+              <div className="glass rounded-[24px] p-4">{children}</div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

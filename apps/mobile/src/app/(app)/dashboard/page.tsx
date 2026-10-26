@@ -15,6 +15,8 @@ import { Money } from '@/components/ui/AnimatedNumber'
 import Segmented from '@/components/ui/Segmented'
 import { MonthSwitcher, PrivacyToggle } from '@/components/ui/PageHeader'
 import { easeOut } from '@/components/ui/motion'
+import Collapse from '@/components/ui/Collapse'
+import BudgetRings from '@/components/dashboard/BudgetRings'
 
 type MainTab = 'movimientos' | 'asignacion'
 
@@ -25,6 +27,11 @@ export default function DashboardPage() {
 
   const [mainTab, setMainTab] = useState<MainTab>('movimientos')
   const [search, setSearch]   = useState('')
+  // Hero compacto cuando se desplaza la lista (con histéresis para no "temblar")
+  const [compact, setCompact] = useState(false)
+  function handleListScroll(y: number) {
+    setCompact((c) => (c ? y > 8 : y > 40))
+  }
 
   const s    = settings ?? DEFAULT_SETTINGS
   const base = monedaBase as Currency
@@ -61,7 +68,9 @@ export default function DashboardPage() {
         initial={{ opacity: 0, y: 12, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={easeOut}
+        layout
         className="relative mx-4 mb-3 rounded-[26px] bg-brand text-white px-4 pt-3 pb-3 shadow-lift overflow-hidden flex-shrink-0"
+        onClick={() => { if (compact) setCompact(false) }}
       >
         {/* Brillos decorativos */}
         <div className="absolute -top-16 -right-10 w-40 h-40 rounded-full bg-white/15 blur-2xl pointer-events-none" />
@@ -75,14 +84,20 @@ export default function DashboardPage() {
         </div>
 
         <div className="relative flex items-baseline gap-2 mt-0.5 min-w-0">
-          <p className="text-[30px] leading-tight font-bold tracking-tight truncate">
+          <motion.p
+            layout="position"
+            animate={{ fontSize: compact ? '22px' : '30px' }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            className="leading-tight font-bold tracking-tight truncate"
+          >
             <Money value={balance} currency={base} />
-          </p>
+          </motion.p>
           <p className="text-[11px] font-medium text-white/70 whitespace-nowrap">
             ≈ <Money value={balanceUSD} currency="USD" />
           </p>
         </div>
 
+        <Collapse open={!compact}>
         <div className="relative grid grid-cols-2 gap-2 mt-2">
           <div className="rounded-2xl bg-white/12 backdrop-blur-md border border-white/15 px-2.5 py-2 flex items-center gap-2">
             <span className="w-7 h-7 rounded-full bg-emerald-400/25 flex items-center justify-center flex-shrink-0">
@@ -119,7 +134,13 @@ export default function DashboardPage() {
             {totalIngresos > 0 ? `${Math.round(pctGastado)}% gastado` : 'Sin ingresos'}
           </span>
         </div>
+        </Collapse>
       </motion.section>
+
+      {/* Presupuestos del mes (solo si hay) */}
+      <Collapse open={!compact} className="flex-shrink-0">
+        <BudgetRings transactions={transactions} month={currentMonth} base={base} />
+      </Collapse>
 
       {/* ── Contenedor glass: tabs + contenido ── */}
       <section className="flex-1 min-h-0 glass rounded-t-[28px] border-b-0 overflow-hidden flex flex-col">
@@ -127,7 +148,7 @@ export default function DashboardPage() {
           <Segmented
             id="dashboard-tab"
             value={mainTab}
-            onChange={setMainTab}
+            onChange={(t) => { setMainTab(t); setCompact(false) }}
             options={[
               { value: 'movimientos', label: 'Movimientos' },
               { value: 'asignacion',  label: 'Asignación'  },
@@ -181,8 +202,8 @@ export default function DashboardPage() {
             className="flex-1 min-h-0 overflow-hidden flex flex-col"
           >
             {mainTab === 'movimientos'
-              ? <TAccountView search={search} />
-              : <AssignmentTab />
+              ? <TAccountView search={search} onScrollY={handleListScroll} />
+              : <AssignmentTab onScrollY={handleListScroll} />
             }
           </motion.div>
         </AnimatePresence>

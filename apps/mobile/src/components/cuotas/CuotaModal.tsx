@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { motion } from 'motion/react'
 import { Trash2 } from 'lucide-react'
-import { addCompraCuotas, updateCompraCuotas, deleteCompraCuotas } from '@finanzas/core/lib/cuotas'
+import { addCompraCuotas, updateCompraCuotas, deleteCompraCuotas, restoreCompraCuotas } from '@finanzas/core/lib/cuotas'
+import { offerUndo } from '@/lib/undo'
 import { getCurrentMonth, SHARED_USERS } from '@finanzas/core/lib/constants'
 import { CompraCuotas, Currency } from '@finanzas/core/types'
 import Sheet, { FieldLabel, fieldClass } from '@/components/ui/Sheet'
@@ -40,7 +41,6 @@ function Form({ editing, onClose }: { editing: CompraCuotas | null; onClose: () 
   const [primerMes, setPrimerMes]     = useState(editing?.primerMes ?? getCurrentMonth())
   const [creadoPor, setCreadoPor]     = useState(editing?.creadoPor ?? SHARED_USERS[0].id)
   const [saving, setSaving]           = useState(false)
-  const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [error, setError]             = useState<string | null>(null)
 
   const monto  = parseFloat(montoCuota.replace(',', '.'))
@@ -73,11 +73,12 @@ function Form({ editing, onClose }: { editing: CompraCuotas | null; onClose: () 
 
   async function handleDelete() {
     if (!editing?.id) return
-    if (!deleteConfirm) { setDeleteConfirm(true); return }
+    const borrada = editing
     setSaving(true)
     try {
-      await deleteCompraCuotas(editing.id)
+      await deleteCompraCuotas(borrada.id!)
       onClose()
+      offerUndo(`"${borrada.descripcion}" eliminada`, () => restoreCompraCuotas(borrada))
     } finally {
       setSaving(false)
     }
@@ -162,9 +163,6 @@ function Form({ editing, onClose }: { editing: CompraCuotas | null; onClose: () 
       {error && (
         <div className="bg-rose-500/10 ring-1 ring-rose-500/20 rounded-2xl px-3 py-2 text-xs text-rose-500">{error}</div>
       )}
-      {deleteConfirm && (
-        <p className="text-[11px] text-rose-500">Tocá el ícono rojo de nuevo para confirmar</p>
-      )}
 
       <div className="flex gap-2 pt-1">
         {editing && (
@@ -172,10 +170,8 @@ function Form({ editing, onClose }: { editing: CompraCuotas | null; onClose: () 
             whileTap={{ scale: 0.92 }}
             onClick={handleDelete}
             disabled={saving}
-            className={`w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-2xl transition-colors ${
-              deleteConfirm ? 'bg-rose-500 text-white' : 'bg-rose-500/10 text-rose-500 hover:bg-rose-500/15'
-            }`}
-            aria-label={deleteConfirm ? 'Confirmar eliminación' : 'Eliminar compra'}
+            className="w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-2xl transition-colors bg-rose-500/10 text-rose-500 hover:bg-rose-500/15"
+            aria-label="Eliminar compra"
           >
             <Trash2 size={17} />
           </motion.button>

@@ -67,6 +67,23 @@ export default function CuotasTab() {
   }, [lista, currentMonth, base, s])
   const maxProy = Math.max(...proyeccion.map((p) => p.total), 1)
 
+  // Activas agrupadas por tarjeta (como llega el resumen del banco), con el
+  // total de cuotas que vencen este mes en cada una
+  const porTarjeta = useMemo(() => {
+    const map = new Map<string, CompraCuotas[]>()
+    for (const c of activas) {
+      const k = c.tarjeta.trim() || 'Sin tarjeta'
+      map.set(k, [...(map.get(k) ?? []), c])
+    }
+    return [...map.entries()]
+      .map(([tarjeta, items]) => ({
+        tarjeta,
+        items,
+        totalMes: items.reduce((sum, c) => sum + (cuotaEnMes(c, currentMonth) !== null ? toBase(c.montoCuota, c.moneda, base, s) : 0), 0),
+      }))
+      .sort((a, b) => b.totalMes - a.totalMes)
+  }, [activas, currentMonth, base, s])
+
   function abrirNueva()               { setEditing(null); setEditorOpen(true) }
   function abrirEdicion(c: CompraCuotas) { setEditing(c); setEditorOpen(true) }
 
@@ -158,58 +175,72 @@ export default function CuotasTab() {
           <p className="text-[11px] text-gray-400 mt-0.5">Agregá una a mano o importá tu extracto</p>
         </Card>
       ) : (
-        <div className="space-y-2">
-          {activas.map((c, i) => {
-            const actual   = cuotaEnMes(c, currentMonth)
-            const restantes = cuotasRestantes(c, currentMonth)
-            const pagadas  = c.totalCuotas - restantes
-            const pct      = (pagadas / c.totalCuotas) * 100
-            const restanteBase = restantes * toBase(c.montoCuota, c.moneda, base, s)
-            return (
-              <motion.button
-                key={c.id}
-                layout
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: stagger(i, 0.04), ease: [0.22, 1, 0.36, 1] }}
-                whileTap={{ scale: 0.985 }}
-                onClick={() => abrirEdicion(c)}
-                className="w-full text-left glass rounded-[22px] px-3.5 py-3"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary flex items-center justify-center flex-shrink-0">
-                    <CreditCard size={17} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-[13px] font-semibold text-gray-900 truncate flex-1 min-w-0">{c.descripcion}</p>
-                      <span className={`text-[13px] font-bold tabular-nums flex-shrink-0 ${hideAmounts ? 'blur-sm' : ''} text-gray-900`}>
-                        {formatAmount(c.montoCuota, c.moneda)}<span className="text-gray-400 font-normal text-[10px]">/mes</span>
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      {c.tarjeta && (
-                        <span className="text-[10px] text-gray-400 truncate">{c.tarjeta}</span>
-                      )}
-                      <span className="text-[10px] font-semibold text-primary">
-                        {actual !== null ? `${actual}/${c.totalCuotas}` : `arranca en ${monthLabel(c.primerMes)}`}
-                      </span>
-                      <span className={`text-[10px] text-gray-400 ml-auto tabular-nums ${hideAmounts ? 'blur-sm' : ''}`}>
-                        faltan {formatAmount(restanteBase, base)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <ProgressBar
-                  value={pct}
-                  color="linear-gradient(90deg, var(--primary-2), var(--primary))"
-                  trackClassName="bg-primary/10"
-                  height={5}
-                  className="mt-2.5"
-                />
-              </motion.button>
-            )
-          })}
+        <div className="space-y-4">
+          {porTarjeta.map(({ tarjeta, items, totalMes }, gi) => (
+            <div key={tarjeta}>
+              <div className="flex items-center gap-2 px-1 mb-1.5">
+                <span className="w-6 h-6 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                  <CreditCard size={13} />
+                </span>
+                <p className="text-[13px] font-semibold text-gray-800 flex-1 truncate">
+                  {tarjeta} <span className="text-gray-400 font-normal">· {items.length}</span>
+                </p>
+                <span className={`text-xs font-bold text-gray-900 tabular-nums ${hideAmounts ? 'blur-sm' : ''}`}>
+                  {formatAmount(totalMes, base)}<span className="text-gray-400 font-normal text-[10px]"> este mes</span>
+                </span>
+              </div>
+              <div className="space-y-2">
+                {items.map((c, i) => {
+                  const actual   = cuotaEnMes(c, currentMonth)
+                  const restantes = cuotasRestantes(c, currentMonth)
+                  const pagadas  = c.totalCuotas - restantes
+                  const pct      = (pagadas / c.totalCuotas) * 100
+                  const restanteBase = restantes * toBase(c.montoCuota, c.moneda, base, s)
+                  return (
+                    <motion.button
+                      key={c.id}
+                      layout
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: stagger(gi * 3 + i, 0.04), ease: [0.22, 1, 0.36, 1] }}
+                      whileTap={{ scale: 0.985 }}
+                      onClick={() => abrirEdicion(c)}
+                      className="w-full text-left glass rounded-[22px] px-3.5 py-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary flex items-center justify-center flex-shrink-0">
+                          <CreditCard size={17} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-[13px] font-semibold text-gray-900 truncate flex-1 min-w-0">{c.descripcion}</p>
+                            <span className={`text-[13px] font-bold tabular-nums flex-shrink-0 ${hideAmounts ? 'blur-sm' : ''} text-gray-900`}>
+                              {formatAmount(c.montoCuota, c.moneda)}<span className="text-gray-400 font-normal text-[10px]">/mes</span>
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[10px] font-semibold text-primary">
+                              {actual !== null ? `${actual}/${c.totalCuotas}` : `arranca en ${monthLabel(c.primerMes)}`}
+                            </span>
+                            <span className={`text-[10px] text-gray-400 ml-auto tabular-nums ${hideAmounts ? 'blur-sm' : ''}`}>
+                              faltan {formatAmount(restanteBase, base)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <ProgressBar
+                        value={pct}
+                        color="linear-gradient(90deg, var(--primary-2), var(--primary))"
+                        trackClassName="bg-primary/10"
+                        height={5}
+                        className="mt-2.5"
+                      />
+                    </motion.button>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

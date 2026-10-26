@@ -7,6 +7,7 @@ import { getCatFromSettings, formatAmount } from '@finanzas/core/lib/constants'
 import { toBase } from '@finanzas/core/lib/currency'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { markEjecutado } from '@finanzas/core/lib/transactions'
+import { haptic } from '@/lib/haptics'
 import Collapse from '@/components/ui/Collapse'
 import ProgressBar from '@/components/ui/ProgressBar'
 import { spring, springPop, pulse } from '@/components/ui/motion'
@@ -184,7 +185,7 @@ export default function AssignmentGroup({
                     type="button"
                     onClick={() => onToggleSelect(exp.id!)}
                     aria-label={isSelected ? 'Quitar de la selección' : 'Seleccionar'}
-                    className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
+                    className={`hit-44 w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
                       isSelected ? 'bg-primary border-primary' : 'border-gray-300'
                     }`}
                   >
@@ -233,8 +234,8 @@ export default function AssignmentGroup({
                     </div>
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); markEjecutado(exp.id!, !exp.ejecutado) }}
-                      className="p-1 -m-1 flex-shrink-0 inline-flex"
+                      onClick={(e) => { e.stopPropagation(); haptic('light'); markEjecutado(exp.id!, !exp.ejecutado) }}
+                      className="hit-44 p-1 -m-1 flex-shrink-0 inline-flex"
                       title={exp.ejecutado ? 'Marcar pendiente' : 'Marcar ejecutado'}
                       aria-label={exp.ejecutado ? 'Marcar pendiente' : 'Marcar ejecutado'}
                     >

@@ -50,7 +50,7 @@ export function HeaderButton({ children, onClick, label, active = false }: {
       onClick={onClick}
       aria-label={label}
       title={label}
-      className={`h-9 min-w-9 px-2.5 flex items-center justify-center gap-1 rounded-full glass text-xs font-semibold transition-colors ${
+      className={`hit-44 h-9 min-w-9 px-2.5 flex items-center justify-center gap-1 rounded-full glass text-xs font-semibold transition-colors ${
         active ? 'text-primary' : 'text-gray-600'
       }`}
     >
@@ -110,7 +110,7 @@ export function MonthSwitcher({ month, onPrev, onNext, compact = false }: {
     <div className="flex items-center glass rounded-full h-9 px-0.5">
       <motion.button
         type="button" whileTap={{ scale: 0.85 }} onClick={onPrev}
-        className="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-500/10"
+        className="hit-44 w-8 h-8 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-500/10"
         aria-label="Mes anterior"
       >
         <ChevronLeft size={15} />
@@ -137,7 +137,7 @@ export function MonthSwitcher({ month, onPrev, onNext, compact = false }: {
       </div>
       <motion.button
         type="button" whileTap={{ scale: 0.85 }} onClick={onNext}
-        className="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-500/10"
+        className="hit-44 w-8 h-8 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-500/10"
         aria-label="Mes siguiente"
       >
         <ChevronRight size={15} />

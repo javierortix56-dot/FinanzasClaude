@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { X, Trash2, Repeat, Copy, ArrowRight, Check, Camera, ScanLine } from 'lucide-react'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
@@ -8,13 +8,17 @@ import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useAssetStore } from '@finanzas/core/store/useAssetStore'
-import { addTransaction, updateTransaction, deleteTransaction, cloneTransactionToMonth, moveTransactionToMonth } from '@finanzas/core/lib/transactions'
+import { addTransaction, updateTransaction, cloneTransactionToMonth, moveTransactionToMonth } from '@finanzas/core/lib/transactions'
 import { SHARED_USER_ID, SHARED_USERS, formatAmount, getParentGroup, getCatFromSettings, toLocalDateString, DEFAULT_GASTO_CATEGORY_GROUPS, DEFAULT_INGRESO_CATEGORY_GROUPS } from '@finanzas/core/lib/constants'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { adjustAssetSaldo } from '@finanzas/core/lib/assets'
 import { toBase } from '@finanzas/core/lib/currency'
 import { parseTicket } from '@finanzas/core/lib/ticket'
 import { ocrImagen } from '@/lib/ocr'
+import { deleteTransactionsWithUndo } from '@/lib/undo'
+import { evalExpr, isExpression } from '@/lib/calc'
+import { CategoryIcon } from '@/lib/categoryIcons'
+import { haptic } from '@/lib/haptics'
 import Sheet, { FieldLabel, fieldClass } from '@/components/ui/Sheet'
 import Segmented from '@/components/ui/Segmented'
 import Collapse from '@/components/ui/Collapse'
@@ -61,16 +65,42 @@ export default function TransactionModal() {
   const [ahorroAssetId, setAhorroAssetId] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [cloneMonth, setCloneMonth] = useState('')
   const [cloneAction, setCloneAction] = useState<'clone' | 'move' | null>(null)
   const scanInputRef = useRef<HTMLInputElement>(null)
+  const montoRef = useRef<HTMLInputElement>(null)
+  // Posición del cursor a restaurar tras insertar un operador. Se aplica en
+  // el mismo commit (layout effect) para no pisar lo que se tipee después.
+  const caretRef = useRef<number | null>(null)
+  useLayoutEffect(() => {
+    if (caretRef.current === null) return
+    const el = montoRef.current
+    el?.focus()
+    el?.setSelectionRange(caretRef.current, caretRef.current)
+    caretRef.current = null
+  }, [monto])
+
+  // Inserta un operador donde está el cursor (el teclado decimal no los tiene)
+  function insertarOperador(op: string) {
+    const el = montoRef.current
+    const start = el?.selectionStart ?? monto.length
+    const end = el?.selectionEnd ?? monto.length
+    caretRef.current = start + op.length
+    setMonto(monto.slice(0, start) + op + monto.slice(end))
+    haptic('light')
+  }
+
+  // Al salir del campo, una cuenta válida se reemplaza por su resultado
+  function resolverCuenta() {
+    if (!isExpression(monto)) return
+    const r = evalExpr(monto)
+    if (r !== null) setMonto(String(r))
+  }
   const [scanning, setScanning] = useState(false)
   const [scanPct, setScanPct] = useState(0)
 
   useEffect(() => {
     if (!isTransactionModalOpen) {
-      setDeleteConfirm(false)
       setSaveError(null)
       setCloneMonth('')
       setCloneAction(null)
@@ -112,7 +142,9 @@ export default function TransactionModal() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSub, selectedGroup])
 
-  const parsedMonto  = num(monto)
+  // El monto admite operaciones ("1500+320"): se evalúa sin eval()
+  const parsedMonto  = evalExpr(monto) ?? 0
+  const montoEsCuenta = isExpression(monto)
   const montoValido  = parsedMonto > 0
   const montoInvalid = !!monto.trim() && !montoValido
 
@@ -265,9 +297,11 @@ export default function TransactionModal() {
 
       if (editingTransaction?.id) {
         await updateTransaction(editingTransaction.id, data)
+        haptic('success')
         showToast('Movimiento actualizado')
       } else {
         await addTransaction(data)
+        haptic('success')
         showToast('Movimiento guardado')
       }
 
@@ -316,21 +350,15 @@ export default function TransactionModal() {
     }
   }
 
+  // Borra al instante y ofrece "Deshacer" (revierte también el saldo de ahorro)
   async function handleDelete() {
     if (!editingTransaction?.id) return
-    if (!deleteConfirm) { setDeleteConfirm(true); return }
     setSaving(true)
     try {
-      if (editingTransaction.ahorroAssetId) {
-        try {
-          const txMonth = editingTransaction.fecha.toDate().toISOString().slice(0, 7)
-          await adjustAssetSaldo(editingTransaction.ahorroAssetId, -editingTransaction.monto, txMonth)
-        } catch (syncErr) {
-          console.error('[handleDelete] asset sync error:', syncErr)
-        }
-      }
-      await deleteTransaction(editingTransaction.id)
+      await deleteTransactionsWithUndo([editingTransaction])
       closeTransactionModal()
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Error al eliminar')
     } finally {
       setSaving(false)
     }
@@ -359,14 +387,14 @@ export default function TransactionModal() {
   const footer = (
     <>
       <AnimatePresence initial={false}>
-        {(montoInvalid || (tipo === 'egreso' && !asigOk && montoValido) || saveError || deleteConfirm) && (
+        {(montoInvalid || (tipo === 'egreso' && !asigOk && montoValido) || saveError) && (
           <motion.div
             initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
             <div className="pb-2 space-y-1">
               {montoInvalid && (
-                <p className="text-[11px] text-rose-500">Ingresá un monto mayor a 0</p>
+                <p className="text-[11px] text-rose-500">{montoEsCuenta ? 'Completá la cuenta (el resultado debe ser mayor a 0)' : 'Ingresá un monto mayor a 0'}</p>
               )}
               {tipo === 'egreso' && !asigOk && montoValido && (
                 <p className="text-[11px] text-rose-500">
@@ -378,11 +406,6 @@ export default function TransactionModal() {
                   Error: {saveError}
                 </div>
               )}
-              {deleteConfirm && (
-                <p className="text-[11px] text-rose-500">
-                  Tocá el ícono rojo de nuevo para confirmar la eliminación
-                </p>
-              )}
             </div>
           </motion.div>
         )}
@@ -393,15 +416,9 @@ export default function TransactionModal() {
             whileTap={{ scale: 0.92 }}
             onClick={handleDelete}
             disabled={saving}
-            animate={deleteConfirm ? { x: [0, -4, 4, -3, 3, 0] } : { x: 0 }}
-            transition={{ duration: 0.35 }}
-            className={`w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-2xl transition-colors ${
-              deleteConfirm
-                ? 'bg-rose-500 text-white'
-                : 'bg-rose-500/10 text-rose-500 hover:bg-rose-500/15'
-            }`}
-            title={deleteConfirm ? 'Confirmar eliminación' : 'Eliminar'}
-            aria-label={deleteConfirm ? 'Confirmar eliminación' : 'Eliminar'}
+            className="w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-2xl transition-colors bg-rose-500/10 text-rose-500 hover:bg-rose-500/15"
+            title="Eliminar"
+            aria-label="Eliminar movimiento"
           >
             <Trash2 size={17} />
           </motion.button>
@@ -460,8 +477,10 @@ export default function TransactionModal() {
           placeholder="0"
           autoFocus={!editingTransaction}
           value={monto}
+          ref={montoRef}
           onChange={(e) => setMonto(e.target.value)}
-          aria-label="Monto"
+          onBlur={resolverCuenta}
+          aria-label="Monto (admite cuentas, por ejemplo 1500+320)"
           className={`amount-input-xl w-full leading-tight font-bold tracking-tight bg-transparent border-0 outline-none placeholder:text-gray-300 tabular-nums ${
             montoInvalid ? 'text-rose-500' : 'text-gray-900'
           }`}
@@ -475,6 +494,36 @@ export default function TransactionModal() {
           options={CURRENCIES.map((c) => ({ value: c, label: c, activeColor: accentColor }))}
           className="mt-1"
         />
+
+        {/* Calculadora: operadores + resultado en vivo */}
+        <div className="flex items-center gap-1.5 mt-2">
+          {['+', '−', '×', '÷'].map((op) => (
+            <motion.button
+              key={op}
+              type="button"
+              whileTap={{ scale: 0.85 }}
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={() => insertarOperador(op)}
+              className="w-10 h-9 rounded-xl bg-surface/70 text-base font-semibold text-gray-600 shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+              aria-label={`Insertar ${op}`}
+            >
+              {op}
+            </motion.button>
+          ))}
+          <AnimatePresence>
+            {montoEsCuenta && (
+              <motion.span
+                initial={{ opacity: 0, x: 8 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 8 }}
+                className={`ml-auto text-sm font-bold tabular-nums ${evalExpr(monto) === null ? 'text-gray-400' : ''}`}
+                style={evalExpr(monto) === null ? undefined : { color: accentColor }}
+              >
+                {evalExpr(monto) === null ? '…' : `= ${formatAmount(parsedMonto, moneda)}`}
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </div>
       </motion.div>
 
       {/* Escanear ticket — solo egresos nuevos */}
@@ -564,13 +613,14 @@ export default function TransactionModal() {
                 type="button"
                 whileTap={{ scale: 0.92 }}
                 onClick={() => { setSelectedGroup(g.id); setSelectedSub('') }}
-                className="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
                 animate={isSelected
                   ? { backgroundColor: g.color, color: '#ffffff', boxShadow: `0 6px 14px -6px ${g.color}` }
                   : { backgroundColor: g.color + '18', color: g.color, boxShadow: '0 0 0 0 rgba(0,0,0,0)' }
                 }
                 transition={{ duration: 0.18 }}
               >
+                <CategoryIcon cat={g} size={13} />
                 {g.nombre}
               </motion.button>
             )
@@ -586,13 +636,14 @@ export default function TransactionModal() {
                   type="button"
                   whileTap={{ scale: 0.92 }}
                   onClick={() => setSelectedSub(isSelected ? '' : sub.id)}
-                  className="px-3 py-1 rounded-full text-xs font-medium"
+                  className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium"
                   animate={isSelected
                     ? { backgroundColor: sub.color, color: '#ffffff' }
                     : { backgroundColor: sub.color + '18', color: sub.color }
                   }
                   transition={{ duration: 0.18 }}
                 >
+                  <CategoryIcon cat={sub} size={12} />
                   {sub.nombre}
                 </motion.button>
               )

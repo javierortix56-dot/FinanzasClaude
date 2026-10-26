@@ -11,6 +11,7 @@ import { subscribeToTransactions } from '@finanzas/core/lib/transactions'
 import { subscribeToAssets } from '@finanzas/core/lib/assets'
 import TransactionModal from '@/components/transactions/TransactionModal'
 import Toast from '@/components/ui/Toast'
+import Onboarding from '@/components/Onboarding'
 import { spring, springPop } from '@/components/ui/motion'
 import { LayoutDashboard, Wallet, BarChart2, Settings, Plus, type LucideIcon } from 'lucide-react'
 
@@ -109,6 +110,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Global modal — mounted once, always available */}
       <TransactionModal />
       <Toast />
+      <Onboarding />
     </div>
   )
 }

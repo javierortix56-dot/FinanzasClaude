@@ -4,6 +4,7 @@ import { GeistMono } from 'geist/font/mono'
 import AuthProvider from '@/components/AuthProvider'
 import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar'
 import AmbientBackground from '@/components/ui/AmbientBackground'
+import { THEME_BOOT_SCRIPT } from '@/lib/theme'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -31,7 +32,11 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="es" className={`${GeistSans.variable} ${GeistMono.variable} h-full antialiased`}>
+    <html lang="es" className={`${GeistSans.variable} ${GeistMono.variable} h-full antialiased`} suppressHydrationWarning>
+      <head>
+        {/* Tema manual guardado: se aplica antes del primer pintado */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
       <body className="min-h-full">
         <AmbientBackground />
         <AuthProvider>{children}</AuthProvider>

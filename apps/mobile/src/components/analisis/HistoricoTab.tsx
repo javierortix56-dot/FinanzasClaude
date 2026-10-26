@@ -8,15 +8,16 @@ import { useBudgetStore } from '@finanzas/core/store/useBudgetStore'
 import { subscribeToBudgets } from '@finanzas/core/lib/budgets'
 import { fetchMonthTransactions, fetchLastNMonths } from '@finanzas/core/lib/analytics'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
-import { shiftMonth, monthLabel, getCurrentMonth, getParentGroup, getCatFromSettings } from '@finanzas/core/lib/constants'
+import { shiftMonth, monthLabel, getCurrentMonth, getParentGroup, getCatFromSettings, formatAmount } from '@finanzas/core/lib/constants'
 import { toBase } from '@finanzas/core/lib/currency'
 import { Transaction, Currency } from '@finanzas/core/types'
 import SummaryComparison from './SummaryComparison'
 import CategoryDonut from './CategoryDonut'
 import MultiLineChart, { LineSeries } from './MultiLineChart'
 import { motion } from 'motion/react'
-import { PiggyBank, CalendarDays, Crown } from 'lucide-react'
+import { PiggyBank, CalendarDays, Crown, TrendingUp, TrendingDown, AlertTriangle, Clock, Gauge, Lightbulb } from 'lucide-react'
 import Card from '@/components/ui/Card'
+import { CategoryIcon } from '@/lib/categoryIcons'
 import { Money } from '@/components/ui/AnimatedNumber'
 
 const MONTH_ABBR = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
@@ -25,7 +26,8 @@ export default function HistoricoTab() {
   const { transactions, currentMonth } = useTransactionStore()
   const { settings } = useSettingsStore()
   const { monedaBase } = useAuthStore()
-  const { setBudgets } = useBudgetStore()
+  const { setBudgets, budgets } = useBudgetStore()
+  const hideAmounts = useSettingsStore((st) => st.hideAmounts)
   const s    = settings ?? DEFAULT_SETTINGS
   const base = monedaBase as Currency
 
@@ -148,8 +150,118 @@ export default function HistoricoTab() {
 
   const ahorroOk = tasaAhorro !== null && tasaAhorro >= 0
 
+  // ── Insights en lenguaje natural ──────────────────────────────────────────
+  // Frases cortas y accionables derivadas de los mismos datos de los gráficos.
+  const insights: { key: string; icon: React.ReactNode; tone: 'good' | 'bad' | 'info'; text: React.ReactNode }[] = []
+  const M = (v: number) => (
+    <span className={`font-semibold tabular-nums ${hideAmounts ? 'blur-[4px] select-none' : ''}`}>{formatAmount(Math.round(v), base)}</span>
+  )
+  const mesPrevNombre = monthLabel(prevMonth).split(' ')[0]
+
+  // 1. Mayor cambio por grupo vs. el mes anterior
+  const gruposPrev = new Map<string, number>()
+  for (const t of prevTxs) {
+    if (t.tipo !== 'egreso') continue
+    const id = getParentGroup(t.categoria, s.categoriasGasto)?.id ?? t.categoria
+    gruposPrev.set(id, (gruposPrev.get(id) ?? 0) + toBase(t.monto, t.moneda, base, s))
+  }
+  const cambios = [...new Set([...gruposMes.keys(), ...gruposPrev.keys()])]
+    .map((id) => ({ id, cur: gruposMes.get(id) ?? 0, prev: gruposPrev.get(id) ?? 0 }))
+    .filter((c) => c.prev > 0 && Math.abs(c.cur - c.prev) / c.prev >= 0.1)
+    .sort((a, b) => Math.abs(b.cur - b.prev) - Math.abs(a.cur - a.prev))
+  if (cambios[0]) {
+    const c = cambios[0]
+    const pct = Math.round(((c.cur - c.prev) / c.prev) * 100)
+    const nombre = getCatFromSettings(c.id, s)?.nombre ?? c.id
+    insights.push({
+      key: 'cambio',
+      icon: pct > 0 ? <TrendingUp size={15} /> : <TrendingDown size={15} />,
+      tone: pct > 0 ? 'bad' : 'good',
+      text: <>Gastaron <b>{Math.abs(pct)}% {pct > 0 ? 'más' : 'menos'}</b> en {nombre} que en {mesPrevNombre} ({M(c.cur)} vs {M(c.prev)}).</>,
+    })
+  }
+
+  // 2. Ahorro del mes
+  if (tasaAhorro !== null) {
+    insights.push({
+      key: 'ahorro',
+      icon: <PiggyBank size={15} />,
+      tone: tasaAhorro >= 0 ? 'good' : 'bad',
+      text: tasaAhorro >= 0
+        ? <>Guardaron el <b>{Math.round(tasaAhorro)}%</b> de lo que ingresó: {M(incMes - expMes)} libres este mes.</>
+        : <>Este mes gastaron {M(expMes - incMes)} <b>más de lo que ingresó</b>.</>,
+    })
+  }
+
+  // 3. Proyección del cierre (solo mes en curso)
+  if (esMesActual && expMes > 0) {
+    const diasMes = new Date(...(currentMonth.split('-').map(Number) as [number, number]), 0).getDate()
+    const proyectado = (expMes / Math.max(diasTranscurridos, 1)) * diasMes
+    insights.push({
+      key: 'proy',
+      icon: <Gauge size={15} />,
+      tone: incMes > 0 && proyectado > incMes ? 'bad' : 'info',
+      text: <>A este ritmo, el mes cierra con egresos de {M(proyectado)}{incMes > 0 && proyectado > incMes ? <>, <b>por encima de lo ingresado</b></> : ''}.</>,
+    })
+  }
+
+  // 4. Presupuestos superados
+  const superados = budgets.filter((b) => {
+    if (b.mes !== currentMonth || b.limite <= 0) return false
+    const gastado = transactions
+      .filter((t) => t.tipo === 'egreso' && (t.categoria === b.categoria || getParentGroup(t.categoria, s.categoriasGasto)?.id === b.categoria))
+      .reduce((sum, t) => sum + toBase(t.monto, t.moneda, base, s), 0)
+    return toBase(gastado, base, b.moneda as Currency, s) > b.limite
+  })
+  if (superados.length > 0) {
+    const nombres = superados.map((b) => getCatFromSettings(b.categoria, s)?.nombre ?? b.categoria)
+    insights.push({
+      key: 'presu',
+      icon: <AlertTriangle size={15} />,
+      tone: 'bad',
+      text: <>Superaron el presupuesto de <b>{nombres.join(', ')}</b>.</>,
+    })
+  }
+
+  // 5. Pagos pendientes
+  const pendientes = transactions.filter((t) => t.tipo === 'egreso' && !t.ejecutado)
+  if (pendientes.length > 0) {
+    const totalPend = pendientes.reduce((sum, t) => sum + toBase(t.monto, t.moneda, base, s), 0)
+    insights.push({
+      key: 'pend',
+      icon: <Clock size={15} />,
+      tone: 'info',
+      text: <>Quedan <b>{pendientes.length} pago{pendientes.length !== 1 ? 's' : ''} pendiente{pendientes.length !== 1 ? 's' : ''}</b> por {M(totalPend)}.</>,
+    })
+  }
+
   return (
     <div className="h-full overflow-y-auto overscroll-contain px-4 pt-1 pb-28 space-y-3 no-scrollbar">
+      {/* Section 0: Insights */}
+      {insights.length > 0 && (
+        <Card title={<span className="inline-flex items-center gap-1.5"><Lightbulb size={12} /> Lo más importante</span>}>
+          <div className="space-y-2">
+            {insights.map((ins, i) => {
+              const tone = ins.tone === 'good'
+                ? 'bg-emerald-500/12 text-emerald-600'
+                : ins.tone === 'bad' ? 'bg-rose-500/12 text-rose-500' : 'bg-primary/10 text-primary'
+              return (
+                <motion.div
+                  key={ins.key}
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.1 + i * 0.06 }}
+                  className="flex items-start gap-2.5"
+                >
+                  <span className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${tone}`}>{ins.icon}</span>
+                  <p className="text-[13px] text-gray-700 leading-snug pt-1">{ins.text}</p>
+                </motion.div>
+              )
+            })}
+          </div>
+        </Card>
+      )}
+
       {/* Section 1: Comparison + insights */}
       <Card title={`Resumen · vs ${monthLabel(prevMonth).replace(' de ', ' ')}`} padded={false}>
         <SummaryComparison
@@ -232,10 +344,9 @@ export default function HistoricoTab() {
                   <span className="relative w-5 h-5 rounded-full bg-surface text-gray-500 text-[10px] font-bold flex items-center justify-center flex-shrink-0 shadow-sm">
                     {i + 1}
                   </span>
-                  <span
-                    className="relative w-1.5 h-1.5 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: cat?.color ?? '#94a3b8' }}
-                  />
+                  <span className="relative inline-flex flex-shrink-0" style={{ color: cat?.color ?? '#94a3b8' }}>
+                    <CategoryIcon cat={cat ?? { id: t.categoria }} size={13} />
+                  </span>
                   <p className="relative flex-1 min-w-0 text-xs font-medium text-gray-700 truncate">
                     {t.descripcion || cat?.nombre || t.categoria}
                   </p>
