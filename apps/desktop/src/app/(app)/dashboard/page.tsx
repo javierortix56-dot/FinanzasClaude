@@ -1,5 +1,6 @@
 'use client'
 
+import { txLabel } from '@/lib/txLabel'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'motion/react'
@@ -408,7 +409,7 @@ function RecentRow({ t, settings, index, onClick }: { t: Transaction; settings: 
         <CategoryIcon cat={cat ?? { id: t.categoria }} size={16} />
       </span>
       <span className="min-w-0">
-        <span className="block text-sm text-foreground font-medium truncate">{t.descripcion || '(sin descripción)'}</span>
+        <span className="block text-sm text-foreground font-medium truncate">{txLabel(t, settings)}</span>
         <span className="block text-xs text-muted truncate">
           {cat?.nombre ?? '—'}
           {!t.ejecutado && <span className="ml-2 text-[10px] uppercase tracking-wide text-unassigned font-semibold">Pendiente</span>}

@@ -1,5 +1,6 @@
 'use client'
 
+import { txLabel } from '@/lib/txLabel'
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Check, ChevronRight, Link2, Wand2, Unlink, X, Inbox } from 'lucide-react'
@@ -258,7 +259,7 @@ export default function AsignacionesPage() {
             <GrupoCard
               key={g.ingreso.id}
               index={i + 1}
-              titulo={`${g.ingreso.descripcion || '(sin descripción)'} · ${fechaCorta(g.ingreso)}`}
+              titulo={`${txLabel(g.ingreso, settings)} · ${fechaCorta(g.ingreso)}`}
               meta={
                 <>
                   Ingreso <MoneyText amount={g.ingresoTotal} currency={base} /> ·{' '}
@@ -311,7 +312,7 @@ export default function AsignacionesPage() {
                   <Link2 className="h-4 w-4" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-foreground">{ing.descripcion || '(sin descripción)'}</span>
+                  <span className="block truncate text-sm font-semibold text-foreground">{txLabel(ing, settings)}</span>
                   <span className="mt-0.5 block text-xs text-muted">
                     {fechaCorta(ing)} · <MoneyText amount={ing.monto} currency={ing.moneda} />
                   </span>
@@ -454,7 +455,7 @@ function GrupoCard({
                       {cat && <CategoryIcon cat={cat} size={11} />}
                     </span>
                     <span className="truncate font-medium text-foreground">
-                      {e.descripcion || '(sin descripción)'}
+                      {txLabel(e, settings)}
                     </span>
                     {e.asignaciones.length > 1 && (
                       <span className="shrink-0 rounded-full bg-primary/12 px-1.5 py-px text-[10px] font-semibold text-primary">dividido</span>
