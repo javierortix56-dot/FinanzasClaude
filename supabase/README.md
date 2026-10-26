@@ -77,9 +77,13 @@ where email = 'EMAIL';
 - Tablas `resumenes` y `resumen_items` (migración `20261026_resumenes.sql`, aplicada el 2026-10-26).
 - Edge Function `analizar-resumen` (código en `functions/analizar-resumen/`): lee el PDF/CSV
   con la API de Claude y devuelve los renglones. Valida que el usuario esté en `allowed_users`.
-- **Paso manual:** cargar la clave de la API de Claude (console.anthropic.com → API Keys):
+- **Proveedor de IA:** usa Gemini (`gemini-3.8-flash`) si existe `gemini_api_key` en `app_secrets`;
+  si no, Claude (`anthropic_api_key`). Con Gemini conviene tener **facturación activada** en el proyecto
+  de Google: en el nivel gratuito, Google puede usar el contenido para mejorar sus productos y
+  revisarlo manualmente (ver términos de la API de Gemini).
+- **Paso manual:** cargar la clave en el SQL Editor de Supabase:
 
 ```sql
-insert into public.app_secrets (key, value) values ('anthropic_api_key', 'sk-ant-...')
+insert into public.app_secrets (key, value) values ('gemini_api_key', 'AIza...')
 on conflict (key) do update set value = excluded.value;
 ```

@@ -3,13 +3,16 @@
 // JSON estructurado. No guarda nada: la app recibe el resultado, lo muestra y
 // lo guarda con la sesión del usuario (RLS).
 //
-// Requiere la clave en app_secrets (solo service role puede leerla):
-//   insert into app_secrets (key, value) values ('anthropic_api_key', 'sk-ant-...');
+// Proveedor de IA: usa Gemini si hay `gemini_api_key` en app_secrets; si no,
+// Claude (`anthropic_api_key`). app_secrets solo la puede leer el service role:
+//   insert into app_secrets (key, value) values ('gemini_api_key', '...');
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import Anthropic from "npm:@anthropic-ai/sdk@0.133.0";
+import { extraerConGemini, ProviderError } from "./gemini.ts";
 
-const MODEL = "claude-opus-5-5";
+const MODEL_CLAUDE = "claude-opus-5-5";
+const MODEL_GEMINI = "gemini-3.8-flash";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -75,6 +78,36 @@ Reglas:
 - "categoria": elegí el id más adecuado de la lista provista; null si no hay uno razonable.
 - "total": total a pagar (tarjeta) o null si no figura.`;
 
+async function extraerConClaude(apiKey: string, archivo: Payload["archivo"], instruccion: string) {
+  const client = new Anthropic({ apiKey });
+  const content: Anthropic.Beta.BetaContentBlockParam[] = archivo.tipo === "pdf"
+    ? [
+        { type: "document", source: { type: "base64", media_type: "application/pdf", data: archivo.data } },
+        { type: "text", text: instruccion },
+      ]
+    : [{ type: "text", text: `<resumen>\n${archivo.data}\n</resumen>\n\n${instruccion}` }];
+
+  const stream = client.beta.messages.stream({
+    model: MODEL_CLAUDE,
+    max_tokens: 64000,
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default",
+    output_config: { effort: "medium", format: { type: "json_schema", schema: SCHEMA } },
+    system: SYSTEM,
+    messages: [{ role: "user", content }],
+  });
+  const msg = await stream.finalMessage();
+
+  if (msg.stop_reason === "refusal") throw new ProviderError("el modelo no pudo procesar este archivo", 422);
+  if (msg.stop_reason === "max_tokens") throw new ProviderError("el resumen es demasiado largo para procesarlo de una vez", 422);
+
+  const text = msg.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
+  return json({
+    resultado: JSON.parse(text),
+    uso: { modelo: msg.model, entrada: msg.usage.input_tokens, salida: msg.usage.output_tokens },
+  });
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "método no permitido" }, 405);
@@ -100,43 +133,26 @@ Deno.serve(async (req: Request) => {
   if (archivo.data.length > 20_000_000) return json({ error: "archivo demasiado grande (máx. ~15 MB)" }, 413);
 
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-  const { data: secret } = await admin.from("app_secrets").select("value").eq("key", "anthropic_api_key").maybeSingle();
-  if (!secret?.value) return json({ error: "falta configurar anthropic_api_key en app_secrets" }, 500);
-
-  const client = new Anthropic({ apiKey: secret.value });
+  const { data: secrets } = await admin.from("app_secrets").select("key, value").in("key", ["gemini_api_key", "anthropic_api_key"]);
+  const geminiKey = secrets?.find((r: { key: string }) => r.key === "gemini_api_key")?.value;
+  const claudeKey = secrets?.find((r: { key: string }) => r.key === "anthropic_api_key")?.value;
+  if (!geminiKey && !claudeKey) {
+    return json({ error: "falta configurar gemini_api_key (o anthropic_api_key) en app_secrets" }, 500);
+  }
 
   const listaCategorias = categorias.map((c) => `${c.id} = ${c.nombre}`).join("\n");
   const instruccion = `Archivo: ${archivo.nombre}\n\nCategorías disponibles (id = nombre):\n${listaCategorias || "(ninguna)"}\n\nExtraé todos los movimientos de este resumen.`;
 
-  const content: Anthropic.Beta.BetaContentBlockParam[] = archivo.tipo === "pdf"
-    ? [
-        { type: "document", source: { type: "base64", media_type: "application/pdf", data: archivo.data } },
-        { type: "text", text: instruccion },
-      ]
-    : [{ type: "text", text: `<resumen>\n${archivo.data}\n</resumen>\n\n${instruccion}` }];
-
   try {
-    const stream = client.beta.messages.stream({
-      model: MODEL,
-      max_tokens: 64000,
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
-      output_config: { effort: "medium", format: { type: "json_schema", schema: SCHEMA } },
-      system: SYSTEM,
-      messages: [{ role: "user", content }],
-    });
-    const msg = await stream.finalMessage();
-
-    if (msg.stop_reason === "refusal") return json({ error: "el modelo no pudo procesar este archivo" }, 422);
-    if (msg.stop_reason === "max_tokens") return json({ error: "el resumen es demasiado largo para procesarlo de una vez" }, 422);
-
-    const text = msg.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
-    const resultado = JSON.parse(text);
-    return json({
-      resultado,
-      uso: { modelo: msg.model, entrada: msg.usage.input_tokens, salida: msg.usage.output_tokens },
-    });
+    if (geminiKey) {
+      const r = await extraerConGemini({
+        apiKey: geminiKey, model: MODEL_GEMINI, system: SYSTEM, schema: SCHEMA, archivo, instruccion,
+      });
+      return json(r);
+    }
+    return await extraerConClaude(claudeKey!, archivo, instruccion);
   } catch (err) {
+    if (err instanceof ProviderError) return json({ error: err.message }, err.status);
     if (err instanceof Anthropic.RateLimitError) return json({ error: "límite de uso de la API, intente de nuevo en un minuto" }, 429);
     if (err instanceof Anthropic.AuthenticationError) return json({ error: "la clave de la API de Claude no es válida" }, 500);
     if (err instanceof Anthropic.BadRequestError) return json({ error: `la API rechazó el archivo: ${err.message}` }, 400);
