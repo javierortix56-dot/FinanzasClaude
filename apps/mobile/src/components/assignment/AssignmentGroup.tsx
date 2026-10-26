@@ -1,11 +1,15 @@
 'use client'
 
-import { ChevronDown, ChevronRight, Unlink, CheckCircle2, Split } from 'lucide-react'
+import { AnimatePresence, motion } from 'motion/react'
+import { ChevronDown, Unlink, Check, Split } from 'lucide-react'
 import { Transaction, Settings, Currency } from '@finanzas/core/types'
 import { getCatFromSettings, formatAmount } from '@finanzas/core/lib/constants'
 import { toBase } from '@finanzas/core/lib/currency'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { markEjecutado } from '@finanzas/core/lib/transactions'
+import Collapse from '@/components/ui/Collapse'
+import ProgressBar from '@/components/ui/ProgressBar'
+import { spring, springPop, pulse } from '@/components/ui/motion'
 
 /** Un egreso dentro de un grupo: si está dividido, montoAsignado < exp.monto */
 export interface GroupItem {
@@ -53,32 +57,37 @@ export default function AssignmentGroup({
   const usedPercent = incomeBase > 0 ? Math.min((totalGastado / incomeBase) * 100, 100) : 0
   const isOver      = disponible < 0
 
-  const barColor = isOver ? '#f87171' : usedPercent >= 85 ? '#fbbf24' : '#22c55e'
+  const barColor = isOver ? '#f43f5e' : usedPercent >= 85 ? '#f59e0b' : '#10b981'
 
   const incomeDate = income?.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
 
+  const blur = hideAmounts ? 'blur-sm select-none' : ''
+
   return (
-    <div className={`mx-3 mb-1.5 rounded-2xl overflow-hidden shadow-sm border ${
-      isUnassigned ? 'border-amber-200' : 'border-gray-100'
-    }`}>
+    <div className={`mx-3 mb-2 rounded-[20px] overflow-hidden transition-shadow ${
+      isUnassigned
+        ? 'bg-amber-500/[0.07] ring-1 ring-amber-500/25'
+        : 'bg-surface/75 shadow-[0_1px_2px_rgba(0,0,0,0.03),0_6px_18px_-10px_rgba(0,0,0,0.12)]'
+    } ${isExpanded ? 'shadow-soft' : ''}`}>
 
       {/* ── Card header ── */}
       <div
-        className={`px-4 pt-2 pb-2 cursor-pointer active:opacity-90 transition-opacity ${
-          isUnassigned
-            ? 'bg-gradient-to-r from-amber-50 to-orange-50'
-            : 'bg-gradient-to-r from-white to-gray-50'
-        }`}
+        role="button"
+        tabIndex={0}
+        aria-expanded={isExpanded}
+        className="px-3.5 pt-2.5 pb-2.5 cursor-pointer select-none"
         onClick={onToggleExpand}
+        onKeyDown={(e) => { if (e.key === 'Enter') onToggleExpand() }}
       >
-        <div className="flex items-start gap-2">
+        <div className="flex items-center gap-2">
           {/* Chevron */}
-          <div className="mt-0.5 flex-shrink-0">
-            {isExpanded
-              ? <ChevronDown size={15} className={isUnassigned ? 'text-amber-400' : 'text-gray-400'} />
-              : <ChevronRight size={15} className={isUnassigned ? 'text-amber-400' : 'text-gray-400'} />
-            }
-          </div>
+          <motion.span
+            animate={{ rotate: isExpanded ? 0 : -90 }}
+            transition={spring}
+            className={`flex-shrink-0 inline-flex ${isUnassigned ? 'text-amber-500' : 'text-gray-400'}`}
+          >
+            <ChevronDown size={16} />
+          </motion.span>
 
           {/* Title + meta */}
           <div className="flex-1 min-w-0">
@@ -86,66 +95,62 @@ export default function AssignmentGroup({
               <p className="text-sm font-bold text-amber-600">Sin asignar</p>
             ) : (
               <>
-                <p className="text-xs font-medium text-gray-900 truncate leading-tight">
+                <p className="text-[13px] font-semibold text-gray-900 truncate leading-tight">
                   {income!.descripcion || getCatFromSettings(income!.categoria, settings)?.nombre || income!.categoria}
                 </p>
                 <p className="text-[11px] text-gray-400 mt-0.5">
-                  {incomeDate}
+                  {incomeDate} · {items.length} egreso{items.length !== 1 ? 's' : ''}
                 </p>
               </>
             )}
           </div>
 
-          {/* Right side: count of expenses (amount is already conveyed by the
-              progress bar + "Disponible") */}
+          {/* Right side */}
           <div className="flex-shrink-0 text-right">
             {isUnassigned ? (
-              <p className={`text-sm font-bold text-amber-600 ${hideAmounts ? 'blur-sm' : ''}`}>
-                -{formatAmount(totalGastado, monedaBase)}
-              </p>
-            ) : null}
-            <p className="text-[11px] text-gray-400">
-              {items.length} egreso{items.length !== 1 ? 's' : ''}
-            </p>
+              <>
+                <p className={`text-sm font-bold text-amber-600 tabular-nums ${blur}`}>
+                  -{formatAmount(totalGastado, monedaBase)}
+                </p>
+                <p className="text-[11px] text-amber-600/70">
+                  {items.length} egreso{items.length !== 1 ? 's' : ''}
+                </p>
+              </>
+            ) : (
+              <span className="text-[11px] font-bold tabular-nums px-2 py-0.5 rounded-full" style={{ color: barColor, backgroundColor: barColor + '18' }}>
+                {Math.round(usedPercent)}%
+              </span>
+            )}
           </div>
 
           {/* Desasignar grupo */}
           {!isUnassigned && items.length > 0 && (
-            <button
+            <motion.button
+              whileTap={{ scale: 0.85 }}
               onClick={(e) => { e.stopPropagation(); onDesassign() }}
-              className="flex-shrink-0 ml-1 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+              className="flex-shrink-0 w-8 h-8 -mr-1 flex items-center justify-center rounded-full text-gray-300 hover:bg-rose-500/10 hover:text-rose-500 transition-colors"
               title="Desasignar todos"
+              aria-label="Desasignar todos"
             >
-              <Unlink size={13} className="text-gray-300 hover:text-red-400 transition-colors" />
-            </button>
+              <Unlink size={14} />
+            </motion.button>
           )}
         </div>
 
         {/* ── Barra de progreso ── */}
         {!isUnassigned && incomeBase > 0 && (
-          <div className="mt-1.5">
-            <div className="flex justify-between items-baseline mb-0.5">
+          <div className="mt-2 pl-6">
+            <ProgressBar value={usedPercent} color={barColor} height={5} />
+            <div className="flex justify-between items-baseline mt-1">
               <span className="text-[11px] text-gray-400">
-                Ingreso:{' '}
-                <span className={`font-semibold text-green-600 ${hideAmounts ? 'blur-sm' : ''}`}>
+                Ingreso{' '}
+                <span className={`font-semibold text-emerald-600 tabular-nums ${blur}`}>
                   +{formatAmount(incomeBase, monedaBase)}
                 </span>
               </span>
-              <span className={`text-[11px] font-semibold ${isOver ? 'text-red-400' : 'text-gray-500'}`}>
-                <span className={hideAmounts ? 'blur-sm' : ''}>
-                  {isOver ? 'Excedido' : 'Disponible'}: {formatAmount(Math.abs(disponible), monedaBase)}
-                </span>
-              </span>
-            </div>
-            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all duration-500"
-                style={{ width: `${usedPercent}%`, backgroundColor: barColor }}
-              />
-            </div>
-            <div className="flex justify-end mt-0.5">
-              <span className="text-[10px] font-semibold" style={{ color: barColor }}>
-                {Math.round(usedPercent)}% usado
+              <span className={`text-[11px] font-semibold ${isOver ? 'text-rose-500' : 'text-gray-500'}`}>
+                {isOver ? 'Excedido' : 'Disponible'}{' '}
+                <span className={`tabular-nums ${blur}`}>{formatAmount(Math.abs(disponible), monedaBase)}</span>
               </span>
             </div>
           </div>
@@ -153,10 +158,10 @@ export default function AssignmentGroup({
       </div>
 
       {/* ── Expense list ── */}
-      {isExpanded && (
-        <div className="bg-surface divide-y divide-gray-50">
+      <Collapse open={isExpanded}>
+        <div className="border-t border-hairline px-1.5 py-1.5 space-y-0.5">
           {items.length === 0 ? (
-            <p className="text-xs text-gray-400 px-4 py-3 italic">
+            <p className="text-xs text-gray-400 px-3 py-2 italic">
               Ningún egreso asignado aún
             </p>
           ) : (
@@ -166,26 +171,34 @@ export default function AssignmentGroup({
               const dateStr = exp.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
 
               return (
-                <div
+                <motion.div
                   key={exp.id}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 transition-colors ${
-                    isSelected ? 'bg-primary/5' : 'hover:bg-gray-50'
-                  } ${exp.ejecutado ? 'opacity-50' : ''}`}
+                  layout="position"
+                  animate={{ opacity: exp.ejecutado ? 0.5 : 1 }}
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-2xl transition-colors ${
+                    isSelected ? 'bg-primary/[0.08]' : 'hover:bg-gray-500/[0.05]'
+                  }`}
                 >
                   {/* Checkbox — solo selección */}
                   <button
                     type="button"
                     onClick={() => onToggleSelect(exp.id!)}
-                    className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${
-                      isSelected ? 'bg-primary border-primary' : 'border-gray-200'
+                    aria-label={isSelected ? 'Quitar de la selección' : 'Seleccionar'}
+                    className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
+                      isSelected ? 'bg-primary border-primary' : 'border-gray-300'
                     }`}
                   >
-                    {isSelected && (
-                      <svg width="8" height="6" viewBox="0 0 10 8" fill="none">
-                        <path d="M1 4l2.5 2.5L9 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    )}
+                    <AnimatePresence>
+                      {isSelected && (
+                        <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={springPop} className="inline-flex">
+                          <Check size={11} strokeWidth={3.5} className="text-white" />
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
                   </button>
+
+                  {/* Color de categoría */}
+                  <span className="w-1 self-stretch rounded-full flex-shrink-0" style={{ backgroundColor: cat?.color ?? '#94a3b8' }} />
 
                   {/* Description + meta — abre edición */}
                   <button
@@ -193,13 +206,13 @@ export default function AssignmentGroup({
                     onClick={() => onEdit(exp)}
                     className="flex-1 min-w-0 text-left"
                   >
-                    <p className={`text-xs font-medium text-gray-900 truncate ${exp.ejecutado ? 'line-through' : ''}`}>
+                    <p className={`text-xs font-semibold text-gray-900 truncate ${exp.ejecutado ? 'line-through' : ''}`}>
                       {exp.descripcion || cat?.nombre || exp.categoria}
                     </p>
-                    <p className="text-[11px] text-gray-400 mt-px flex items-center gap-1">
-                      {dateStr}{cat ? ` · ${cat.nombre}` : ''}
+                    <p className="text-[11px] text-gray-400 mt-px flex items-center gap-1 min-w-0">
+                      <span className="truncate">{dateStr}{cat ? ` · ${cat.nombre}` : ''}</span>
                       {esParcial && (
-                        <span className="inline-flex items-center gap-0.5 px-1.5 py-px rounded-full bg-primary/10 text-primary font-semibold">
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-px rounded-full bg-primary/10 text-primary font-semibold flex-shrink-0">
                           <Split size={9} /> dividido
                         </span>
                       )}
@@ -207,13 +220,13 @@ export default function AssignmentGroup({
                   </button>
 
                   {/* Amount + status */}
-                  <div className="flex-shrink-0 flex items-center gap-1.5">
+                  <div className="flex-shrink-0 flex items-center gap-2">
                     <div className="text-right">
-                      <p className={`text-xs font-semibold text-red-400 ${hideAmounts ? 'blur-sm' : ''} ${exp.ejecutado ? 'line-through' : ''}`}>
+                      <p className={`text-xs font-bold text-rose-500 tabular-nums ${blur} ${exp.ejecutado ? 'line-through' : ''}`}>
                         -{formatAmount(toBase(montoAsignado, exp.moneda, monedaBase, settings), monedaBase)}
                       </p>
                       {esParcial && (
-                        <p className={`text-[10px] text-gray-400 tabular-nums leading-tight ${hideAmounts ? 'blur-sm' : ''}`}>
+                        <p className={`text-[10px] text-gray-400 tabular-nums leading-tight ${blur}`}>
                           de {formatAmount(toBase(exp.monto, exp.moneda, monedaBase, settings), monedaBase)}
                         </p>
                       )}
@@ -223,19 +236,23 @@ export default function AssignmentGroup({
                       onClick={(e) => { e.stopPropagation(); markEjecutado(exp.id!, !exp.ejecutado) }}
                       className="p-1 -m-1 flex-shrink-0 inline-flex"
                       title={exp.ejecutado ? 'Marcar pendiente' : 'Marcar ejecutado'}
+                      aria-label={exp.ejecutado ? 'Marcar pendiente' : 'Marcar ejecutado'}
                     >
-                      {exp.ejecutado
-                        ? <CheckCircle2 size={13} className="text-green-500" />
-                        : <div className="w-[13px] h-[13px] rounded-full border border-gray-300" />
-                      }
+                      <motion.span
+                        className={`w-4 h-4 rounded-full flex items-center justify-center border ${exp.ejecutado ? 'bg-emerald-500 border-emerald-500' : 'border-gray-300'}`}
+                        animate={{ scale: exp.ejecutado ? [1, 1.25, 1] : 1 }}
+                        transition={pulse}
+                      >
+                        {exp.ejecutado && <Check size={10} strokeWidth={3.5} className="text-white" />}
+                      </motion.span>
                     </button>
                   </div>
-                </div>
+                </motion.div>
               )
             })
           )}
         </div>
-      )}
+      </Collapse>
     </div>
   )
 }

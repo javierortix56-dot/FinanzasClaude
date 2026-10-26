@@ -3,7 +3,7 @@
 import { ArrowUp, ArrowDown } from 'lucide-react'
 import { Transaction, Settings, Currency } from '@finanzas/core/types'
 import { toBase } from '@finanzas/core/lib/currency'
-import { formatAmount } from '@finanzas/core/lib/constants'
+import { Money } from '@/components/ui/AnimatedNumber'
 
 interface Props {
   current:  Transaction[]
@@ -32,23 +32,23 @@ function Metric({ label, value, prev, curr, currency = '', higherIsBetter = true
   const diff = prev === 0 ? 0 : ((curr - prev) / prev) * 100
   const improved = higherIsBetter ? curr >= prev : curr <= prev
   const arrow = diff === 0 ? null : improved
-    ? <ArrowUp  size={10} className="text-green-500" />
-    : <ArrowDown size={10} className="text-red-400"  />
+    ? <ArrowUp  size={10} />
+    : <ArrowDown size={10} />
 
   return (
-    <div className="bg-gray-50 rounded-xl px-3 py-2.5">
-      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide mb-1">{label}</p>
-      <p className="text-sm font-bold text-gray-900 leading-tight tabular-nums">
-        {typeof value === 'string' ? value : formatAmount(value, currency)}
+    <div className="rounded-2xl bg-gray-500/[0.06] px-3 py-2.5">
+      <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wide mb-1">{label}</p>
+      <p className="text-[15px] font-bold text-gray-900 leading-tight tabular-nums truncate">
+        {typeof value === 'string' ? value : <Money value={value} currency={currency} />}
       </p>
-      <div className="flex items-center gap-0.5 mt-0.5 h-3">
+      <div className="flex items-center mt-1 h-4">
         {diff !== 0 && (
-          <>
+          <span className={`inline-flex items-center gap-0.5 px-1.5 rounded-full text-[10px] font-bold ${
+            improved ? 'bg-emerald-500/12 text-emerald-600' : 'bg-rose-500/12 text-rose-500'
+          }`}>
             {arrow}
-            <span className={`text-[10px] font-semibold ${improved ? 'text-green-500' : 'text-red-400'}`}>
-              {Math.abs(diff).toFixed(0)}%
-            </span>
-          </>
+            {Math.abs(diff).toFixed(0)}%
+          </span>
         )}
       </div>
     </div>
@@ -64,7 +64,7 @@ export default function SummaryComparison({ current, previous, settings, monedaB
   const pBalance  = pIngresos - pEgresos
 
   return (
-    <div className="grid grid-cols-2 gap-2 px-4 py-2.5">
+    <div className="grid grid-cols-2 gap-2 px-4 pb-2">
       <Metric label="Balance"      value={cBalance}   prev={pBalance}   curr={cBalance}   currency={monedaBase} higherIsBetter />
       <Metric label="Ingresos"     value={cIngresos}  prev={pIngresos}  curr={cIngresos}  currency={monedaBase} higherIsBetter />
       <Metric label="Egresos"      value={cEgresos}   prev={pEgresos}   curr={cEgresos}   currency={monedaBase} higherIsBetter={false} />

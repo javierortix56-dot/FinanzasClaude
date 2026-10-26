@@ -1,14 +1,17 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { AnimatePresence, motion } from 'motion/react'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
-import { monthLabel } from '@finanzas/core/lib/constants'
 import HistoricoTab from '@/components/analisis/HistoricoTab'
 import PilotoTab    from '@/components/analisis/PilotoTab'
 import CuotasTab    from '@/components/cuotas/CuotasTab'
+import PageHeader, { MonthSwitcher } from '@/components/ui/PageHeader'
+import Segmented from '@/components/ui/Segmented'
 
 type Tab = 'historico' | 'cuotas' | 'piloto'
+
+const TABS: Tab[] = ['historico', 'cuotas', 'piloto']
 
 const TAB_LABELS: Record<Tab, string> = {
   historico: 'Histórico',
@@ -19,51 +22,48 @@ const TAB_LABELS: Record<Tab, string> = {
 export default function AnalisisPage() {
   const { currentMonth, prevMonth, nextMonth } = useTransactionStore()
   const [tab, setTab] = useState<Tab>('historico')
+  // Dirección del cambio de tab para deslizar el contenido hacia el lado correcto
+  const [dir, setDir] = useState(1)
+
+  function changeTab(t: Tab) {
+    setDir(TABS.indexOf(t) > TABS.indexOf(tab) ? 1 : -1)
+    setTab(t)
+  }
 
   return (
-    <div className="flex flex-col h-full bg-gray-50">
+    <div className="flex flex-col h-full">
+      <PageHeader
+        title="Análisis"
+        actions={<MonthSwitcher month={currentMonth} onPrev={prevMonth} onNext={nextMonth} compact />}
+      >
+        <Segmented
+          id="analisis-tab"
+          value={tab}
+          onChange={changeTab}
+          options={TABS.map((t) => ({ value: t, label: TAB_LABELS[t] }))}
+          className="mt-4"
+        />
+      </PageHeader>
 
-      {/* ── Header ── */}
-      <div className="bg-surface px-4 pt-10 pb-3 shadow-sm">
-        <div className="flex items-center justify-between">
-          <h1 className="text-gray-800 font-bold text-xl">Análisis</h1>
-          <div className="flex items-center gap-1">
-            <button onClick={prevMonth} className="p-1.5 border border-gray-200 rounded-full">
-              <ChevronLeft size={13} className="text-gray-500" />
-            </button>
-            <span className="text-gray-600 text-xs font-medium px-2 capitalize">
-              {monthLabel(currentMonth)}
-            </span>
-            <button onClick={nextMonth} className="p-1.5 border border-gray-200 rounded-full">
-              <ChevronRight size={13} className="text-gray-500" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Main card ── */}
-      <div className="flex-1 min-h-0 bg-surface overflow-hidden flex flex-col">
-
-        {/* Tabs */}
-        <div className="flex border-b border-gray-100 px-4 pt-1">
-          {(['historico', 'cuotas', 'piloto'] as Tab[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`flex-1 py-3 text-sm font-semibold transition-colors ${
-                tab === t
-                  ? 'text-primary border-b-2 border-primary'
-                  : 'text-gray-400'
-              }`}
-            >
-              {TAB_LABELS[t]}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex-1 overflow-hidden">
-          {tab === 'historico' ? <HistoricoTab /> : tab === 'cuotas' ? <CuotasTab /> : <PilotoTab />}
-        </div>
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <AnimatePresence mode="wait" initial={false} custom={dir}>
+          <motion.div
+            key={tab}
+            custom={dir}
+            variants={{
+              enter: (d: number) => ({ opacity: 0, x: d * 24 }),
+              center: { opacity: 1, x: 0 },
+              exit: (d: number) => ({ opacity: 0, x: d * -24 }),
+            }}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            className="h-full"
+          >
+            {tab === 'historico' ? <HistoricoTab /> : tab === 'cuotas' ? <CuotasTab /> : <PilotoTab />}
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   )

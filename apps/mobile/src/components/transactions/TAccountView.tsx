@@ -1,7 +1,8 @@
 'use client'
 
 import { memo, useMemo } from 'react'
-import { CheckCircle2, TrendingUp, TrendingDown } from 'lucide-react'
+import { AnimatePresence, motion } from 'motion/react'
+import { Check, TrendingUp, TrendingDown } from 'lucide-react'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
@@ -11,6 +12,8 @@ import { getCatFromSettings, formatAmount } from '@finanzas/core/lib/constants'
 import { toBase } from '@finanzas/core/lib/currency'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { markEjecutado } from '@finanzas/core/lib/transactions'
+import { Money } from '@/components/ui/AnimatedNumber'
+import { springPop, stagger, pulse } from '@/components/ui/motion'
 
 interface TxRowProps {
   tx: Transaction
@@ -24,78 +27,95 @@ interface TxRowProps {
 
 // memo + linkedLabel resuelto en el padre: cada fila ya no se suscribe al
 // store completo ni re-renderiza cuando cambia cualquier otro movimiento.
-const TxRow = memo(function TxRow({ tx, hideAmounts, settings, monedaBase, linkedLabel, onEdit }: TxRowProps) {
+const TxRow = memo(function TxRow({ tx, hideAmounts, settings, monedaBase, linkedLabel, onEdit, index }: TxRowProps & { index: number }) {
   const cat = getCatFromSettings(tx.categoria, settings)
   const isIngreso = tx.tipo === 'ingreso'
   const dateStr = tx.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
-  const dotColor = cat?.color ?? (isIngreso ? '#22c55e' : '#f87171')
+  const dotColor = cat?.color ?? (isIngreso ? '#10b981' : '#f43f5e')
   const montoBase = toBase(tx.monto, tx.moneda, monedaBase, settings ?? DEFAULT_SETTINGS)
+  const blur = hideAmounts ? 'blur-[5px] select-none' : ''
 
   return (
-    <div
+    <motion.div
+      layout="position"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: tx.ejecutado ? 0.5 : 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.15 } }}
+      transition={{ duration: 0.28, delay: stagger(index), ease: [0.22, 1, 0.36, 1] }}
       role="button"
       tabIndex={0}
       onClick={() => onEdit(tx)}
       onKeyDown={(e) => { if (e.key === 'Enter') onEdit(tx) }}
-      className={`w-full min-w-0 text-left px-2.5 py-2 border-b border-gray-50 hover:bg-gray-50 active:bg-gray-100 transition-colors overflow-hidden cursor-pointer ${tx.ejecutado ? 'opacity-50' : ''}`}
+      whileTap={{ scale: 0.98 }}
+      className="relative w-full min-w-0 text-left mb-1.5 px-2.5 py-2 rounded-2xl bg-surface/70 hover:bg-surface transition-colors overflow-hidden cursor-pointer shadow-[0_1px_2px_rgba(0,0,0,0.03)]"
     >
+      {/* Acento de color de la categoría */}
+      <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full" style={{ backgroundColor: dotColor }} />
+
       <div className="flex items-center justify-between gap-1 min-w-0">
-        <p className={`text-xs font-medium text-gray-900 truncate leading-tight flex-1 min-w-0 ${tx.ejecutado ? 'line-through' : ''}`}>
+        <p className={`text-xs font-semibold text-gray-900 truncate leading-tight flex-1 min-w-0 ${tx.ejecutado ? 'line-through' : ''}`}>
           {tx.descripcion || cat?.nombre || '-'}
         </p>
-        {tx.tipo === 'egreso' && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); markEjecutado(tx.id!, !tx.ejecutado) }}
+          className="p-1 -m-1 flex-shrink-0 inline-flex"
+          title={tx.ejecutado ? 'Marcar pendiente' : 'Marcar ejecutado'}
+          aria-label={tx.ejecutado ? 'Marcar pendiente' : 'Marcar ejecutado'}
+        >
+          <motion.span
+            className={`w-4 h-4 rounded-full flex items-center justify-center border ${
+              tx.ejecutado ? 'bg-emerald-500 border-emerald-500' : 'border-gray-300'
+            }`}
+            animate={{ scale: tx.ejecutado ? [1, 1.25, 1] : 1 }}
+            transition={pulse}
+          >
+            <AnimatePresence>
+              {tx.ejecutado && (
+                <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={springPop} className="inline-flex">
+                  <Check size={10} strokeWidth={3.5} className="text-white" />
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </motion.span>
+        </button>
+      </div>
+
+      <p className={`text-[13px] font-bold tabular-nums truncate mt-1 leading-none ${
+        isIngreso ? 'text-emerald-600' : 'text-rose-500'
+      } ${blur} ${tx.ejecutado ? 'line-through' : ''}`}>
+        {formatAmount(montoBase, monedaBase)}
+      </p>
+
+      <div className="flex items-center justify-between mt-1 gap-1 min-w-0">
+        <span className="text-[10px] text-gray-400 truncate flex-shrink-0">{dateStr}</span>
+        {tx.moneda !== monedaBase ? (
+          <span className={`text-[10px] text-gray-400 tabular-nums truncate ${blur}`}>
+            {formatAmount(tx.monto, tx.moneda)}
+          </span>
+        ) : tx.tipo === 'egreso' && (
           linkedLabel
-            ? <span className="text-[10px] font-semibold text-primary shrink-0 truncate max-w-[45%]">{linkedLabel}</span>
-            : <span className="text-[10px] font-semibold text-amber-400 shrink-0">Sin asignar</span>
+            ? <span className="text-[10px] font-semibold text-primary truncate max-w-[60%]">→ {linkedLabel}</span>
+            : <span className="text-[10px] font-semibold text-amber-500 flex-shrink-0">Sin asignar</span>
         )}
       </div>
-      <div className="flex items-center justify-between mt-0.5 gap-1 min-w-0">
-        <div className="flex items-center gap-1 min-w-0 shrink">
-          <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: dotColor }} />
-          <span className="text-[11px] text-gray-400 truncate">{dateStr}</span>
-        </div>
-        <div className="flex items-center gap-1 shrink-0 max-w-[55%]">
-          <div className="flex flex-col items-end min-w-0">
-            <span
-              className={`text-xs font-semibold tabular-nums truncate ${
-                isIngreso ? 'text-green-600' : 'text-red-400'
-              } ${hideAmounts ? 'blur-sm' : ''} ${tx.ejecutado ? 'line-through' : ''}`}
-            >
-              {formatAmount(montoBase, monedaBase)}
-            </span>
-            {tx.moneda !== monedaBase && (
-              <span className={`text-[10px] text-gray-400 tabular-nums truncate leading-tight ${hideAmounts ? 'blur-sm' : ''} ${tx.ejecutado ? 'line-through' : ''}`}>
-                {formatAmount(tx.monto, tx.moneda)}
-              </span>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); markEjecutado(tx.id!, !tx.ejecutado) }}
-            className="p-1 -m-1 flex-shrink-0 inline-flex"
-            title={tx.ejecutado ? 'Marcar pendiente' : 'Marcar ejecutado'}
-          >
-            {tx.ejecutado
-              ? <CheckCircle2 size={13} className="text-green-500" />
-              : <div className="w-[13px] h-[13px] rounded-full border border-gray-300" />
-            }
-          </button>
-        </div>
-      </div>
-    </div>
+      {tx.moneda !== monedaBase && tx.tipo === 'egreso' && (
+        linkedLabel
+          ? <p className="text-[10px] font-semibold text-primary truncate mt-0.5">→ {linkedLabel}</p>
+          : <p className="text-[10px] font-semibold text-amber-500 mt-0.5">Sin asignar</p>
+      )}
+    </motion.div>
   )
 })
 
 function SkeletonRows() {
   return (
-    <div className="px-2.5 py-2 space-y-3 animate-pulse">
+    <div className="space-y-1.5">
       {Array.from({ length: 5 }).map((_, i) => (
-        <div key={i} className="space-y-1.5">
-          <div className="h-2.5 bg-gray-100 rounded w-3/4" />
-          <div className="flex justify-between">
-            <div className="h-2 bg-gray-100 rounded w-1/4" />
-            <div className="h-2 bg-gray-100 rounded w-1/3" />
-          </div>
+        <div key={i} className="rounded-2xl bg-surface/60 px-2.5 py-2.5 space-y-2">
+          <div className="skeleton h-2.5 rounded-full w-3/4" />
+          <div className="skeleton h-3 rounded-full w-1/2" />
+          <div className="skeleton h-2 rounded-full w-1/4" />
         </div>
       ))}
     </div>
@@ -105,20 +125,24 @@ function SkeletonRows() {
 function EmptyState({ tipo }: { tipo: 'ingreso' | 'egreso' }) {
   const isIngreso = tipo === 'ingreso'
   return (
-    <div className="flex flex-col items-center justify-center py-10 px-3 text-center">
-      <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 ${
-        isIngreso ? 'bg-green-50' : 'bg-red-50'
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="flex flex-col items-center justify-center py-10 px-3 text-center"
+    >
+      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-2.5 ${
+        isIngreso ? 'bg-emerald-500/10' : 'bg-rose-500/10'
       }`}>
         {isIngreso
-          ? <TrendingUp size={20} className="text-green-300" />
-          : <TrendingDown size={20} className="text-red-300" />
+          ? <TrendingUp size={22} className="text-emerald-500" />
+          : <TrendingDown size={22} className="text-rose-500" />
         }
       </div>
-      <p className="text-xs font-medium text-gray-400">
+      <p className="text-xs font-semibold text-gray-500">
         Sin {isIngreso ? 'ingresos' : 'egresos'}
       </p>
-      <p className="text-[11px] text-gray-300 mt-0.5">Tocá + para agregar</p>
-    </div>
+      <p className="text-[11px] text-gray-400 mt-0.5">Tocá + para agregar</p>
+    </motion.div>
   )
 }
 
@@ -184,68 +208,76 @@ export default function TAccountView({ search = '' }: Props) {
     return labels
   }, [transactions, settings])
 
-  const pctGastado = totalIngresos > 0 ? Math.min((totalEgresos / totalIngresos) * 100, 100) : 0
-  const pctColor = pctGastado >= 90 ? 'bg-red-400' : pctGastado >= 70 ? 'bg-amber-400' : 'bg-green-500'
-
-
   return (
     <div className="flex flex-1 min-h-0 overflow-hidden">
-      {/* ── Columna Ingresos ── */}
-      <div className="flex-1 min-w-0 min-h-0 flex flex-col border-r-2 border-gray-200 overflow-hidden">
-        <div className="px-3 py-2.5 bg-green-50 border-b border-green-100 flex-shrink-0">
-          <p className="text-[11px] font-bold text-green-700 uppercase tracking-wider">
-            Ingresos <span className="font-normal opacity-60">({ingresos.length})</span>
-          </p>
-          <p className={`text-sm font-bold text-green-700 tabular-nums mt-0.5 ${hideAmounts ? 'blur-sm' : ''}`}>
-            {formatAmount(totalIngresos, base)}
-          </p>
-        </div>
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          {isLoading
-            ? <SkeletonRows />
-            : ingresos.length === 0
-              ? <EmptyState tipo="ingreso" />
-              : ingresos.map((tx) => (
-                  <TxRow key={tx.id} tx={tx} hideAmounts={hideAmounts} settings={settings} monedaBase={base} linkedLabel={null} onEdit={openEditModal} />
-                ))
-          }
-        </div>
-      </div>
+      <Column
+        tipo="ingreso"
+        count={ingresos.length}
+        total={totalIngresos}
+        base={base}
+      >
+        {isLoading
+          ? <SkeletonRows />
+          : ingresos.length === 0
+            ? <EmptyState tipo="ingreso" />
+            : (
+              <AnimatePresence initial={true}>
+                {ingresos.map((tx, i) => (
+                  <TxRow key={tx.id} index={i} tx={tx} hideAmounts={hideAmounts} settings={settings} monedaBase={base} linkedLabel={null} onEdit={openEditModal} />
+                ))}
+              </AnimatePresence>
+            )
+        }
+      </Column>
 
-      {/* ── Columna Egresos ── */}
-      <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
-        <div className="px-3 py-2.5 bg-red-50 border-b border-red-100 flex-shrink-0">
-          <p className="text-[11px] font-bold text-red-400 uppercase tracking-wider">
-            Egresos <span className="font-normal opacity-60">({egresos.length})</span>
+      <div className="w-px my-3 bg-hairline flex-shrink-0" />
+
+      <Column
+        tipo="egreso"
+        count={egresos.length}
+        total={totalEgresos}
+        base={base}
+      >
+        {isLoading
+          ? <SkeletonRows />
+          : egresos.length === 0
+            ? <EmptyState tipo="egreso" />
+            : (
+              <AnimatePresence initial={true}>
+                {egresos.map((tx, i) => (
+                  <TxRow key={tx.id} index={i} tx={tx} hideAmounts={hideAmounts} settings={settings} monedaBase={base} linkedLabel={linkedLabels.get(tx.id!) ?? null} onEdit={openEditModal} />
+                ))}
+              </AnimatePresence>
+            )
+        }
+      </Column>
+    </div>
+  )
+}
+
+function Column({ tipo, count, total, base, children }: {
+  tipo: 'ingreso' | 'egreso'
+  count: number
+  total: number
+  base: Currency
+  children: React.ReactNode
+}) {
+  const isIngreso = tipo === 'ingreso'
+  return (
+    <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
+      <div className="px-3 pt-1 pb-2 flex-shrink-0">
+        <div className="flex items-center gap-1.5">
+          <span className={`w-1.5 h-1.5 rounded-full ${isIngreso ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+          <p className="eyebrow">
+            {isIngreso ? 'Ingresos' : 'Egresos'} <span className="opacity-60">· {count}</span>
           </p>
-          <p className={`text-sm font-bold text-red-400 tabular-nums mt-0.5 ${hideAmounts ? 'blur-sm' : ''}`}>
-            {formatAmount(totalEgresos, base)}
-          </p>
-          {/* Barra de progreso: % del ingreso gastado */}
-          {totalIngresos > 0 && (
-            <div className="mt-1.5">
-              <div className="h-1 bg-red-100 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${pctColor}`}
-                  style={{ width: `${pctGastado}%` }}
-                />
-              </div>
-              <p className={`text-[10px] text-red-400 mt-0.5 ${hideAmounts ? 'blur-sm' : ''}`}>
-                {Math.round(pctGastado)}% del ingreso
-              </p>
-            </div>
-          )}
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          {isLoading
-            ? <SkeletonRows />
-            : egresos.length === 0
-              ? <EmptyState tipo="egreso" />
-              : egresos.map((tx) => (
-                  <TxRow key={tx.id} tx={tx} hideAmounts={hideAmounts} settings={settings} monedaBase={base} linkedLabel={linkedLabels.get(tx.id!) ?? null} onEdit={openEditModal} />
-                ))
-          }
-        </div>
+        <p className={`text-[15px] font-bold mt-1 truncate ${isIngreso ? 'text-emerald-600' : 'text-rose-500'}`}>
+          <Money value={total} currency={base} />
+        </p>
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-1.5 pb-28 no-scrollbar">
+        {children}
       </div>
     </div>
   )

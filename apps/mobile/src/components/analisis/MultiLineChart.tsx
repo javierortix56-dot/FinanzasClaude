@@ -1,5 +1,9 @@
 'use client'
 
+import { useId, useState } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
+import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
+
 const W     = 320
 const H     = 120
 const PAD_L = 34
@@ -57,6 +61,11 @@ function areaFill(pts: [number, number][], bottom: number): string {
 const GRID_ROWS = 3
 
 export default function MultiLineChart({ months, series }: Props) {
+  const uid = useId().replace(/:/g, '')
+  const hideAmounts = useSettingsStore((st) => st.hideAmounts)
+  // Mes seleccionado (tap/arrastre): por defecto, el último
+  const [sel, setSel] = useState<number | null>(null)
+
   if (!months.length || !series.length) return null
 
   const allVals = series.flatMap((s) => s.values)
@@ -65,27 +74,42 @@ export default function MultiLineChart({ months, series }: Props) {
   const n       = months.length
   const bottom  = PAD_T + PLOT_H
   const zeroY   = py(0, minVal, maxVal)
+  const active  = sel ?? n - 1
+  const colW    = n > 1 ? PLOT_W / (n - 1) : PLOT_W
+  const blur    = hideAmounts ? 'blur-[4px] select-none' : ''
 
   return (
-    <div className="px-3 pb-3">
-      {/* Legend */}
-      <div className="flex gap-3 mb-2 px-1">
+    <div className="px-3 pb-4">
+      {/* Leyenda con el valor del mes seleccionado */}
+      <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2 px-1 min-h-[30px] items-start">
         {series.map((s) => (
-          <div key={s.label} className="flex items-center gap-1">
+          <div key={s.label} className="flex items-center gap-1.5 min-w-0">
             <span
-              className="inline-block w-2 h-2 rounded-full"
-              style={{ backgroundColor: s.color, opacity: s.dashed ? 0.7 : 1 }}
+              className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+              style={{ backgroundColor: s.color, opacity: s.dashed ? 0.75 : 1 }}
             />
-            <span className="text-[10px] font-medium text-gray-400">{s.label}</span>
+            <span className="text-[10px] font-medium text-gray-400 truncate max-w-[84px]">{s.label}</span>
+            <AnimatePresence mode="popLayout" initial={false}>
+              <motion.span
+                key={`${active}-${s.values[active]}`}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.15 }}
+                className={`text-[10px] font-bold tabular-nums text-gray-700 ${blur}`}
+              >
+                {fmt(s.values[active] ?? 0)}
+              </motion.span>
+            </AnimatePresence>
           </div>
         ))}
       </div>
 
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ overflow: 'visible' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ overflow: 'visible' }} className="touch-pan-y">
         <defs>
-          {series.map((s) => (
-            <linearGradient key={s.label} id={`grad-${s.label}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%"   stopColor={s.color} stopOpacity={s.dashed ? 0.06 : 0.12} />
+          {series.map((s, si) => (
+            <linearGradient key={s.label} id={`grad-${uid}-${si}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"   stopColor={s.color} stopOpacity={s.dashed ? 0.08 : 0.18} />
               <stop offset="100%" stopColor={s.color} stopOpacity="0" />
             </linearGradient>
           ))}
@@ -99,12 +123,13 @@ export default function MultiLineChart({ months, series }: Props) {
             <g key={i}>
               <line
                 x1={PAD_L} y1={y} x2={W} y2={y}
-                stroke="var(--color-gray-100)" strokeWidth="1"
+                stroke="var(--color-gray-200)" strokeWidth="0.6" strokeDasharray="2 3"
               />
               <text
-                x={PAD_L - 3} y={y + 3}
+                x={PAD_L - 4} y={y + 2.5}
                 textAnchor="end" fontSize="6.5" fill="var(--color-gray-400)"
-                fontFamily="system-ui"
+                fontFamily="inherit"
+                style={hideAmounts ? { filter: 'blur(2px)' } : undefined}
               >
                 {fmt(v)}
               </text>
@@ -116,28 +141,41 @@ export default function MultiLineChart({ months, series }: Props) {
         {minVal < 0 && (
           <line
             x1={PAD_L} y1={zeroY} x2={W} y2={zeroY}
-            stroke="var(--color-gray-200)" strokeWidth="1" strokeDasharray="3 2"
+            stroke="var(--color-gray-300)" strokeWidth="0.8"
           />
         )}
 
+        {/* Guía vertical del mes seleccionado */}
+        <motion.line
+          y1={PAD_T} y2={bottom}
+          stroke="var(--primary)" strokeOpacity="0.25" strokeWidth="1"
+          initial={false}
+          animate={{ x1: px(active, n), x2: px(active, n) }}
+          transition={{ type: 'spring', stiffness: 400, damping: 34 }}
+        />
+
         {/* Area fills */}
-        {series.map((s) => {
+        {series.map((s, si) => {
           const pts: [number, number][] = s.values.map((v, i) => [px(i, n), py(v, minVal, maxVal)])
           return (
-            <path
+            <motion.path
               key={s.label}
               d={areaFill(pts, bottom)}
-              fill={`url(#grad-${s.label})`}
+              fill={`url(#grad-${uid}-${si})`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
             />
           )
         })}
 
         {/* Lines */}
-        {series.map((s) => {
+        {series.map((s, si) => {
           const pts: [number, number][] = s.values.map((v, i) => [px(i, n), py(v, minVal, maxVal)])
+          const pt = pts[active]
           return (
             <g key={s.label}>
-              <path
+              <motion.path
                 d={smoothLine(pts)}
                 fill="none"
                 stroke={s.color}
@@ -145,18 +183,21 @@ export default function MultiLineChart({ months, series }: Props) {
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeDasharray={s.dashed ? '5 3' : undefined}
-                opacity={s.dashed ? 0.75 : 1}
+                opacity={s.dashed ? 0.8 : 1}
+                initial={s.dashed ? { opacity: 0 } : { pathLength: 0 }}
+                animate={s.dashed ? { opacity: 0.8 } : { pathLength: 1 }}
+                transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1], delay: si * 0.08 }}
               />
-              {/* End-point dot only */}
-              {(() => {
-                const last = pts[pts.length - 1]
-                return (
-                  <circle
-                    cx={last[0]} cy={last[1]} r="3"
-                    fill="white" stroke={s.color} strokeWidth="1.5"
-                  />
-                )
-              })()}
+              {/* Punto en el mes seleccionado */}
+              {pt && (
+                <motion.circle
+                  r="3.2"
+                  fill="var(--surface)" stroke={s.color} strokeWidth="1.6"
+                  initial={false}
+                  animate={{ cx: pt[0], cy: pt[1] }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 34 }}
+                />
+              )}
             </g>
           )
         })}
@@ -164,17 +205,32 @@ export default function MultiLineChart({ months, series }: Props) {
         {/* X-axis labels */}
         {months.map((m, i) => (
           <text
-            key={m}
+            key={`${m}-${i}`}
             x={px(i, n)}
             y={H - 5}
             textAnchor="middle"
             fontSize="7"
-            fill={i === n - 1 ? 'var(--color-primary)' : 'var(--color-gray-400)'}
-            fontWeight={i === n - 1 ? '700' : '400'}
-            fontFamily="system-ui"
+            fill={i === active ? 'var(--primary)' : 'var(--color-gray-400)'}
+            fontWeight={i === active ? '700' : '400'}
+            fontFamily="inherit"
           >
             {m}
           </text>
+        ))}
+
+        {/* Zonas táctiles por mes */}
+        {months.map((m, i) => (
+          <rect
+            key={`hit-${m}-${i}`}
+            x={px(i, n) - colW / 2}
+            y={0}
+            width={colW}
+            height={H}
+            fill="transparent"
+            onPointerDown={() => setSel(i)}
+            onPointerEnter={(e) => { if (e.buttons > 0 || e.pointerType === 'mouse') setSel(i) }}
+            style={{ cursor: 'pointer' }}
+          />
         ))}
       </svg>
     </div>

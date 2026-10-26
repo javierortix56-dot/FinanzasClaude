@@ -1,17 +1,22 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Plus } from 'lucide-react'
+import { AnimatePresence, motion } from 'motion/react'
+import { Plus, Wallet } from 'lucide-react'
 import { useAssetStore } from '@finanzas/core/store/useAssetStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { toUSD } from '@finanzas/core/lib/currency'
-import { formatAmount, getCurrentMonth, shiftMonth } from '@finanzas/core/lib/constants'
+import { getCurrentMonth, shiftMonth } from '@finanzas/core/lib/constants'
 import { Asset } from '@finanzas/core/types'
 import AssetCard from '@/components/patrimonio/AssetCard'
 import AssetModal from '@/components/patrimonio/AssetModal'
 import SnapshotModal from '@/components/patrimonio/SnapshotModal'
 import PatrimonioChart from '@/components/patrimonio/PatrimonioChart'
+import PageHeader, { HeaderButton, PrivacyToggle } from '@/components/ui/PageHeader'
+import Segmented from '@/components/ui/Segmented'
+import { Money } from '@/components/ui/AnimatedNumber'
+import { easeOut, stagger } from '@/components/ui/motion'
 
 type Tab = 'activo' | 'pasivo'
 
@@ -24,6 +29,7 @@ export default function PatrimonioPage() {
   const [modalOpen,   setModalOpen]   = useState(false)
   const [editing,     setEditing]     = useState<Asset | null>(null)
   const [snapAsset,   setSnapAsset]   = useState<Asset | null>(null)
+  const [snapOpen,    setSnapOpen]    = useState(false)
 
   const activos = assets.filter((a) => a.clase === 'activo')
   const pasivos = assets.filter((a) => a.clase === 'pasivo')
@@ -118,102 +124,147 @@ export default function PatrimonioPage() {
 
   function openAdd() { setEditing(null); setModalOpen(true) }
   function openEdit(a: Asset) { setEditing(a); setModalOpen(true) }
-  function openSnap(a: Asset) { setSnapAsset(a) }
+  function openSnap(a: Asset) { setSnapAsset(a); setSnapOpen(true) }
 
   const listed = tab === 'activo' ? activos : pasivos
 
+  const totalBruto = totalActivosUSD + totalPasivosUSD
+  const pctActivos = totalBruto > 0 ? (totalActivosUSD / totalBruto) * 100 : 100
+
   return (
-    <div className="flex flex-col h-full bg-gray-50">
+    <div className="flex flex-col h-full">
+      <PageHeader
+        title="Patrimonio"
+        subtitle="Cuentas, inversiones y deudas"
+        actions={<>
+          <PrivacyToggle />
+          <HeaderButton onClick={openAdd} label="Agregar cuenta" active>
+            <Plus size={16} /> <span className="pr-0.5">Cuenta</span>
+          </HeaderButton>
+        </>}
+      />
 
-      {/* ── Header ── */}
-      <div className="bg-surface px-4 pt-10 pb-2 shadow-sm">
-        <div className="flex items-center justify-between mb-2">
-          <h1 className="text-gray-800 font-bold text-xl">Patrimonio</h1>
-          <button
-            onClick={openAdd}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 hover:bg-primary/20 transition-colors"
-          >
-            <Plus size={13} className="text-primary" />
-            <span className="text-primary text-xs font-semibold">Cuenta</span>
-          </button>
-        </div>
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pb-28 no-scrollbar">
+        {/* ── Hero: patrimonio neto ── */}
+        <motion.section
+          initial={{ opacity: 0, y: 12, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={easeOut}
+          className="relative mx-4 rounded-[26px] bg-brand text-white px-4 pt-4 pb-3.5 shadow-lift overflow-hidden"
+        >
+          <div className="absolute -top-16 -right-10 w-40 h-40 rounded-full bg-white/15 blur-2xl pointer-events-none" />
+          <p className="relative text-[11px] font-semibold uppercase tracking-[0.08em] text-white/70">Patrimonio neto</p>
+          <p className={`relative text-[32px] leading-tight font-bold tracking-tight mt-0.5 ${netoUSD < 0 ? 'text-rose-200' : ''}`}>
+            <Money value={netoUSD} currency="USD" />
+          </p>
 
-        {/* Summary cards — compact single row */}
-        <div className="grid grid-cols-3 gap-1.5">
-          <div className="bg-green-50 rounded-lg px-2 py-1.5 text-center">
-            <p className="text-gray-400 text-[10px] mb-0.5">Activos</p>
-            <p className="text-green-700 text-xs font-bold">{formatAmount(totalActivosUSD, 'USD')}</p>
+          {/* Proporción activos / pasivos */}
+          <div className="relative mt-3 h-2 rounded-full bg-white/15 overflow-hidden flex">
+            <motion.div
+              className="h-full bg-emerald-300"
+              initial={{ width: 0 }}
+              animate={{ width: `${pctActivos}%` }}
+              transition={{ type: 'spring', stiffness: 110, damping: 22 }}
+            />
+            <motion.div
+              className="h-full bg-rose-300"
+              initial={{ width: 0 }}
+              animate={{ width: `${100 - pctActivos}%` }}
+              transition={{ type: 'spring', stiffness: 110, damping: 22 }}
+            />
           </div>
-          <div className="bg-red-50 rounded-lg px-2 py-1.5 text-center">
-            <p className="text-gray-400 text-[10px] mb-0.5">Pasivos</p>
-            <p className="text-red-400 text-xs font-bold">{formatAmount(totalPasivosUSD, 'USD')}</p>
+          <div className="relative flex justify-between mt-2 text-[11px]">
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" />
+              <span className="text-white/70">Activos</span>
+              <span className="font-semibold"><Money value={totalActivosUSD} currency="USD" /></span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-300" />
+              <span className="text-white/70">Pasivos</span>
+              <span className="font-semibold"><Money value={totalPasivosUSD} currency="USD" /></span>
+            </span>
           </div>
-          <div className="bg-primary/10 rounded-lg px-2 py-1.5 text-center border border-primary/20">
-            <p className="text-gray-400 text-[10px] mb-0.5">Neto</p>
-            <p className={`text-xs font-bold ${netoUSD >= 0 ? 'text-primary' : 'text-red-400'}`}>
-              {formatAmount(netoUSD, 'USD')}
-            </p>
-          </div>
-        </div>
-      </div>
+        </motion.section>
 
-      {/* ── Main card ── */}
-      <div className="flex-1 min-h-0 bg-surface overflow-hidden flex flex-col">
-
-        {/* Chart */}
+        {/* ── Chart ── */}
         {assets.length > 0 && (
-          <div className="border-b border-gray-50">
+          <motion.section
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ ...easeOut, delay: 0.06 }}
+            className="mx-4 mt-3 glass rounded-[24px]"
+          >
             <PatrimonioChart data={chartData} currency="USD" />
-          </div>
+          </motion.section>
         )}
 
-        {/* Tabs */}
-        <div className="flex border-b border-gray-100 px-4">
-          {(['activo', 'pasivo'] as Tab[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`flex-1 py-3 text-sm font-semibold transition-colors ${
-                tab === t
-                  ? 'text-primary border-b-2 border-primary'
-                  : 'text-gray-400'
-              }`}
-            >
-              {t === 'activo' ? `Activos (${activos.length})` : `Pasivos (${pasivos.length})`}
-            </button>
-          ))}
+        {/* ── Tabs ── */}
+        <div className="mx-4 mt-4 mb-2">
+          <Segmented
+            id="patrimonio-tab"
+            value={tab}
+            onChange={setTab}
+            options={[
+              { value: 'activo', label: <>Activos <span className="opacity-50 tabular-nums">{activos.length}</span></> },
+              { value: 'pasivo', label: <>Pasivos <span className="opacity-50 tabular-nums">{pasivos.length}</span></> },
+            ]}
+          />
         </div>
 
-        {/* List */}
-        <div className="flex-1 overflow-y-auto pb-24">
+        {/* ── List ── */}
+        <div className="px-4">
           {isLoading ? (
-            <div className="flex items-center justify-center py-14">
-              <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : listed.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-14 text-center px-6">
-              <p className="text-gray-400 text-sm">
-                No hay {tab === 'activo' ? 'activos' : 'pasivos'} registrados
-              </p>
-              <button
-                onClick={openAdd}
-                className="mt-3 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-semibold"
-              >
-                + Agregar cuenta
-              </button>
+            <div className="space-y-2">
+              {[0, 1, 2].map((i) => <div key={i} className="skeleton h-[76px] rounded-[22px]" />)}
             </div>
           ) : (
-            <div className="divide-y divide-gray-50">
-              {listed.map((a) => (
-                <AssetCard
-                  key={a.id}
-                  asset={a}
-                  settings={s}
-                  onClick={() => openEdit(a)}
-                  onUpdateSnapshot={() => openSnap(a)}
-                />
-              ))}
-            </div>
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={tab}
+                initial={{ opacity: 0, x: tab === 'activo' ? -16 : 16 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: tab === 'activo' ? 16 : -16 }}
+                transition={{ duration: 0.2 }}
+              >
+                {listed.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center px-6 glass rounded-[24px]">
+                    <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-2.5">
+                      <Wallet size={20} className="text-primary" />
+                    </div>
+                    <p className="text-gray-500 text-sm font-semibold">
+                      No hay {tab === 'activo' ? 'activos' : 'pasivos'} registrados
+                    </p>
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      onClick={openAdd}
+                      className="mt-3 px-4 h-9 rounded-full bg-brand text-white text-xs font-semibold shadow-soft"
+                    >
+                      + Agregar cuenta
+                    </motion.button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {listed.map((a, i) => (
+                      <motion.div
+                        key={a.id}
+                        layout
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: stagger(i, 0.04), ease: [0.22, 1, 0.36, 1] }}
+                      >
+                        <AssetCard
+                          asset={a}
+                          settings={s}
+                          onClick={() => openEdit(a)}
+                          onUpdateSnapshot={() => openSnap(a)}
+                        />
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </motion.div>
+            </AnimatePresence>
           )}
         </div>
       </div>
@@ -221,12 +272,12 @@ export default function PatrimonioPage() {
       {/* Modales */}
       <AssetModal
         open={modalOpen}
-        onClose={() => { setModalOpen(false); setEditing(null) }}
+        onClose={() => setModalOpen(false)}
         editing={editing}
       />
       <SnapshotModal
-        open={snapAsset !== null}
-        onClose={() => setSnapAsset(null)}
+        open={snapOpen}
+        onClose={() => setSnapOpen(false)}
         asset={snapAsset}
       />
     </div>

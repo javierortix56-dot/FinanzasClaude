@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect, useMemo, useRef } from 'react'
-import * as Dialog from '@radix-ui/react-dialog'
-import { X, Trash2, Repeat, Copy, ArrowRight, Check, CheckCircle2, Camera } from 'lucide-react'
+import { AnimatePresence, motion } from 'motion/react'
+import { X, Trash2, Repeat, Copy, ArrowRight, Check, Camera, ScanLine } from 'lucide-react'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
@@ -15,6 +15,10 @@ import { adjustAssetSaldo } from '@finanzas/core/lib/assets'
 import { toBase } from '@finanzas/core/lib/currency'
 import { parseTicket } from '@finanzas/core/lib/ticket'
 import { ocrImagen } from '@/lib/ocr'
+import Sheet, { FieldLabel, fieldClass } from '@/components/ui/Sheet'
+import Segmented from '@/components/ui/Segmented'
+import Collapse from '@/components/ui/Collapse'
+import { springPop, pulse } from '@/components/ui/motion'
 import { Transaction, Currency, TransactionType, CategoryGroup, Asignacion } from '@finanzas/core/types'
 
 const CURRENCIES: Currency[] = ['ARS', 'COP', 'USD']
@@ -232,8 +236,10 @@ export default function TransactionModal() {
     }
   }
 
-  const accentColor = tipo === 'egreso' ? '#f87171' : '#22c55e'
-  const accentBg    = tipo === 'egreso' ? 'bg-red-400' : 'bg-green-500'
+  const accentColor = tipo === 'egreso' ? '#f43f5e' : '#10b981'
+  const accentGrad  = tipo === 'egreso'
+    ? 'linear-gradient(135deg, #fb7185 0%, #e11d48 100%)'
+    : 'linear-gradient(135deg, #34d399 0%, #059669 100%)'
 
   async function handleSave() {
     if (!canSave) return
@@ -350,465 +356,478 @@ export default function TransactionModal() {
     }
   }
 
-  return (
-    <Dialog.Root
-      open={isTransactionModalOpen}
-      onOpenChange={(open) => { if (!open) closeTransactionModal() }}
-    >
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/50 z-50 backdrop-blur-[2px]" />
-        <Dialog.Content
-          className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-surface rounded-t-3xl z-50 shadow-2xl outline-none flex flex-col max-h-[92dvh]"
-          aria-describedby={undefined}
+  const footer = (
+    <>
+      <AnimatePresence initial={false}>
+        {(montoInvalid || (tipo === 'egreso' && !asigOk && montoValido) || saveError || deleteConfirm) && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="pb-2 space-y-1">
+              {montoInvalid && (
+                <p className="text-[11px] text-rose-500">Ingresá un monto mayor a 0</p>
+              )}
+              {tipo === 'egreso' && !asigOk && montoValido && (
+                <p className="text-[11px] text-rose-500">
+                  Las partes asignadas deben sumar el total del egreso
+                </p>
+              )}
+              {saveError && (
+                <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2 text-xs text-rose-500 font-medium break-all">
+                  Error: {saveError}
+                </div>
+              )}
+              {deleteConfirm && (
+                <p className="text-[11px] text-rose-500">
+                  Tocá el ícono rojo de nuevo para confirmar la eliminación
+                </p>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <div className="flex gap-2">
+        {editingTransaction && (
+          <motion.button
+            whileTap={{ scale: 0.92 }}
+            onClick={handleDelete}
+            disabled={saving}
+            animate={deleteConfirm ? { x: [0, -4, 4, -3, 3, 0] } : { x: 0 }}
+            transition={{ duration: 0.35 }}
+            className={`w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-2xl transition-colors ${
+              deleteConfirm
+                ? 'bg-rose-500 text-white'
+                : 'bg-rose-500/10 text-rose-500 hover:bg-rose-500/15'
+            }`}
+            title={deleteConfirm ? 'Confirmar eliminación' : 'Eliminar'}
+            aria-label={deleteConfirm ? 'Confirmar eliminación' : 'Eliminar'}
+          >
+            <Trash2 size={17} />
+          </motion.button>
+        )}
+        <motion.button
+          whileTap={{ scale: 0.96 }}
+          onClick={closeTransactionModal}
+          disabled={saving}
+          className="h-12 px-4 rounded-2xl bg-gray-500/10 text-sm font-semibold text-gray-600 hover:bg-gray-500/15 transition-colors"
         >
-          {/* ── Header fijo: handle + tipo/título + cerrar ── */}
-          <div className="flex-shrink-0 px-4 pt-3 pb-2.5">
-            <div className="flex justify-center pb-2.5">
-              <div className="w-9 h-1 bg-gray-200 rounded-full" />
-            </div>
-            <div className="flex items-center gap-2">
-              {editingTransaction ? (
-                <Dialog.Title className="flex-1 text-base font-bold text-gray-900 pl-1">
-                  Editar {tipo === 'egreso' ? 'egreso' : 'ingreso'}
-                </Dialog.Title>
-              ) : (
-                <>
-                  <Dialog.Title className="sr-only">Nuevo movimiento</Dialog.Title>
-                  <div className="flex-1 flex rounded-xl bg-gray-100 p-0.5 gap-0.5">
-                    {(['egreso', 'ingreso'] as TransactionType[]).map((t) => (
-                      <button
-                        key={t}
-                        onClick={() => { setTipo(t); setSelectedGroup(''); setSelectedSub(''); setAsigs([]) }}
-                        className={`flex-1 py-2 rounded-[10px] text-sm font-bold transition-all ${
-                          tipo === t
-                            ? t === 'egreso' ? 'bg-red-400 text-white shadow-sm' : 'bg-green-500 text-white shadow-sm'
-                            : 'text-gray-400'
-                        }`}
-                      >
-                        {t === 'egreso' ? '↓ Egreso' : '↑ Ingreso'}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-              <button
-                onClick={closeTransactionModal}
-                className="w-9 h-9 flex-shrink-0 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
-              >
-                <X size={15} className="text-gray-600" />
-              </button>
-            </div>
-          </div>
+          Cancelar
+        </motion.button>
+        <motion.button
+          whileTap={{ scale: 0.97 }}
+          onClick={handleSave}
+          disabled={saving || !canSave}
+          className="flex-1 h-12 rounded-2xl text-sm font-bold text-white transition-opacity disabled:opacity-40 shadow-[0_8px_20px_-8px_rgba(0,0,0,0.35)]"
+          style={{ background: accentGrad }}
+        >
+          {saving ? 'Guardando…' : editingTransaction ? 'Guardar cambios' : 'Agregar'}
+        </motion.button>
+      </div>
+    </>
+  )
 
-          {/* ── Cuerpo scrolleable ── */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 space-y-4">
+  return (
+    <Sheet
+      open={isTransactionModalOpen}
+      onClose={closeTransactionModal}
+      title={editingTransaction ? `Editar ${tipo === 'egreso' ? 'egreso' : 'ingreso'}` : 'Nuevo movimiento'}
+      hideTitle={!editingTransaction}
+      headerContent={!editingTransaction && (
+        <Segmented
+          id="tx-tipo"
+          size="lg"
+          value={tipo}
+          onChange={(t) => { setTipo(t); setSelectedGroup(''); setSelectedSub(''); setAsigs([]) }}
+          options={[
+            { value: 'egreso',  label: '↓ Egreso',  activeColor: 'linear-gradient(135deg, #fb7185, #e11d48)' },
+            { value: 'ingreso', label: '↑ Ingreso', activeColor: 'linear-gradient(135deg, #34d399, #059669)' },
+          ]}
+        />
+      )}
+      footer={footer}
+      bodyClassName="px-5 pb-5 space-y-5"
+    >
+      {/* Monto + moneda */}
+      <motion.div
+        className="rounded-[22px] px-4 pt-3 pb-3"
+        animate={{ backgroundColor: accentColor + '14' }}
+        transition={{ duration: 0.3 }}
+      >
+        <input
+          type="text"
+          inputMode="decimal"
+          placeholder="0"
+          autoFocus={!editingTransaction}
+          value={monto}
+          onChange={(e) => setMonto(e.target.value)}
+          aria-label="Monto"
+          className={`amount-input-xl w-full leading-tight font-bold tracking-tight bg-transparent border-0 outline-none placeholder:text-gray-300 tabular-nums ${
+            montoInvalid ? 'text-rose-500' : 'text-gray-900'
+          }`}
+          style={{ caretColor: accentColor }}
+        />
+        <Segmented
+          id="tx-moneda"
+          size="sm"
+          value={moneda}
+          onChange={setMoneda}
+          options={CURRENCIES.map((c) => ({ value: c, label: c, activeColor: accentColor }))}
+          className="mt-1"
+        />
+      </motion.div>
 
-            {/* Monto + moneda en un solo bloque */}
-            <div
-              className="rounded-2xl px-4 py-3 flex items-center gap-3"
-              style={{ backgroundColor: accentColor + '12' }}
+      {/* Escanear ticket — solo egresos nuevos */}
+      {tipo === 'egreso' && !editingTransaction && (
+        <>
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.98 }}
+            onClick={() => scanInputRef.current?.click()}
+            disabled={scanning}
+            className="relative w-full h-11 flex items-center justify-center gap-2 rounded-2xl border border-dashed border-gray-300 text-gray-500 text-xs font-semibold hover:border-primary/50 hover:text-primary transition-colors disabled:opacity-80 overflow-hidden"
+          >
+            {scanning && (
+              <motion.span
+                className="absolute inset-y-0 left-0 bg-primary/10"
+                initial={{ width: 0 }}
+                animate={{ width: `${scanPct}%` }}
+              />
+            )}
+            <span className="relative inline-flex items-center gap-2">
+              {scanning ? <ScanLine size={15} className="animate-pulse" /> : <Camera size={15} />}
+              {scanning
+                ? scanPct > 0 ? `Leyendo ticket… ${scanPct}%` : 'Preparando lector…'
+                : 'Escanear ticket con la cámara'}
+            </span>
+          </motion.button>
+          <input
+            ref={scanInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={handleScanTicket}
+          />
+        </>
+      )}
+
+      {/* Descripción */}
+      <div>
+        <input
+          type="text"
+          placeholder={montoValido && !descripcion.trim() ? '¿En qué fue? (recomendado)' : '¿En qué fue?'}
+          value={descripcion}
+          onChange={(e) => setDescripcion(e.target.value)}
+          className={`${fieldClass} ${
+            montoValido && !descripcion.trim() ? 'border-amber-300/70 placeholder:text-amber-500/70' : ''
+          }`}
+        />
+        <AnimatePresence initial={false}>
+          {sugerencias.length > 0 && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden"
             >
-              <input
-                type="text"
-                inputMode="decimal"
-                placeholder="0"
-                autoFocus={!editingTransaction}
-                value={monto}
-                onChange={(e) => setMonto(e.target.value)}
-                className={`flex-1 min-w-0 text-4xl font-bold bg-transparent border-0 outline-none placeholder:text-gray-300 tabular-nums ${
-                  montoInvalid ? 'text-red-400' : 'text-gray-900'
-                }`}
-                style={{ caretColor: accentColor }}
-              />
-              <div className="flex flex-col gap-1 flex-shrink-0">
-                {CURRENCIES.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setMoneda(c)}
-                    className={`w-14 py-1 rounded-lg text-[11px] font-bold transition-all ${
-                      moneda === c ? 'text-white shadow-sm' : 'bg-surface/70 text-gray-400'
-                    }`}
-                    style={moneda === c ? { backgroundColor: accentColor } : {}}
+              <div className="flex gap-1.5 pt-2 overflow-x-auto no-scrollbar">
+                {sugerencias.map((sg, i) => (
+                  <motion.button
+                    key={sg}
+                    type="button"
+                    initial={{ opacity: 0, x: 8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.04 }}
+                    whileTap={{ scale: 0.94 }}
+                    onClick={() => setDescripcion(sg)}
+                    className="flex-shrink-0 px-3 py-1.5 bg-gray-500/[0.08] rounded-full text-xs text-gray-600 hover:bg-primary/10 hover:text-primary transition-colors"
                   >
-                    {c}
-                  </button>
+                    {sg}
+                  </motion.button>
                 ))}
               </div>
-            </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
-            {/* Escanear ticket — solo egresos nuevos */}
-            {tipo === 'egreso' && !editingTransaction && (
-              <>
-                <button
+      {/* Categoría */}
+      <div>
+        <FieldLabel hint={montoValido && !categoria ? <span className="text-amber-500">· recomendado</span> : undefined}>
+          Categoría
+        </FieldLabel>
+        <div className="flex flex-wrap gap-1.5">
+          {activeGroups.map((g) => {
+            const isSelected = selectedGroup === g.id
+            return (
+              <motion.button
+                key={g.id}
+                type="button"
+                whileTap={{ scale: 0.92 }}
+                onClick={() => { setSelectedGroup(g.id); setSelectedSub('') }}
+                className="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
+                animate={isSelected
+                  ? { backgroundColor: g.color, color: '#ffffff', boxShadow: `0 6px 14px -6px ${g.color}` }
+                  : { backgroundColor: g.color + '18', color: g.color, boxShadow: '0 0 0 0 rgba(0,0,0,0)' }
+                }
+                transition={{ duration: 0.18 }}
+              >
+                {g.nombre}
+              </motion.button>
+            )
+          })}
+        </div>
+        <Collapse open={!!selectedGroup && activeSubs.length > 0}>
+          <div className="flex flex-wrap gap-1.5 mt-2.5 pl-3 border-l-2" style={{ borderColor: (currentGroup?.color ?? '#e5e7eb') + '55' }}>
+            {activeSubs.map((sub) => {
+              const isSelected = selectedSub === sub.id
+              return (
+                <motion.button
+                  key={sub.id}
                   type="button"
-                  onClick={() => scanInputRef.current?.click()}
-                  disabled={scanning}
-                  className="w-full h-9 flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-gray-300 text-gray-400 text-xs font-semibold hover:border-primary/40 hover:text-primary transition-colors disabled:opacity-70"
+                  whileTap={{ scale: 0.92 }}
+                  onClick={() => setSelectedSub(isSelected ? '' : sub.id)}
+                  className="px-3 py-1 rounded-full text-xs font-medium"
+                  animate={isSelected
+                    ? { backgroundColor: sub.color, color: '#ffffff' }
+                    : { backgroundColor: sub.color + '18', color: sub.color }
+                  }
+                  transition={{ duration: 0.18 }}
                 >
-                  <Camera size={14} />
-                  {scanning
-                    ? scanPct > 0 ? `Leyendo ticket… ${scanPct}%` : 'Preparando lector…'
-                    : 'Escanear ticket con la cámara'}
-                </button>
-                <input
-                  ref={scanInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={handleScanTicket}
-                />
-              </>
-            )}
+                  {sub.nombre}
+                </motion.button>
+              )
+            })}
+          </div>
+        </Collapse>
+      </div>
 
-            {/* Descripción */}
-            <div>
-              <input
-                type="text"
-                placeholder={montoValido && !descripcion.trim() ? '¿En qué fue? (recomendado)' : '¿En qué fue?'}
-                value={descripcion}
-                onChange={(e) => setDescripcion(e.target.value)}
-                className={`w-full bg-gray-50 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 transition-all placeholder:text-gray-300 ${
-                  montoValido && !descripcion.trim()
-                    ? 'ring-1 ring-amber-200 focus:ring-amber-300 placeholder:text-amber-300'
-                    : 'focus:ring-primary/30 focus:bg-surface'
-                }`}
-              />
-              {sugerencias.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {sugerencias.map((sg) => (
-                    <button
-                      key={sg}
-                      type="button"
-                      onClick={() => setDescripcion(sg)}
-                      className="px-2.5 py-1 bg-gray-100 rounded-full text-xs text-gray-500 hover:bg-primary/10 hover:text-primary transition-colors"
-                    >
-                      {sg}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+      {/* Fecha + persona */}
+      <div className="flex gap-2 items-center">
+        <input
+          type="date"
+          value={fecha}
+          onChange={(e) => setFecha(e.target.value)}
+          aria-label="Fecha"
+          className={`${fieldClass} flex-1 min-w-0`}
+        />
+        <Segmented
+          id="tx-user"
+          size="md"
+          value={creadoPor}
+          onChange={setCreadoPor}
+          options={SHARED_USERS.map((u) => ({ value: u.id, label: u.nombre }))}
+          variant="solid"
+          className="flex-shrink-0 w-[150px]"
+        />
+      </div>
 
-            {/* Categoría */}
-            <div>
-              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
-                Categoría
-                {montoValido && !categoria && (
-                  <span className="ml-1.5 text-amber-400 font-semibold normal-case tracking-normal">· recomendado</span>
-                )}
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {activeGroups.map((g) => {
-                  const isSelected = selectedGroup === g.id
-                  return (
-                    <button
-                      key={g.id}
-                      type="button"
-                      onClick={() => { setSelectedGroup(g.id); setSelectedSub('') }}
-                      className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all active:scale-95"
-                      style={isSelected
-                        ? { backgroundColor: g.color, color: '#fff' }
-                        : { backgroundColor: g.color + '15', color: g.color }
-                      }
-                    >
-                      {g.nombre}
-                    </button>
-                  )
-                })}
-              </div>
-              {selectedGroup && activeSubs.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-2 pl-3 border-l-2 border-gray-100">
-                  {activeSubs.map((sub) => {
-                    const isSelected = selectedSub === sub.id
-                    return (
-                      <button
-                        key={sub.id}
-                        type="button"
-                        onClick={() => setSelectedSub(isSelected ? '' : sub.id)}
-                        className="px-3 py-1 rounded-full text-xs font-medium transition-all active:scale-95"
-                        style={isSelected
-                          ? { backgroundColor: sub.color, color: '#fff' }
-                          : { backgroundColor: sub.color + '15', color: sub.color }
-                        }
-                      >
-                        {sub.nombre}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
+      {/* Estado + recurrente */}
+      <div className="grid grid-cols-2 gap-2">
+        <motion.button
+          type="button"
+          whileTap={{ scale: 0.96 }}
+          onClick={() => setEjecutado((v) => !v)}
+          className={`h-11 flex items-center justify-center gap-2 rounded-2xl text-xs font-semibold transition-colors ${
+            ejecutado
+              ? 'bg-emerald-500/12 text-emerald-600 ring-1 ring-emerald-500/30'
+              : 'bg-gray-500/[0.07] text-gray-500'
+          }`}
+        >
+          <motion.span
+            className={`w-4 h-4 rounded-full flex items-center justify-center border ${ejecutado ? 'bg-emerald-500 border-emerald-500' : 'border-gray-300'}`}
+            animate={{ scale: ejecutado ? [1, 1.25, 1] : 1 }}
+            transition={pulse}
+          >
+            {ejecutado && <Check size={10} strokeWidth={3.5} className="text-white" />}
+          </motion.span>
+          {ejecutado ? 'Ejecutado' : 'Pendiente'}
+        </motion.button>
+        <motion.button
+          type="button"
+          whileTap={{ scale: 0.96 }}
+          onClick={() => setRecurrente((v) => !v)}
+          className={`h-11 flex items-center justify-center gap-2 rounded-2xl text-xs font-semibold transition-colors ${
+            recurrente
+              ? 'bg-primary/12 text-primary ring-1 ring-primary/30'
+              : 'bg-gray-500/[0.07] text-gray-500'
+          }`}
+        >
+          <motion.span animate={{ rotate: recurrente ? 180 : 0 }} transition={{ duration: 0.4 }} className="inline-flex">
+            <Repeat size={14} />
+          </motion.span>
+          Recurrente
+        </motion.button>
+      </div>
 
-            {/* Fecha + persona */}
-            <div className="flex gap-2">
-              <input
-                type="date"
-                value={fecha}
-                onChange={(e) => setFecha(e.target.value)}
-                className="flex-1 min-w-0 h-10 bg-gray-50 rounded-xl px-3 text-sm text-gray-700 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-surface"
-              />
-              <div className="flex rounded-xl bg-gray-100 p-0.5 gap-0.5 flex-shrink-0">
-                {SHARED_USERS.map((u) => (
-                  <button
-                    key={u.id}
-                    type="button"
-                    onClick={() => setCreadoPor(u.id)}
-                    className={`px-3.5 h-9 rounded-[10px] text-xs font-bold transition-all ${
-                      creadoPor === u.id ? 'bg-primary text-white shadow-sm' : 'text-gray-400'
+      {/* ── Asignar a ingreso(s) — solo egresos ── */}
+      {tipo === 'egreso' && (
+        <div>
+          <FieldLabel hint="— tocá otro para dividir">Asignar a ingreso</FieldLabel>
+          {ingresoOptions.length === 0 ? (
+            <p className="text-xs text-gray-400 italic px-1">No hay ingresos este mes</p>
+          ) : (
+            <div className="space-y-1.5">
+              {ingresoOptions.map(({ ing, remaining }) => {
+                const cat = getCatFromSettings(ing.categoria, settings ?? null)
+                const nombre = ing.descripcion?.trim() || cat?.nombre || ing.categoria
+                const dateStr = ing.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
+                const draft = asigs.find((a) => a.ingresoId === ing.id)
+                const isSel = !!draft
+                // Disponible proyectado: lo que le quedaría restando lo que este movimiento le asigna
+                const draftBase = draft ? toBase(num(draft.monto), moneda, base, s) : 0
+                const projected = remaining - draftBase
+                const overAfter = isSel && projected < 0
+
+                return (
+                  <motion.div
+                    key={ing.id}
+                    layout
+                    className={`rounded-2xl transition-colors ${
+                      isSel ? 'bg-primary/[0.07] ring-1 ring-primary/35' : 'bg-gray-500/[0.06]'
                     }`}
                   >
-                    {u.nombre}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Estado + recurrente */}
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setEjecutado((v) => !v)}
-                className={`flex-1 h-10 flex items-center justify-center gap-1.5 rounded-xl border text-xs font-semibold transition-all ${
-                  ejecutado
-                    ? 'bg-green-50 border-green-300 text-green-600'
-                    : 'bg-gray-50 border-gray-200 text-gray-400'
-                }`}
-              >
-                {ejecutado ? <CheckCircle2 size={14} /> : <span className="w-3 h-3 rounded-full border border-gray-300" />}
-                {ejecutado ? 'Ejecutado' : 'Pendiente'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setRecurrente((v) => !v)}
-                className={`flex-1 h-10 flex items-center justify-center gap-1.5 rounded-xl border text-xs font-semibold transition-all ${
-                  recurrente
-                    ? 'bg-primary/10 border-primary/40 text-primary'
-                    : 'bg-gray-50 border-gray-200 text-gray-400'
-                }`}
-              >
-                <Repeat size={14} />
-                Recurrente
-              </button>
-            </div>
-
-            {/* ── Asignar a ingreso(s) — solo egresos ── */}
-            {tipo === 'egreso' && (
-              <div>
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
-                  Asignar a ingreso
-                  <span className="ml-1 font-normal normal-case tracking-normal text-gray-300">
-                    — tocá otro para dividir
-                  </span>
-                </p>
-                {ingresoOptions.length === 0 ? (
-                  <p className="text-xs text-gray-300 italic px-1">No hay ingresos este mes</p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {ingresoOptions.map(({ ing, remaining }) => {
-                      const cat = getCatFromSettings(ing.categoria, settings ?? null)
-                      const nombre = ing.descripcion?.trim() || cat?.nombre || ing.categoria
-                      const dateStr = ing.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
-                      const draft = asigs.find((a) => a.ingresoId === ing.id)
-                      const isSel = !!draft
-                      // Disponible proyectado: lo que le quedaría restando lo que este movimiento le asigna
-                      const draftBase = draft ? toBase(num(draft.monto), moneda, base, s) : 0
-                      const projected = remaining - draftBase
-                      const overAfter = isSel && projected < 0
-
-                      return (
-                        <div
-                          key={ing.id}
-                          className={`rounded-xl border transition-all ${
-                            isSel ? 'border-primary/50 bg-primary/5' : 'border-gray-200 bg-gray-50'
-                          }`}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => toggleIngreso(ing.id!)}
-                            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left"
-                          >
-                            <span className={`w-[18px] h-[18px] rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${
-                              isSel ? 'bg-primary border-primary' : 'border-gray-300 bg-surface'
-                            }`}>
-                              {isSel && <Check size={11} color="white" strokeWidth={3.5} />}
-                            </span>
-                            <span className="flex-1 min-w-0">
-                              <span className="block text-xs font-semibold text-gray-800 truncate">{nombre}</span>
-                              <span className="block text-[11px] text-gray-400">{dateStr}</span>
-                            </span>
-                            <span className="flex-shrink-0 text-right">
-                              <span className={`block text-[11px] font-semibold tabular-nums ${
-                                overAfter ? 'text-red-400' : remaining < 0 ? 'text-red-400' : 'text-green-600'
-                              } ${hideAmounts ? 'blur-sm' : ''}`}>
-                                {isSel
-                                  ? `quedan ${formatAmount(projected, base)}`
-                                  : `disp. ${formatAmount(remaining, base)}`
-                                }
-                              </span>
-                            </span>
-                          </button>
-
-                          {/* Input de monto parcial — solo cuando está dividido */}
-                          {isSel && isSplit && (
-                            <div className="flex items-center gap-2 px-3 pb-2.5 pl-[42px]">
-                              <span className="text-[11px] text-gray-400 flex-shrink-0">Parte:</span>
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                value={draft!.monto}
-                                onChange={(e) => setAsigMonto(ing.id!, e.target.value)}
-                                className="flex-1 min-w-0 h-9 bg-surface border border-gray-200 rounded-lg px-2.5 text-sm font-semibold text-gray-900 tabular-nums text-right focus:outline-none focus:ring-2 focus:ring-primary/30"
-                              />
-                              <span className="text-[11px] text-gray-400 flex-shrink-0">{moneda}</span>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-
-                    {/* Resumen de la división */}
-                    {isSplit && (
-                      <div className={`flex items-center gap-1.5 px-1 text-[11px] font-semibold ${
-                        asigOk ? 'text-green-600' : 'text-red-400'
+                    <button
+                      type="button"
+                      onClick={() => toggleIngreso(ing.id!)}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left"
+                    >
+                      <span className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
+                        isSel ? 'bg-primary border-primary' : 'border-gray-300'
                       }`}>
-                        {asigOk ? <Check size={12} strokeWidth={3} /> : <X size={12} strokeWidth={3} />}
-                        <span className={hideAmounts ? 'blur-sm' : ''}>
-                          Dividido: {asigs.map((a) => formatAmount(num(a.monto), moneda)).join(' + ')}
-                          {asigOk ? '' : ` — deben sumar ${formatAmount(parsedMonto, moneda)}`}
+                        <AnimatePresence>
+                          {isSel && (
+                            <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={springPop} className="inline-flex">
+                              <Check size={11} color="white" strokeWidth={3.5} />
+                            </motion.span>
+                          )}
+                        </AnimatePresence>
+                      </span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-xs font-semibold text-gray-800 truncate">{nombre}</span>
+                        <span className="block text-[11px] text-gray-400">{dateStr}</span>
+                      </span>
+                      <span className="flex-shrink-0 text-right">
+                        <span className={`block text-[11px] font-semibold tabular-nums ${
+                          overAfter ? 'text-rose-500' : remaining < 0 ? 'text-rose-500' : 'text-emerald-600'
+                        } ${hideAmounts ? 'blur-sm' : ''}`}>
+                          {isSel
+                            ? `quedan ${formatAmount(projected, base)}`
+                            : `disp. ${formatAmount(remaining, base)}`
+                          }
                         </span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ── Destino de ahorro — solo egresos ── */}
-            {tipo === 'egreso' && (
-              <div>
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
-                  Destino de ahorro
-                  <span className="ml-1 font-normal normal-case tracking-normal text-gray-300">— opcional</span>
-                </p>
-                <select
-                  value={ahorroAssetId}
-                  onChange={(e) => setAhorroAssetId(e.target.value)}
-                  className="w-full h-10 rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-surface"
-                >
-                  <option value="">Sin destino de ahorro</option>
-                  {assets.filter((a) => a.clase === 'activo').map((a) => (
-                    <option key={a.id} value={a.id}>{a.nombre} ({a.moneda})</option>
-                  ))}
-                </select>
-                {ahorroAssetId && (
-                  <p className="text-[11px] text-primary mt-1">El saldo de esta cuenta se actualizará al guardar</p>
-                )}
-              </div>
-            )}
-
-            {/* ── Clonar / Mover — solo al editar ── */}
-            {editingTransaction && (
-              <div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setCloneAction(cloneAction === 'clone' ? null : 'clone')}
-                    className={`flex-1 h-9 flex items-center justify-center gap-1.5 rounded-xl border text-xs font-semibold transition-all ${
-                      cloneAction === 'clone'
-                        ? 'bg-primary/10 border-primary/40 text-primary'
-                        : 'bg-gray-50 border-gray-200 text-gray-400'
-                    }`}
-                  >
-                    <Copy size={13} />Clonar a otro mes
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCloneAction(cloneAction === 'move' ? null : 'move')}
-                    className={`flex-1 h-9 flex items-center justify-center gap-1.5 rounded-xl border text-xs font-semibold transition-all ${
-                      cloneAction === 'move'
-                        ? 'bg-amber-50 border-amber-300 text-amber-600'
-                        : 'bg-gray-50 border-gray-200 text-gray-400'
-                    }`}
-                  >
-                    <ArrowRight size={13} />Mover de mes
-                  </button>
-                </div>
-                {cloneAction && (
-                  <div className="flex gap-2 mt-2">
-                    <input
-                      type="month"
-                      value={cloneMonth}
-                      onChange={(e) => setCloneMonth(e.target.value)}
-                      className="flex-1 h-9 bg-gray-50 rounded-xl px-3 text-sm text-gray-700 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleCloneMove}
-                      disabled={!cloneMonth || saving}
-                      className={`px-4 h-9 rounded-xl text-xs font-bold text-white disabled:opacity-40 ${cloneAction === 'move' ? 'bg-amber-400' : 'bg-primary'}`}
-                    >
-                      {saving ? '…' : cloneAction === 'move' ? 'Mover' : 'Clonar'}
+                      </span>
                     </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
 
-          {/* ── Footer fijo: siempre visible, sin scrollear ── */}
-          <div className="flex-shrink-0 border-t border-gray-100 px-4 pt-3 pb-5 bg-surface">
-            {montoInvalid && (
-              <p className="text-[11px] text-red-400 mb-2">Ingresá un monto mayor a 0</p>
-            )}
-            {tipo === 'egreso' && !asigOk && montoValido && (
-              <p className="text-[11px] text-red-400 mb-2">
-                Las partes asignadas deben sumar el total del egreso
-              </p>
-            )}
-            {saveError && (
-              <div className="mb-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-xs text-red-400 font-medium break-all">
-                Error: {saveError}
-              </div>
-            )}
-            {deleteConfirm && (
-              <p className="text-[11px] text-red-400 mb-2">
-                Tocá el ícono rojo de nuevo para confirmar la eliminación
-              </p>
-            )}
-            <div className="flex gap-2">
-              {editingTransaction && (
-                <button
-                  onClick={handleDelete}
-                  disabled={saving}
-                  className={`w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-2xl border-2 transition-all ${
-                    deleteConfirm
-                      ? 'bg-red-400 border-red-400 text-white'
-                      : 'border-red-100 text-red-400 hover:bg-red-50'
-                  }`}
-                  title={deleteConfirm ? 'Confirmar eliminación' : 'Eliminar'}
-                >
-                  <Trash2 size={17} />
-                </button>
-              )}
-              <button
-                onClick={closeTransactionModal}
-                disabled={saving}
-                className="h-12 px-4 rounded-2xl bg-gray-100 text-sm font-semibold text-gray-500 hover:bg-gray-200 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || !canSave}
-                className={`flex-1 h-12 rounded-2xl text-sm font-bold text-white transition-all disabled:opacity-40 ${accentBg}`}
-              >
-                {saving ? 'Guardando…' : editingTransaction ? 'Guardar cambios' : 'Agregar'}
-              </button>
+                    {/* Input de monto parcial — solo cuando está dividido */}
+                    <Collapse open={isSel && isSplit}>
+                      <div className="flex items-center gap-2 px-3 pb-2.5 pl-[42px]">
+                        <span className="text-[11px] text-gray-400 flex-shrink-0">Parte:</span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={draft?.monto ?? ''}
+                          onChange={(e) => setAsigMonto(ing.id!, e.target.value)}
+                          className="flex-1 min-w-0 h-9 bg-surface rounded-xl px-2.5 text-sm font-semibold text-gray-900 tabular-nums text-right outline-none focus:ring-2 focus:ring-primary/30"
+                        />
+                        <span className="text-[11px] text-gray-400 flex-shrink-0">{moneda}</span>
+                      </div>
+                    </Collapse>
+                  </motion.div>
+                )
+              })}
+
+              {/* Resumen de la división */}
+              <AnimatePresence>
+                {isSplit && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                    className={`flex items-center gap-1.5 px-1 text-[11px] font-semibold ${
+                      asigOk ? 'text-emerald-600' : 'text-rose-500'
+                    }`}
+                  >
+                    {asigOk ? <Check size={12} strokeWidth={3} /> : <X size={12} strokeWidth={3} />}
+                    <span className={hideAmounts ? 'blur-sm' : ''}>
+                      Dividido: {asigs.map((a) => formatAmount(num(a.monto), moneda)).join(' + ')}
+                      {asigOk ? '' : ` — deben sumar ${formatAmount(parsedMonto, moneda)}`}
+                    </span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Destino de ahorro — solo egresos ── */}
+      {tipo === 'egreso' && (
+        <div>
+          <FieldLabel hint="— opcional">Destino de ahorro</FieldLabel>
+          <select
+            value={ahorroAssetId}
+            onChange={(e) => setAhorroAssetId(e.target.value)}
+            className={fieldClass}
+          >
+            <option value="">Sin destino de ahorro</option>
+            {assets.filter((a) => a.clase === 'activo').map((a) => (
+              <option key={a.id} value={a.id}>{a.nombre} ({a.moneda})</option>
+            ))}
+          </select>
+          {ahorroAssetId && (
+            <p className="text-[11px] text-primary mt-1.5">El saldo de esta cuenta se actualizará al guardar</p>
+          )}
+        </div>
+      )}
+
+      {/* ── Clonar / Mover — solo al editar ── */}
+      {editingTransaction && (
+        <div>
+          <div className="grid grid-cols-2 gap-2">
+            <motion.button
+              type="button"
+              whileTap={{ scale: 0.96 }}
+              onClick={() => setCloneAction(cloneAction === 'clone' ? null : 'clone')}
+              className={`h-10 flex items-center justify-center gap-1.5 rounded-2xl text-xs font-semibold transition-colors ${
+                cloneAction === 'clone'
+                  ? 'bg-primary/12 text-primary ring-1 ring-primary/30'
+                  : 'bg-gray-500/[0.07] text-gray-500'
+              }`}
+            >
+              <Copy size={13} />Clonar a otro mes
+            </motion.button>
+            <motion.button
+              type="button"
+              whileTap={{ scale: 0.96 }}
+              onClick={() => setCloneAction(cloneAction === 'move' ? null : 'move')}
+              className={`h-10 flex items-center justify-center gap-1.5 rounded-2xl text-xs font-semibold transition-colors ${
+                cloneAction === 'move'
+                  ? 'bg-amber-500/12 text-amber-600 ring-1 ring-amber-500/30'
+                  : 'bg-gray-500/[0.07] text-gray-500'
+              }`}
+            >
+              <ArrowRight size={13} />Mover de mes
+            </motion.button>
           </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+          <Collapse open={!!cloneAction}>
+            <div className="flex gap-2 mt-2">
+              <input
+                type="month"
+                value={cloneMonth}
+                onChange={(e) => setCloneMonth(e.target.value)}
+                className={`${fieldClass} flex-1`}
+              />
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.95 }}
+                onClick={handleCloneMove}
+                disabled={!cloneMonth || saving}
+                className={`px-4 h-11 rounded-2xl text-xs font-bold text-white disabled:opacity-40 ${cloneAction === 'move' ? 'bg-amber-500' : 'bg-primary'}`}
+              >
+                {saving ? '…' : cloneAction === 'move' ? 'Mover' : 'Clonar'}
+              </motion.button>
+            </div>
+          </Collapse>
+        </div>
+      )}
+    </Sheet>
   )
 }

@@ -1,8 +1,10 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
 import { CheckCircle2, XCircle } from 'lucide-react'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
+import { springPop } from './motion'
 
 const DURATION = 2500
 
@@ -17,21 +19,34 @@ export default function Toast() {
     return () => { if (timerRef.current) clearTimeout(timerRef.current) }
   }, [toast, hideToast])
 
-  if (!toast) return null
-
-  const isSuccess = toast.type === 'success'
+  const isSuccess = toast?.type === 'success'
 
   return (
-    <div
-      className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-lg text-white text-sm font-semibold max-w-[340px] w-[90vw] animate-in fade-in slide-in-from-bottom-4 duration-200 ${
-        isSuccess ? 'bg-[#1a7a4a]' : 'bg-red-400'
-      }`}
-    >
-      {isSuccess
-        ? <CheckCircle2 size={18} className="flex-shrink-0" />
-        : <XCircle size={18} className="flex-shrink-0" />
-      }
-      <span className="flex-1 leading-tight">{toast.message}</span>
+    <div className="fixed bottom-[104px] inset-x-0 z-[100] flex justify-center pointer-events-none px-4">
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            key={toast.message + toast.type}
+            role="status"
+            initial={{ opacity: 0, y: 24, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 12, scale: 0.95, transition: { duration: 0.18 } }}
+            transition={springPop}
+            onClick={hideToast}
+            className="pointer-events-auto flex items-center gap-2.5 pl-2.5 pr-4 py-2.5 rounded-full glass-strong max-w-[340px] text-sm font-semibold text-gray-900"
+          >
+            <span className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${
+              isSuccess ? 'bg-emerald-500' : 'bg-rose-500'
+            }`}>
+              {isSuccess
+                ? <CheckCircle2 size={16} className="text-white" />
+                : <XCircle size={16} className="text-white" />
+              }
+            </span>
+            <span className="leading-tight">{toast.message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

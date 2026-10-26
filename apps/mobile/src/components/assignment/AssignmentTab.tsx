@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { createPortal } from 'react-dom'
+import { AnimatePresence, motion } from 'motion/react'
 import { Zap, X, Unlink2, Sparkles, AlertCircle, CheckCircle2, Trash2 } from 'lucide-react'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
@@ -14,6 +16,7 @@ import { toBase } from '@finanzas/core/lib/currency'
 import { Transaction, Currency } from '@finanzas/core/types'
 import AssignmentGroup, { GroupItem } from './AssignmentGroup'
 import ReassignModal from './ReassignModal'
+import { springSoft, stagger } from '@/components/ui/motion'
 
 export default function AssignmentTab() {
   const { transactions } = useTransactionStore()
@@ -221,136 +224,171 @@ export default function AssignmentTab() {
   ]
 
   const barGradient = allAssigned
-    ? 'linear-gradient(90deg, #22c55e, #10b981)'
+    ? 'linear-gradient(90deg, #6ee7b7, #34d399)'
     : progressPercent >= 50
-      ? 'linear-gradient(90deg, #3b82f6, #6366f1)'
-      : 'linear-gradient(90deg, #fbbf24, #f87171)'
+      ? 'linear-gradient(90deg, #a5b4fc, #e0e7ff)'
+      : 'linear-gradient(90deg, #fcd34d, #fda4af)'
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-gray-50/60">
+    <div className="flex-1 flex flex-col overflow-hidden">
 
       {/* ── Header — hero card ── */}
-      <div className="px-3 pt-2 pb-2 bg-surface">
-        <div className="relative rounded-xl overflow-hidden px-3 py-2.5 bg-gradient-to-r from-primary to-[#8b5cf6] shadow-sm">
-          <div className="absolute -top-6 -right-6 w-20 h-20 bg-surface/10 rounded-full blur-xl" />
+      <div className="px-3 pt-1 pb-2 flex-shrink-0">
+        <div className="relative rounded-[22px] overflow-hidden px-3.5 py-3 bg-brand shadow-soft text-white">
+          <div className="absolute -top-8 -right-8 w-24 h-24 bg-white/15 rounded-full blur-2xl" />
 
           {/* Fila 1: número · badge · spacer · botón auto-asignar */}
-          <div className="relative flex items-center gap-2 mb-2">
-            <p className="text-lg font-black text-white tabular-nums leading-none flex-shrink-0">
+          <div className="relative flex items-center gap-2 mb-2.5">
+            <p className="text-xl font-bold tabular-nums leading-none flex-shrink-0">
               {assignedCount}
-              <span className="text-white/50 text-sm font-bold">/{totalEgresos}</span>
+              <span className="text-white/50 text-sm font-semibold">/{totalEgresos}</span>
             </p>
 
-            {allAssigned ? (
-              <div className="flex items-center gap-1">
-                <CheckCircle2 size={10} className="text-emerald-300 flex-shrink-0" />
-                <span className="text-[11px] text-emerald-200 font-semibold whitespace-nowrap">Todo asignado</span>
-              </div>
-            ) : unassignedExpenses.length > 0 ? (
-              <div className="flex items-center gap-1">
-                <AlertCircle size={10} className="text-amber-300 flex-shrink-0" />
-                <span className="text-[11px] text-amber-200 font-semibold whitespace-nowrap">{unassignedExpenses.length} sin asignar</span>
-              </div>
-            ) : null}
+            <AnimatePresence mode="wait" initial={false}>
+              {allAssigned ? (
+                <motion.div key="ok" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-400/20">
+                  <CheckCircle2 size={11} className="text-emerald-200 flex-shrink-0" />
+                  <span className="text-[11px] text-emerald-100 font-semibold whitespace-nowrap">Todo asignado</span>
+                </motion.div>
+              ) : unassignedExpenses.length > 0 ? (
+                <motion.div key="pending" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-400/20">
+                  <AlertCircle size={11} className="text-amber-200 flex-shrink-0" />
+                  <span className="text-[11px] text-amber-100 font-semibold whitespace-nowrap">{unassignedExpenses.length} sin asignar</span>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
 
             <div className="flex-1" />
 
-            <button
+            <motion.button
+              whileTap={{ scale: 0.94 }}
               onClick={autoAssign}
               disabled={autoLoading || unassignedExpenses.length === 0 || ingresos.length === 0}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface text-primary text-[11px] font-bold shadow-sm disabled:opacity-40 active:scale-95 transition-all whitespace-nowrap flex-shrink-0"
+              className="flex items-center gap-1 px-3 h-8 rounded-full bg-white text-primary text-[11px] font-bold shadow-sm disabled:opacity-40 whitespace-nowrap flex-shrink-0"
             >
               {autoLoading
-                ? <><Sparkles size={10} className="animate-pulse" /> Asignando…</>
-                : <><Zap size={10} /> Auto-asignar</>
+                ? <><Sparkles size={12} className="animate-pulse" /> Asignando…</>
+                : <><Zap size={12} /> Auto-asignar</>
               }
-            </button>
+            </motion.button>
           </div>
 
           {/* Fila 2: barra de progreso · % · desasignar */}
           <div className="relative flex items-center gap-2">
-            <div className="flex-1 min-w-0">
-              <div className="h-1 bg-surface/20 rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-700"
-                  style={{ width: `${progressPercent}%`, background: barGradient }}
-                />
-              </div>
+            <div className="flex-1 min-w-0 h-1.5 bg-white/20 rounded-full overflow-hidden">
+              <motion.div
+                className="h-full rounded-full"
+                style={{ background: barGradient }}
+                initial={{ width: 0 }}
+                animate={{ width: `${progressPercent}%` }}
+                transition={{ type: 'spring', stiffness: 120, damping: 22 }}
+              />
             </div>
-            <span className="text-[11px] text-white/70 font-semibold tabular-nums flex-shrink-0">
+            <span className="text-[11px] text-white/75 font-semibold tabular-nums flex-shrink-0">
               {Math.round(progressPercent)}%
             </span>
             {assignedCount > 0 && (
-              <button
+              <motion.button
+                whileTap={{ scale: 0.94 }}
                 onClick={desassignAll}
                 disabled={unassignLoading}
-                className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-semibold transition-all active:scale-95 flex-shrink-0 whitespace-nowrap ${
-                  unassignConfirm ? 'bg-red-400 text-white' : 'bg-surface/15 text-white/90'
+                className={`flex items-center gap-1 px-2.5 h-6 rounded-full text-[11px] font-semibold transition-colors flex-shrink-0 whitespace-nowrap ${
+                  unassignConfirm ? 'bg-rose-500 text-white' : 'bg-white/15 text-white/90'
                 }`}
               >
-                <Unlink2 size={9} />
+                <Unlink2 size={10} />
                 {unassignConfirm ? '¿Confirmar?' : 'Desasignar todo'}
-              </button>
+              </motion.button>
             )}
           </div>
         </div>
       </div>
 
       {/* ── Groups ── */}
-      <div className="flex-1 overflow-y-auto pt-2 pb-24">
+      <div className="flex-1 overflow-y-auto overscroll-contain pt-1 pb-28 no-scrollbar">
         {egresos.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center px-6">
-            <p className="text-gray-400 text-sm">No hay egresos este mes</p>
-            <p className="text-gray-300 text-xs mt-1">Agregá egresos con el botón +</p>
+            <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-2.5">
+              <Zap size={20} className="text-primary" />
+            </div>
+            <p className="text-gray-500 text-sm font-semibold">No hay egresos este mes</p>
+            <p className="text-gray-400 text-xs mt-1">Agregá egresos con el botón +</p>
           </div>
         ) : (
-          groupEntries.map(({ key, group }) => {
+          groupEntries.map(({ key, group }, i) => {
             return (
-              <AssignmentGroup
+              <motion.div
                 key={key}
-                income={group.income}
-                items={group.items}
-                selectedIds={selectedIds}
-                onToggleSelect={toggleSelect}
-                onEdit={openEditModal}
-                onDesassign={() => desassignGroup(key)}
-                isExpanded={expandedGroups.has(key)}
-                onToggleExpand={() => toggleGroup(key)}
-                userNames={userNames}
-                settings={s}
-                monedaBase={base}
-              />
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: stagger(i, 0.04), ease: [0.22, 1, 0.36, 1] }}
+              >
+                <AssignmentGroup
+                  income={group.income}
+                  items={group.items}
+                  selectedIds={selectedIds}
+                  onToggleSelect={toggleSelect}
+                  onEdit={openEditModal}
+                  onDesassign={() => desassignGroup(key)}
+                  isExpanded={expandedGroups.has(key)}
+                  onToggleExpand={() => toggleGroup(key)}
+                  userNames={userNames}
+                  settings={s}
+                  monedaBase={base}
+                />
+              </motion.div>
             )
           })
         )}
       </div>
 
-      {/* ── Multi-select action bar ── */}
-      {selectedIds.size > 0 && (
-        <div className="fixed bottom-[72px] left-1/2 -translate-x-1/2 w-full max-w-[390px] bg-surface border-t border-gray-100 shadow-lg z-30 px-4 py-3 flex items-center gap-2">
-          <button onClick={() => { setSelectedIds(new Set()); setDeleteConfirm(false) }} className="p-2 rounded-full hover:bg-gray-100">
-            <X size={18} className="text-gray-500" />
-          </button>
-          <span className="flex-1 text-sm font-semibold text-gray-700">
-            {selectedIds.size} seleccionado{selectedIds.size !== 1 ? 's' : ''}
-          </span>
-          <button
-            onClick={deleteSelected}
-            disabled={deleteLoading}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all ${
-              deleteConfirm ? 'bg-red-400 text-white' : 'bg-red-50 text-red-400'
-            }`}
-          >
-            <Trash2 size={14} />
-            {deleteConfirm ? '¿Confirmar?' : 'Eliminar'}
-          </button>
-          <button
-            onClick={() => setReassignOpen(true)}
-            className="px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold active:scale-95 transition-transform"
-          >
-            Reasignar
-          </button>
-        </div>
+      {/* ── Multi-select action bar (portal: queda fuera de los contenedores animados) ── */}
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {selectedIds.size > 0 && (
+            <motion.div
+              initial={{ y: 40, opacity: 0, scale: 0.96 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 40, opacity: 0, scale: 0.96 }}
+              transition={springSoft}
+              className="fixed bottom-[calc(max(12px,env(safe-area-inset-bottom))+76px)] inset-x-0 mx-auto w-[calc(100%-24px)] max-w-[366px] glass-strong rounded-[22px] z-30 pl-2 pr-2 py-2 flex items-center gap-2"
+            >
+              <button onClick={() => { setSelectedIds(new Set()); setDeleteConfirm(false) }} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-500/10" aria-label="Cancelar selección">
+                <X size={18} className="text-gray-500" />
+              </button>
+              <span className="flex-1 min-w-0 flex items-center gap-1.5 text-[13px] font-semibold text-gray-700 whitespace-nowrap">
+                <motion.span
+                  key={selectedIds.size}
+                  initial={{ scale: 0.6 }}
+                  animate={{ scale: 1 }}
+                  className="min-w-6 h-6 px-1.5 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center tabular-nums"
+                >
+                  {selectedIds.size}
+                </motion.span>
+                <span className="truncate">selecc.</span>
+              </span>
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={deleteSelected}
+                disabled={deleteLoading}
+                className={`flex items-center gap-1.5 px-3 h-10 rounded-2xl text-[13px] font-semibold transition-colors whitespace-nowrap ${
+                  deleteConfirm ? 'bg-rose-500 text-white' : 'bg-rose-500/10 text-rose-500'
+                }`}
+              >
+                <Trash2 size={14} />
+                {deleteConfirm ? '¿Confirmar?' : 'Eliminar'}
+              </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setReassignOpen(true)}
+                className="px-3.5 h-10 rounded-2xl bg-brand text-white text-[13px] font-semibold shadow-soft whitespace-nowrap"
+              >
+                Reasignar
+              </motion.button>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
       )}
 
       <ReassignModal

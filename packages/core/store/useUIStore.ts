@@ -23,7 +23,9 @@ export const useUIStore = create<UIState>((set) => ({
   toast: null,
   openAddModal: () => set({ isTransactionModalOpen: true, editingTransaction: null }),
   openEditModal: (tx) => set({ isTransactionModalOpen: true, editingTransaction: tx }),
-  closeTransactionModal: () => set({ isTransactionModalOpen: false, editingTransaction: null }),
+  // editingTransaction se conserva al cerrar: el sheet anima su salida con el
+  // contenido intacto. openAddModal / openEditModal lo reemplazan al reabrir.
+  closeTransactionModal: () => set({ isTransactionModalOpen: false }),
   showToast: (message, type = 'success') => set({ toast: { message, type } }),
   hideToast: () => set({ toast: null }),
 }))

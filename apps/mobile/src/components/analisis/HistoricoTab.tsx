@@ -8,12 +8,16 @@ import { useBudgetStore } from '@finanzas/core/store/useBudgetStore'
 import { subscribeToBudgets } from '@finanzas/core/lib/budgets'
 import { fetchMonthTransactions, fetchLastNMonths } from '@finanzas/core/lib/analytics'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
-import { shiftMonth, monthLabel, formatAmount, getCurrentMonth, getParentGroup, getCatFromSettings } from '@finanzas/core/lib/constants'
+import { shiftMonth, monthLabel, getCurrentMonth, getParentGroup, getCatFromSettings } from '@finanzas/core/lib/constants'
 import { toBase } from '@finanzas/core/lib/currency'
 import { Transaction, Currency } from '@finanzas/core/types'
 import SummaryComparison from './SummaryComparison'
 import CategoryDonut from './CategoryDonut'
 import MultiLineChart, { LineSeries } from './MultiLineChart'
+import { motion } from 'motion/react'
+import { PiggyBank, CalendarDays, Crown } from 'lucide-react'
+import Card from '@/components/ui/Card'
+import { Money } from '@/components/ui/AnimatedNumber'
 
 const MONTH_ABBR = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
 
@@ -84,7 +88,7 @@ export default function HistoricoTab() {
   const lineSeries: LineSeries[] = [
     { label: 'Ingresos', color: '#10b981', values: ingresosVals },
     { label: 'Egresos',  color: '#f43f5e', values: egresosVals  },
-    { label: 'Balance',  color: '#a78bfa', values: balanceVals, dashed: true },
+    { label: 'Balance',  color: '#8b7bff', values: balanceVals, dashed: true },
   ]
 
   // ── Insights del mes ──────────────────────────────────────────────────────
@@ -142,13 +146,12 @@ export default function HistoricoTab() {
     .sort((a, b) => b.montoBase - a.montoBase)
     .slice(0, 5)
 
+  const ahorroOk = tasaAhorro !== null && tasaAhorro >= 0
+
   return (
-    <div className="h-full overflow-y-auto pb-8">
-      {/* Section 1: Comparison */}
-      <div className="border-b border-gray-50">
-        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-4 pt-3 pb-0.5">
-          Resumen — vs {monthLabel(prevMonth)}
-        </p>
+    <div className="h-full overflow-y-auto overscroll-contain px-4 pt-1 pb-28 space-y-3 no-scrollbar">
+      {/* Section 1: Comparison + insights */}
+      <Card title={`Resumen · vs ${monthLabel(prevMonth).replace(' de ', ' ')}`} padded={false}>
         <SummaryComparison
           current={transactions}
           previous={prevTxs}
@@ -157,99 +160,114 @@ export default function HistoricoTab() {
         />
 
         {/* Insights rápidos */}
-        <div className="grid grid-cols-3 gap-2 px-4 pb-3">
-          <div className={`rounded-xl px-2.5 py-2 ${tasaAhorro !== null && tasaAhorro >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
-            <p className="text-[10px] text-gray-400 font-medium leading-tight">Tasa de ahorro</p>
-            <p className={`text-sm font-bold tabular-nums ${tasaAhorro !== null && tasaAhorro >= 0 ? 'text-green-600' : 'text-red-400'}`}>
-              {tasaAhorro === null ? '—' : `${Math.round(tasaAhorro)}%`}
-            </p>
-          </div>
-          <div className="rounded-xl px-2.5 py-2 bg-gray-50">
-            <p className="text-[10px] text-gray-400 font-medium leading-tight">
-              {esMesActual ? 'Gasto x día' : 'Prom. diario'}
-            </p>
-            <p className="text-sm font-bold text-gray-900 tabular-nums truncate">
-              {formatAmount(Math.round(promDiario), base)}
-            </p>
-          </div>
-          <div className="rounded-xl px-2.5 py-2 bg-gray-50">
-            <p className="text-[10px] text-gray-400 font-medium leading-tight truncate">
-              Top: {topGrupoNombre ?? '—'}
-            </p>
-            <p className="text-sm font-bold text-gray-900 tabular-nums">
-              {topGrupo ? `${topGrupoPct}%` : '—'}
-            </p>
-          </div>
+        <div className="grid grid-cols-3 gap-2 px-4 pb-4">
+          <Insight
+            icon={<PiggyBank size={14} />}
+            tone={ahorroOk ? 'good' : 'bad'}
+            label="Tasa de ahorro"
+            value={tasaAhorro === null ? '—' : `${Math.round(tasaAhorro)}%`}
+          />
+          <Insight
+            icon={<CalendarDays size={14} />}
+            label={esMesActual ? 'Gasto x día' : 'Prom. diario'}
+            value={<Money value={Math.round(promDiario)} currency={base} />}
+          />
+          <Insight
+            icon={<Crown size={14} />}
+            label={`Top: ${topGrupoNombre ?? '—'}`}
+            value={topGrupo ? `${topGrupoPct}%` : '—'}
+          />
         </div>
-      </div>
+      </Card>
 
       {/* Section 2: Donut by category */}
-      <div className="border-b border-gray-50">
-        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-4 pt-3 pb-0">
-          Por categoría
-        </p>
+      <Card title="Por categoría" padded={false} delay={0.05}>
         <CategoryDonut
           transactions={transactions}
           settings={s}
           monedaBase={base}
           mes={currentMonth}
         />
-      </div>
+      </Card>
 
       {/* Section 3: Line chart */}
-      <div className="border-b border-gray-50 pb-2">
-        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-4 pt-3 pb-1">
-          Evolución 6 meses
-        </p>
+      <Card title="Evolución 6 meses" padded={false} delay={0.1}>
         {loadingChart ? (
-          <div className="flex justify-center py-6">
-            <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          </div>
+          <div className="px-4 pb-4 pt-2"><div className="skeleton h-28 rounded-2xl" /></div>
         ) : (
           <MultiLineChart months={chartMonths} series={lineSeries} currency={base} />
         )}
-      </div>
+      </Card>
 
       {/* Section 4: Evolución de gasto por categoría */}
       {!loadingChart && gruposSeries.length > 0 && (
-        <div className="border-b border-gray-50 pb-2">
-          <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-4 pt-3 pb-1">
-            Gasto por categoría — 6 meses
-          </p>
+        <Card title="Gasto por categoría · 6 meses" padded={false} delay={0.15}>
           <MultiLineChart months={chartMonths} series={gruposSeries} currency={base} />
-        </div>
+        </Card>
       )}
 
       {/* Section 5: Mayores gastos del mes */}
       {topGastos.length > 0 && (
-        <div className="pb-2">
-          <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-4 pt-3 pb-1.5">
-            Mayores gastos del mes
-          </p>
-          <div className="px-4 space-y-1">
+        <Card title="Mayores gastos del mes" delay={0.2}>
+          <div className="space-y-1">
             {topGastos.map(({ t, montoBase }, i) => {
               const cat = getCatFromSettings(t.categoria, s)
+              const pct = topGastos[0].montoBase > 0 ? (montoBase / topGastos[0].montoBase) * 100 : 0
               return (
-                <div key={t.id} className="flex items-center gap-2.5 py-1.5">
-                  <span className="w-5 h-5 rounded-full bg-gray-100 text-gray-500 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                <motion.div
+                  key={t.id}
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.25 + i * 0.05 }}
+                  className="relative flex items-center gap-2.5 py-2 px-2 rounded-xl overflow-hidden"
+                >
+                  {/* Barra relativa al mayor gasto */}
+                  <motion.span
+                    className="absolute inset-y-0 left-0 rounded-xl"
+                    style={{ backgroundColor: (cat?.color ?? '#94a3b8') + '14' }}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${pct}%` }}
+                    transition={{ type: 'spring', stiffness: 90, damping: 20, delay: 0.3 + i * 0.05 }}
+                  />
+                  <span className="relative w-5 h-5 rounded-full bg-surface text-gray-500 text-[10px] font-bold flex items-center justify-center flex-shrink-0 shadow-sm">
                     {i + 1}
                   </span>
-                  <div
-                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                  <span
+                    className="relative w-1.5 h-1.5 rounded-full flex-shrink-0"
                     style={{ backgroundColor: cat?.color ?? '#94a3b8' }}
                   />
-                  <p className="flex-1 min-w-0 text-xs text-gray-700 truncate">
+                  <p className="relative flex-1 min-w-0 text-xs font-medium text-gray-700 truncate">
                     {t.descripcion || cat?.nombre || t.categoria}
                   </p>
-                  <p className="text-xs font-semibold text-red-400 tabular-nums flex-shrink-0">
-                    -{formatAmount(montoBase, base)}
+                  <p className="relative text-xs font-bold text-rose-500 flex-shrink-0">
+                    -<Money value={montoBase} currency={base} animated={false} />
                   </p>
-                </div>
+                </motion.div>
               )
             })}
           </div>
-        </div>
+        </Card>
       )}
+    </div>
+  )
+}
+
+function Insight({ icon, label, value, tone }: {
+  icon: React.ReactNode
+  label: string
+  value: React.ReactNode
+  tone?: 'good' | 'bad'
+}) {
+  const toneCls = tone === 'good'
+    ? 'bg-emerald-500/10 text-emerald-600'
+    : tone === 'bad'
+      ? 'bg-rose-500/10 text-rose-500'
+      : 'bg-primary/10 text-primary'
+  return (
+    <div className="rounded-2xl bg-gray-500/[0.06] px-2.5 py-2.5 min-w-0">
+      <span className={`w-6 h-6 rounded-lg flex items-center justify-center ${toneCls}`}>{icon}</span>
+      <p className="text-[10px] text-gray-400 font-medium leading-tight mt-1.5 truncate">{label}</p>
+      <p className="text-sm font-bold text-gray-900 tabular-nums truncate mt-0.5">{value}</p>
     </div>
   )
 }

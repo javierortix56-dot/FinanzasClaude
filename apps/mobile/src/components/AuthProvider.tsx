@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { MotionConfig, motion } from 'motion/react'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { initAuth } from '@finanzas/core/lib/auth'
@@ -47,15 +48,24 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   }, [user?.id, setSettings, setMonedaBase])
 
   // Splash mínimo mientras se resuelve la sesión persistida (evita flash de login)
-  if (!authReady) {
-    return (
-      <div className="flex items-center justify-center min-h-[100dvh] bg-gray-50">
-        <div className="w-7 h-7 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
-
-  if (!user) return <LoginScreen />
-
-  return <>{children}</>
+  // reducedMotion="user": respeta "Reducir movimiento" del sistema en toda la app
+  return (
+    <MotionConfig reducedMotion="user">
+      {!authReady ? (
+        <div className="flex items-center justify-center min-h-[100dvh]">
+          <motion.div
+            className="w-14 h-14 rounded-2xl bg-brand shadow-lift flex items-center justify-center"
+            animate={{ scale: [1, 1.06, 1] }}
+            transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <span className="text-white font-black text-sm">J&amp;M</span>
+          </motion.div>
+        </div>
+      ) : !user ? (
+        <LoginScreen />
+      ) : (
+        children
+      )}
+    </MotionConfig>
+  )
 }
