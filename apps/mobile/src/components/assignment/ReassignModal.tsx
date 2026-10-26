@@ -4,7 +4,7 @@ import { motion } from 'motion/react'
 import { CheckCircle2 } from 'lucide-react'
 import { Transaction, Settings, Currency } from '@finanzas/core/types'
 import { getCatFromSettings, formatAmount } from '@finanzas/core/lib/constants'
-import { toBase } from '@finanzas/core/lib/currency'
+import { toBase, txToBase, txMonth } from '@finanzas/core/lib/currency'
 import Sheet from '@/components/ui/Sheet'
 import ProgressBar from '@/components/ui/ProgressBar'
 
@@ -51,10 +51,10 @@ export default function ReassignModal({
               day: 'numeric',
               month: 'short',
             })
-            const incBase = toBase(inc.monto, inc.moneda, monedaBase, settings)
+            const incBase = txToBase(inc, monedaBase, settings)
             const totalAsignado = egresos.reduce((sum, e) => sum + e.asignaciones
               .filter((a) => a.ingresoId === inc.id)
-              .reduce((x, a) => x + toBase(a.monto, e.moneda, monedaBase, settings), 0), 0)
+              .reduce((x, a) => x + toBase(a.monto, e.moneda, monedaBase, settings, txMonth(e)), 0), 0)
             const disponible = incBase - totalAsignado
             const isOver = disponible < 0
             const used = incBase > 0 ? Math.min((totalAsignado / incBase) * 100, 100) : 0

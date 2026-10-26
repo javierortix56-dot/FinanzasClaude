@@ -5,7 +5,7 @@ import {
   ChevronRight, ChevronLeft, Plus, Pencil,
   Copy, RotateCcw, Lock, Trash2, Check, Download, Upload, LogOut,
   UserRound, Bell, ArrowLeftRight, Tags, Coins, Layers, PiggyBank, CalendarCog, DatabaseBackup,
-  Palette, Sparkles,
+  Palette, Sparkles, RefreshCw,
 } from 'lucide-react'
 import { AnimatePresence, motion, type PanInfo } from 'motion/react'
 import PageHeader from '@/components/ui/PageHeader'
@@ -23,6 +23,7 @@ import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { signOut } from '@finanzas/core/lib/auth'
 import { pushSoportado, getSuscripcionActual, activarPush, desactivarPush } from '@finanzas/core/lib/push'
 import { updateSettings } from '@finanzas/core/lib/settings'
+import { cambiarFuenteCambio, syncCotizaciones, haceCuanto, FUENTES_CAMBIO } from '@finanzas/core/lib/cotizaciones'
 import {
   deleteMonthTransactions,
   restoreTransactions,
@@ -33,7 +34,7 @@ import {
 import { exportBackup, downloadBackup, importBackup, parseBackupFile } from '@finanzas/core/lib/backup'
 import { monthLabel, SHARED_USER_ID } from '@finanzas/core/lib/constants'
 import dynamic from 'next/dynamic'
-import { Category, CategoryGroup, AhorroLink, Currency } from '@finanzas/core/types'
+import { Category, CategoryGroup, AhorroLink, Currency, FuenteCambio } from '@finanzas/core/types'
 
 const CategoryModal = dynamic(() => import('@/components/ajustes/CategoryModal'), { ssr: false })
 
@@ -74,6 +75,7 @@ export default function AjustesPage() {
   const [savingRate, setSavingRate] = useState(false)
   const [rateSaved, setRateSaved] = useState(false)
   const [rateError, setRateError] = useState<string | null>(null)
+  const [syncing, setSyncing] = useState(false)
 
   // Apariencia (por dispositivo)
   const [theme, setTheme] = useState<ThemePref>(() => getThemePref())
@@ -136,6 +138,31 @@ export default function AjustesPage() {
   }
 
   // ── Tipos de cambio ──────────────────────────────────────────────────────────
+  async function handleFuente(f: FuenteCambio) {
+    if (!settings) return
+    setRateError(null)
+    setSyncing(true)
+    try {
+      await cambiarFuenteCambio(settings, f)
+    } catch (err) {
+      setRateError('No se pudo actualizar: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  async function handleSyncAhora() {
+    if (!settings) return
+    setRateError(null)
+    setSyncing(true)
+    try {
+      const ok = await syncCotizaciones(settings, { force: true })
+      if (!ok) setRateError('No se pudo obtener la cotización (sin conexión con el servicio).')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   async function saveRates() {
     setRateError(null)
     const ARS_USD = parseFloat(arsRate.replace(',', '.'))
@@ -596,11 +623,46 @@ export default function AjustesPage() {
             label="Tipos de cambio"
             icon={<ArrowLeftRight size={15} />}
             tint="#10b981"
-            hint={`ARS ${s.tipoCambio.ARS_USD.toLocaleString('es-AR')} · COP ${s.tipoCambio.COP_USD.toLocaleString('es-AR')}`}
+            hint={`${(FUENTES_CAMBIO.find((f) => f.value === (s.fuenteCambio ?? 'mep'))?.label ?? '')} · ARS ${s.tipoCambio.ARS_USD.toLocaleString('es-AR')} · COP ${s.tipoCambio.COP_USD.toLocaleString('es-AR')}`}
             open={openSection === 'cambio'}
             onToggle={() => { toggle('cambio'); setArsRate(String(s?.tipoCambio.ARS_USD ?? 1200)); setCopRate(String(s?.tipoCambio.COP_USD ?? 4100)) }}
           >
             <div className="space-y-3 pt-1">
+              <Segmented
+                id="fuente-cambio"
+                size="md"
+                value={s.fuenteCambio ?? 'mep'}
+                onChange={(f) => { if (!syncing) handleFuente(f) }}
+                options={FUENTES_CAMBIO.map((f) => ({ value: f.value, label: f.label }))}
+                variant="solid"
+              />
+              <p className="text-[11px] text-gray-500 leading-snug">
+                {FUENTES_CAMBIO.find((f) => f.value === (s.fuenteCambio ?? 'mep'))?.detalle}.
+                {' '}Cada mes pasado se convierte con su propio promedio.
+              </p>
+              {(s.fuenteCambio ?? 'mep') !== 'manual' ? (
+                <div className="rounded-2xl bg-gray-500/[0.06] px-3.5 py-3 space-y-1.5">
+                  <div className="flex justify-between text-sm tabular-nums">
+                    <span className="text-gray-500">1 USD</span>
+                    <span className="font-semibold">ARS {s.tipoCambio.ARS_USD.toLocaleString('es-AR')}</span>
+                  </div>
+                  <div className="flex justify-between text-sm tabular-nums">
+                    <span className="text-gray-500">1 USD</span>
+                    <span className="font-semibold">COP {s.tipoCambio.COP_USD.toLocaleString('es-AR')}</span>
+                  </div>
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-[11px] text-gray-500">Actualizado {haceCuanto(s.cambioActualizado)}</span>
+                    <button
+                      onClick={handleSyncAhora}
+                      disabled={syncing}
+                      className="text-xs font-semibold text-primary inline-flex items-center gap-1 disabled:opacity-50"
+                    >
+                      <RefreshCw size={12} className={syncing ? 'animate-spin' : ''} /> {syncing ? 'Actualizando…' : 'Actualizar ahora'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
               <RateInput label="1 USD = ? ARS" value={arsRate} onChange={setArsRate} />
               <RateInput label="1 USD = ? COP" value={copRate} onChange={setCopRate} />
               <button
@@ -612,6 +674,8 @@ export default function AjustesPage() {
               >
                 {rateSaved ? <><Check size={14} /> Guardado</> : savingRate ? 'Guardando...' : 'Actualizar tipo de cambio'}
               </button>
+                </>
+              )}
               {rateError && (
                 <div className="bg-rose-500/10 ring-1 ring-rose-500/25 rounded-2xl px-3 py-2 text-xs text-rose-500 font-medium">
                   {rateError}
@@ -622,8 +686,8 @@ export default function AjustesPage() {
                   <p className="eyebrow pt-1">Historial</p>
                   {[...(s?.historialTipoCambio ?? [])].reverse().slice(0, 6).map((h) => (
                     <div key={h.mes} className="flex justify-between text-xs text-gray-500 py-1.5 border-b border-hairline tabular-nums">
-                      <span className="capitalize">{monthLabel(h.mes)}</span>
-                      <span>ARS {h.ARS_USD} · COP {h.COP_USD}</span>
+                      <span className="capitalize">{monthLabel(h.mes)}{h.fuente ? '' : ' · manual'}</span>
+                      <span>ARS {h.ARS_USD.toLocaleString('es-AR')} · COP {h.COP_USD.toLocaleString('es-AR')}</span>
                     </div>
                   ))}
                 </div>

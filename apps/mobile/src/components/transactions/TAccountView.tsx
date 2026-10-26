@@ -9,7 +9,7 @@ import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { Transaction, Currency, Settings } from '@finanzas/core/types'
 import { getCatFromSettings, formatAmount } from '@finanzas/core/lib/constants'
-import { toBase } from '@finanzas/core/lib/currency'
+import { txToBase } from '@finanzas/core/lib/currency'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { markEjecutado } from '@finanzas/core/lib/transactions'
 import { Money } from '@/components/ui/AnimatedNumber'
@@ -38,7 +38,7 @@ const TxRow = memo(function TxRow({ tx, hideAmounts, settings, monedaBase, linke
   const isIngreso = tx.tipo === 'ingreso'
   const dateStr = tx.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
   const dotColor = cat?.color ?? (isIngreso ? '#10b981' : '#f43f5e')
-  const montoBase = toBase(tx.monto, tx.moneda, monedaBase, settings ?? DEFAULT_SETTINGS)
+  const montoBase = txToBase(tx, monedaBase, settings ?? DEFAULT_SETTINGS)
   const blur = hideAmounts ? 'blur-[5px] select-none' : ''
 
   // Swipe: derecha = marcar ejecutado/pendiente · izquierda = eliminar (con Deshacer)
@@ -250,11 +250,11 @@ export default function TAccountView({ search = '', onScrollY }: Props) {
   )
 
   const totalIngresos = useMemo(
-    () => ingresos.reduce((sum, t) => sum + toBase(t.monto, t.moneda, base, s), 0),
+    () => ingresos.reduce((sum, t) => sum + txToBase(t, base, s), 0),
     [ingresos, base, s],
   )
   const totalEgresos = useMemo(
-    () => egresos.reduce((sum, t) => sum + toBase(t.monto, t.moneda, base, s), 0),
+    () => egresos.reduce((sum, t) => sum + txToBase(t, base, s), 0),
     [egresos, base, s],
   )
 

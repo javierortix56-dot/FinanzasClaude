@@ -8,7 +8,7 @@ import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { fetchMonthTransactions } from '@finanzas/core/lib/analytics'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { shiftMonth } from '@finanzas/core/lib/constants'
-import { toBase } from '@finanzas/core/lib/currency'
+import { txToBase } from '@finanzas/core/lib/currency'
 import { Transaction, Currency } from '@finanzas/core/types'
 import { motion } from 'motion/react'
 import { Money } from '@/components/ui/AnimatedNumber'
@@ -90,7 +90,7 @@ export default function PilotoTab() {
 
   function sumBase(txs: Transaction[], tipo: 'ingreso' | 'egreso') {
     return txs.filter((t) => t.tipo === tipo).reduce(
-      (acc, t) => acc + toBase(t.monto, t.moneda, base, s), 0
+      (acc, t) => acc + txToBase(t, base, s), 0
     )
   }
 

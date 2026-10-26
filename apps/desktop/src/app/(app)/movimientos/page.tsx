@@ -18,7 +18,7 @@ import { stagger } from '@/components/ui/motion'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { getCatFromSettings, SHARED_USERS } from '@finanzas/core/lib/constants'
 import { markEjecutado } from '@finanzas/core/lib/transactions'
-import { toBase } from '@finanzas/core/lib/currency'
+import { txToBase } from '@finanzas/core/lib/currency'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { cn } from '@finanzas/core/lib/utils'
 import { Currency, Settings, Transaction, TransactionType } from '@finanzas/core/types'
@@ -76,8 +76,8 @@ export default function MovimientosPage() {
   const ingresos = transactions.filter((t) => t.tipo === 'ingreso' && matches(t)).sort(byDate)
   const egresos = transactions.filter((t) => t.tipo === 'egreso' && matches(t)).sort(byDate)
 
-  const totalIn = ingresos.reduce((s, t) => s + toBase(t.monto, t.moneda, base, settings), 0)
-  const totalOut = egresos.reduce((s, t) => s + toBase(t.monto, t.moneda, base, settings), 0)
+  const totalIn = ingresos.reduce((s, t) => s + txToBase(t, base, settings), 0)
+  const totalOut = egresos.reduce((s, t) => s + txToBase(t, base, settings), 0)
 
   const allCategories: { id: string; nombre: string; group: string }[] = []
   for (const g of [...settings.categoriasGasto, ...settings.categoriasIngreso]) {
@@ -353,7 +353,7 @@ function LedgerRow({
   const fecha = t.fecha.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })
   // El renglón en USD es una referencia, no un importe operable: se redondea
   // para que la columna de montos no se llene de decimales.
-  const usd = Math.round(toBase(t.monto, t.moneda, 'USD', settings))
+  const usd = Math.round(txToBase(t, 'USD', settings))
   const done = t.ejecutado
   const income = kind === 'in'
 

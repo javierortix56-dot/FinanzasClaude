@@ -6,6 +6,7 @@ import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { initAuth } from '@finanzas/core/lib/auth'
 import { getOrInitSettings, subscribeToSettings } from '@finanzas/core/lib/settings'
+import { syncCotizaciones } from '@finanzas/core/lib/cotizaciones'
 import { Settings } from '@finanzas/core/types'
 import LoginScreen from '@/components/auth/LoginScreen'
 
@@ -32,6 +33,8 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         const settings = await getOrInitSettings('shared')
         if (cancelled) return
         apply(settings)
+        // Cotización del día + historial mensual (MEP/TRM); el realtime trae el resultado
+        syncCotizaciones(settings)
         unsub = subscribeToSettings('shared', apply)
       } catch (err) {
         console.error('[AuthProvider] settings load failed:', err)

@@ -12,7 +12,7 @@ import { addTransaction, updateTransaction, cloneTransactionToMonth, moveTransac
 import { SHARED_USER_ID, SHARED_USERS, formatAmount, getParentGroup, getCatFromSettings, toLocalDateString, DEFAULT_GASTO_CATEGORY_GROUPS, DEFAULT_INGRESO_CATEGORY_GROUPS } from '@finanzas/core/lib/constants'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { adjustAssetSaldo } from '@finanzas/core/lib/assets'
-import { toBase } from '@finanzas/core/lib/currency'
+import { toBase, txToBase, txMonth } from '@finanzas/core/lib/currency'
 import { parseTicket } from '@finanzas/core/lib/ticket'
 import { ocrImagen } from '@/lib/ocr'
 import { deleteTransactionsWithUndo } from '@/lib/undo'
@@ -194,12 +194,12 @@ export default function TransactionModal() {
       .filter((t) => t.tipo === 'ingreso')
       .sort((a, b) => b.fecha.toDate().getTime() - a.fecha.toDate().getTime())
       .map((ing) => {
-        const incBase = toBase(ing.monto, ing.moneda, base, s)
+        const incBase = txToBase(ing, base, s)
         const usedBase = transactions
           .filter((t) => t.tipo === 'egreso' && t.id !== editingTransaction?.id)
           .reduce((sum, t) => sum + t.asignaciones
             .filter((a) => a.ingresoId === ing.id)
-            .reduce((x, a) => x + toBase(a.monto, t.moneda, base, s), 0), 0)
+            .reduce((x, a) => x + toBase(a.monto, t.moneda, base, s, txMonth(t)), 0), 0)
         return { ing, remaining: incBase - usedBase }
       })
   }, [transactions, base, s, editingTransaction])

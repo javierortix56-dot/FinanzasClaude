@@ -1,5 +1,5 @@
 import { Currency, Settings, Transaction } from '../types'
-import { toBase } from './currency'
+import { toBase, txToBase, txMonth } from './currency'
 
 /**
  * Plan de auto-asignación de egresos sin ingreso de respaldo (compartido por
@@ -20,20 +20,20 @@ export function planAutoAssign(
 
   const capacity = new Map<string, number>()
   ingresos.forEach((inc) => {
-    const incBase = toBase(inc.monto, inc.moneda, base, s)
+    const incBase = txToBase(inc, base, s)
     const yaAsignado = egresos.reduce((sum, e) => sum + e.asignaciones
       .filter((a) => a.ingresoId === inc.id)
-      .reduce((x, a) => x + toBase(a.monto, e.moneda, base, s), 0), 0)
+      .reduce((x, a) => x + toBase(a.monto, e.moneda, base, s, txMonth(e)), 0), 0)
     capacity.set(inc.id!, incBase - yaAsignado)
   })
 
   // Primero los egresos más grandes para mejor empaquetado
   const ordered = [...unassigned].sort(
-    (a, b) => toBase(b.monto, b.moneda, base, s) - toBase(a.monto, a.moneda, base, s),
+    (a, b) => txToBase(b, base, s) - txToBase(a, base, s),
   )
 
   return ordered.map((exp) => {
-    const expBase = toBase(exp.monto, exp.moneda, base, s)
+    const expBase = txToBase(exp, base, s)
     const expTime = exp.fecha.toDate().getTime()
     const elegibles = ingresos.filter((inc) => (capacity.get(inc.id!) ?? 0) >= expBase)
     const cercania = (t: Transaction) => Math.abs(t.fecha.toDate().getTime() - expTime)

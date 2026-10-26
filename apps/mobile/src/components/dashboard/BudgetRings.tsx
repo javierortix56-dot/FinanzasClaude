@@ -6,7 +6,7 @@ import { useBudgetStore } from '@finanzas/core/store/useBudgetStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { subscribeToBudgets } from '@finanzas/core/lib/budgets'
 import { getCatFromSettings, getParentGroup } from '@finanzas/core/lib/constants'
-import { toBase } from '@finanzas/core/lib/currency'
+import { toBase, txToBase } from '@finanzas/core/lib/currency'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { Currency, Transaction } from '@finanzas/core/types'
 import { CategoryIcon } from '@/lib/categoryIcons'
@@ -37,8 +37,8 @@ export default function BudgetRings({ transactions, month, base }: {
     .map((b) => {
       const spentBase = transactions
         .filter((t) => t.tipo === 'egreso' && (t.categoria === b.categoria || getParentGroup(t.categoria, s.categoriasGasto)?.id === b.categoria))
-        .reduce((sum, t) => sum + toBase(t.monto, t.moneda, base, s), 0)
-      const spent = toBase(spentBase, base, b.moneda as Currency, s)
+        .reduce((sum, t) => sum + txToBase(t, base, s), 0)
+      const spent = toBase(spentBase, base, b.moneda as Currency, s, b.mes)
       const pct = (spent / b.limite) * 100
       return { b, cat: getCatFromSettings(b.categoria, s), pct }
     })

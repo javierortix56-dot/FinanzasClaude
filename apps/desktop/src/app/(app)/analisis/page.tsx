@@ -15,7 +15,7 @@ import { Donut } from '@/components/charts/Donut'
 import { LineChart } from '@/components/charts/LineChart'
 import { InsightsList } from '@/components/InsightsList'
 import { fetchLastNMonths } from '@finanzas/core/lib/analytics'
-import { toBase } from '@finanzas/core/lib/currency'
+import { txToBase } from '@finanzas/core/lib/currency'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { getCatFromSettings, monthLabel, shiftMonth } from '@finanzas/core/lib/constants'
 import { computeInsights } from '@finanzas/core/lib/insights'
@@ -57,7 +57,7 @@ export default function AnalisisPage() {
 
   const sumByType = (txs: Transaction[], tipo: 'ingreso' | 'egreso') =>
     txs.filter((t) => t.tipo === tipo)
-       .reduce((s, t) => s + toBase(t.monto, t.moneda, base, settings), 0)
+       .reduce((s, t) => s + txToBase(t, base, settings), 0)
 
   const ingresosCur = sumByType(transactions, 'ingreso')
   const egresosCur  = sumByType(transactions, 'egreso')
@@ -67,10 +67,10 @@ export default function AnalisisPage() {
   const balancePrev  = ingresosPrev - egresosPrev
 
   const target = transactions.filter((t) => t.tipo === (tabCat === 'gastos' ? 'egreso' : 'ingreso'))
-  const totalCat = target.reduce((s, t) => s + toBase(t.monto, t.moneda, base, settings), 0)
+  const totalCat = target.reduce((s, t) => s + txToBase(t, base, settings), 0)
   const byCat = new Map<string, number>()
   for (const t of target) {
-    byCat.set(t.categoria, (byCat.get(t.categoria) ?? 0) + toBase(t.monto, t.moneda, base, settings))
+    byCat.set(t.categoria, (byCat.get(t.categoria) ?? 0) + txToBase(t, base, settings))
   }
   const slices = [...byCat.entries()]
     .map(([id, value]) => {

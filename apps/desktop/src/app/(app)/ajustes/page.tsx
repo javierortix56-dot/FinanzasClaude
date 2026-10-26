@@ -2,7 +2,7 @@
 
 import { useState, useSyncExternalStore } from 'react'
 import { motion } from 'motion/react'
-import { Save, Copy, Repeat, Monitor, Sun, Moon, ChevronRight } from 'lucide-react'
+import { Save, Copy, Repeat, Monitor, Sun, Moon, ChevronRight, RefreshCw } from 'lucide-react'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
@@ -17,7 +17,8 @@ import { cloneMonthTransactions, createRecurringTransactions, countMonthTransact
 import { shiftMonth, monthLabel } from '@finanzas/core/lib/constants'
 import { CategoryIcon } from '@finanzas/core/lib/categoryIcons'
 import { currentThemePref, setThemePref, subscribeTheme, ThemePref } from '@/lib/theme'
-import { CategoryGroup } from '@finanzas/core/types'
+import { CategoryGroup, FuenteCambio } from '@finanzas/core/types'
+import { cambiarFuenteCambio, syncCotizaciones, haceCuanto, FUENTES_CAMBIO } from '@finanzas/core/lib/cotizaciones'
 import { PageScroll } from '@/components/shell/PageScroll'
 
 const parseRate = (v: string) => parseFloat(v.replace(',', '.'))
@@ -52,6 +53,29 @@ export default function AjustesPage() {
     } finally {
       setSavingRates(false)
     }
+  }
+
+  const fuente: FuenteCambio = settings.fuenteCambio ?? 'mep'
+  const [syncing, setSyncing] = useState(false)
+  const historial = [...(settings.historialTipoCambio ?? [])].reverse().slice(0, 12)
+
+  async function handleFuente(f: FuenteCambio) {
+    setSyncing(true)
+    try {
+      await cambiarFuenteCambio(settings, f)
+      showToast(f === 'manual' ? 'Tipo de cambio manual' : `Cotización ${FUENTES_CAMBIO.find((x) => x.value === f)?.label} aplicada`)
+    } catch {
+      showToast('No se pudo actualizar la cotización', 'error')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  async function handleSyncAhora() {
+    setSyncing(true)
+    const ok = await syncCotizaciones(settings, { force: true })
+    setSyncing(false)
+    showToast(ok ? 'Cotización actualizada' : 'No se pudo obtener la cotización', ok ? 'success' : 'error')
   }
 
   const prev = shiftMonth(currentMonth, -1)
@@ -102,17 +126,59 @@ export default function AjustesPage() {
         />
       </Section>
 
-      <Section title="Tipos de cambio" sub="Se aplican a todas las conversiones a USD y a la moneda base." delay={0.04}>
-        <form
-          onSubmit={(e) => { e.preventDefault(); saveRates() }}
-          className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] items-end gap-4"
-        >
-          <RateInput id="rate-ars" label="ARS por USD" value={arsUsd} onChange={setArsUsd} invalid={!(ars > 0)} />
-          <RateInput id="rate-cop" label="COP por USD" value={copUsd} onChange={setCopUsd} invalid={!(cop > 0)} />
-          <Button type="submit" disabled={savingRates || !ratesValid || !ratesDirty}>
-            <Save className="h-4 w-4" /> {savingRates ? 'Guardando…' : 'Guardar'}
-          </Button>
-        </form>
+      <Section
+        title="Tipos de cambio"
+        sub="Cada mes pasado se convierte con su propio promedio; el mes en curso, con la cotización del día."
+        delay={0.04}
+      >
+        <div className="flex flex-wrap items-center gap-3">
+          <Segmented
+            id="ajustes-fuente"
+            value={fuente}
+            onChange={(f) => { if (!syncing) handleFuente(f) }}
+            options={FUENTES_CAMBIO.map((f) => ({ value: f.value, label: f.label }))}
+          />
+          <span className="text-xs text-muted">{FUENTES_CAMBIO.find((f) => f.value === fuente)?.detalle}</span>
+        </div>
+
+        {fuente !== 'manual' ? (
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] items-center gap-4">
+            <RateValue label="ARS por USD" value={settings.tipoCambio.ARS_USD} />
+            <RateValue label="COP por USD (TRM)" value={settings.tipoCambio.COP_USD} />
+            <div className="flex flex-col items-start sm:items-end gap-1">
+              <Button variant="secondary" size="sm" onClick={handleSyncAhora} disabled={syncing}>
+                <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
+                {syncing ? 'Actualizando…' : 'Actualizar ahora'}
+              </Button>
+              <span className="text-[11px] text-muted-2">Actualizado {haceCuanto(settings.cambioActualizado)}</span>
+            </div>
+          </div>
+        ) : (
+          <form
+            onSubmit={(e) => { e.preventDefault(); saveRates() }}
+            className="mt-4 grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] items-end gap-4"
+          >
+            <RateInput id="rate-ars" label="ARS por USD" value={arsUsd} onChange={setArsUsd} invalid={!(ars > 0)} />
+            <RateInput id="rate-cop" label="COP por USD" value={copUsd} onChange={setCopUsd} invalid={!(cop > 0)} />
+            <Button type="submit" disabled={savingRates || !ratesValid || !ratesDirty}>
+              <Save className="h-4 w-4" /> {savingRates ? 'Guardando…' : 'Guardar'}
+            </Button>
+          </form>
+        )}
+
+        {historial.length > 0 && (
+          <div className="mt-5">
+            <div className="eyebrow mb-2">Promedios mensuales</div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6">
+              {historial.map((h) => (
+                <div key={h.mes} className="flex justify-between border-b border-hairline py-1.5 text-xs tnum">
+                  <span className="capitalize text-muted">{monthLabel(h.mes)}{h.fuente ? '' : ' · manual'}</span>
+                  <span className="text-foreground">{h.ARS_USD.toLocaleString('es-AR')} · {h.COP_USD.toLocaleString('es-AR')}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </Section>
 
       <Section title="Operaciones del mes" sub={`Sobre ${monthLabel(currentMonth)}.`} delay={0.08}>
@@ -171,6 +237,15 @@ function Section({ title, sub, delay, children }: { title: string; sub?: string;
       </div>
       <div className="px-6 pb-6">{children}</div>
     </Card>
+  )
+}
+
+function RateValue({ label, value }: { label: string; value: number }) {
+  return (
+    <div>
+      <div className="eyebrow mb-2">{label}</div>
+      <div className="text-[22px] font-semibold tnum">{value.toLocaleString('es-AR')}</div>
+    </div>
   )
 }
 

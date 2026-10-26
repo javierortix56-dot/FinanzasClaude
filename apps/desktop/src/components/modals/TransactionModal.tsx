@@ -18,7 +18,7 @@ import { addTransaction, updateTransaction } from '@finanzas/core/lib/transactio
 import { adjustAssetSaldo } from '@finanzas/core/lib/assets'
 import { deleteTransactionsWithUndo } from '@finanzas/core/lib/undo'
 import { evalExpr, isExpression } from '@finanzas/core/lib/calc'
-import { toBase } from '@finanzas/core/lib/currency'
+import { toBase, txToBase, txMonth } from '@finanzas/core/lib/currency'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { CategoryIcon } from '@finanzas/core/lib/categoryIcons'
 import { Asignacion, Currency, Transaction, TransactionType } from '@finanzas/core/types'
@@ -151,8 +151,8 @@ function Form({
         .filter((t) => t.tipo === 'egreso' && t.id !== editing?.id)
         .reduce((sum, t) => sum + t.asignaciones
           .filter((a) => a.ingresoId === ing.id)
-          .reduce((x, a) => x + toBase(a.monto, t.moneda, base, s), 0), 0)
-      return { ing, libre: toBase(ing.monto, ing.moneda, base, s) - used }
+          .reduce((x, a) => x + toBase(a.monto, t.moneda, base, s, txMonth(t)), 0), 0)
+      return { ing, libre: txToBase(ing, base, s) - used }
     }), [transactions, editing, base, s])
 
   const ahorroOptions = assets.filter((a) => a.clase === 'activo')

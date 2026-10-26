@@ -9,7 +9,7 @@ import { subscribeToBudgets } from '@finanzas/core/lib/budgets'
 import { fetchMonthTransactions, fetchLastNMonths } from '@finanzas/core/lib/analytics'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { shiftMonth, monthLabel, getCurrentMonth, getParentGroup, getCatFromSettings, formatAmount } from '@finanzas/core/lib/constants'
-import { toBase } from '@finanzas/core/lib/currency'
+import { txToBase } from '@finanzas/core/lib/currency'
 import { Transaction, Currency } from '@finanzas/core/types'
 import SummaryComparison from './SummaryComparison'
 import CategoryDonut from './CategoryDonut'
@@ -87,10 +87,10 @@ export default function HistoricoTab() {
     chartMonths.push(MONTH_ABBR[parseInt(mon) - 1])
 
     const inc = txs.filter((t) => t.tipo === 'ingreso').reduce(
-      (s, t) => s + toBase(t.monto, t.moneda, base, settings ?? DEFAULT_SETTINGS), 0
+      (s, t) => s + txToBase(t, base, settings ?? DEFAULT_SETTINGS), 0
     )
     const exp = txs.filter((t) => t.tipo === 'egreso').reduce(
-      (s, t) => s + toBase(t.monto, t.moneda, base, settings ?? DEFAULT_SETTINGS), 0
+      (s, t) => s + txToBase(t, base, settings ?? DEFAULT_SETTINGS), 0
     )
     ingresosVals.push(inc)
     egresosVals.push(exp)
@@ -119,7 +119,7 @@ export default function HistoricoTab() {
     if (t.tipo !== 'egreso') continue
     const grp = getParentGroup(t.categoria, s.categoriasGasto)
     const id = grp?.id ?? t.categoria
-    gruposMes.set(id, (gruposMes.get(id) ?? 0) + toBase(t.monto, t.moneda, base, s))
+    gruposMes.set(id, (gruposMes.get(id) ?? 0) + txToBase(t, base, s))
   }
   const topGrupo = [...gruposMes.entries()].sort((a, b) => b[1] - a[1])[0]
   const topGrupoNombre = topGrupo ? (getCatFromSettings(topGrupo[0], s)?.nombre ?? topGrupo[0]) : null
@@ -137,7 +137,7 @@ export default function HistoricoTab() {
         const grp = getParentGroup(t.categoria, s.categoriasGasto)
         const id = grp?.id ?? t.categoria
         if (!porGrupo.has(id)) porGrupo.set(id, Array(6).fill(0))
-        porGrupo.get(id)![idx] += toBase(t.monto, t.moneda, base, s)
+        porGrupo.get(id)![idx] += txToBase(t, base, s)
       }
     }
     return [...porGrupo.entries()]
@@ -154,7 +154,7 @@ export default function HistoricoTab() {
   // ── Top 5 gastos del mes ──────────────────────────────────────────────────
   const topGastos = [...transactions]
     .filter((t) => t.tipo === 'egreso')
-    .map((t) => ({ t, montoBase: toBase(t.monto, t.moneda, base, s) }))
+    .map((t) => ({ t, montoBase: txToBase(t, base, s) }))
     .sort((a, b) => b.montoBase - a.montoBase)
     .slice(0, 5)
 

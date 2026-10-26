@@ -102,8 +102,8 @@ export default function PatrimonioPage() {
         }
         running[id] = saldoMes
 
-        saldoTotalUSD += sign * toUSD(saldoMes,  a.moneda, s)
-        aporteMesUSD  += sign * toUSD(aporteMes, a.moneda, s)
+        saldoTotalUSD += sign * toUSD(saldoMes,  a.moneda, s, mon)
+        aporteMesUSD  += sign * toUSD(aporteMes, a.moneda, s, mon)
       }
 
       aportesAcumUSD += aporteMesUSD
