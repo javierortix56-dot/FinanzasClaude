@@ -20,7 +20,7 @@ import { Donut } from '@/components/charts/Donut'
 import Sparkline from '@/components/ui/Sparkline'
 import ProgressBar from '@/components/ui/ProgressBar'
 import { InsightsList } from '@/components/InsightsList'
-import { toBase } from '@finanzas/core/lib/currency'
+import { toBase, txToBase } from '@finanzas/core/lib/currency'
 import { getCatFromSettings, getParentGroup, monthLabel, shiftMonth } from '@finanzas/core/lib/constants'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { fetchLastNMonths } from '@finanzas/core/lib/analytics'
@@ -132,18 +132,18 @@ export default function DashboardPage() {
     for (let i = 5; i >= 0; i--) months.push(shiftMonth(currentMonth, -i))
     return months.map((m) => {
       const txs = m === currentMonth ? transactions : (grouped[m] ?? [])
-      const ing = txs.filter((t) => t.tipo === 'ingreso').reduce((sum, t) => sum + toBase(t.monto, t.moneda, base, s), 0)
-      const egr = txs.filter((t) => t.tipo === 'egreso').reduce((sum, t) => sum + toBase(t.monto, t.moneda, base, s), 0)
+      const ing = txs.filter((t) => t.tipo === 'ingreso').reduce((sum, t) => sum + txToBase(t, base, s), 0)
+      const egr = txs.filter((t) => t.tipo === 'egreso').reduce((sum, t) => sum + txToBase(t, base, s), 0)
       return { month: m, ingresos: ing, egresos: egr, balance: ing - egr }
     })
   }, [grouped, transactions, currentMonth, base, s])
 
   const ingresos = transactions.filter((t) => t.tipo === 'ingreso')
   const egresos = transactions.filter((t) => t.tipo === 'egreso')
-  const totalIngresos = ingresos.reduce((sum, t) => sum + toBase(t.monto, t.moneda, base, s), 0)
-  const totalEgresos = egresos.reduce((sum, t) => sum + toBase(t.monto, t.moneda, base, s), 0)
+  const totalIngresos = ingresos.reduce((sum, t) => sum + txToBase(t, base, s), 0)
+  const totalEgresos = egresos.reduce((sum, t) => sum + txToBase(t, base, s), 0)
   const balance = totalIngresos - totalEgresos
-  const balanceUSD = toBase(balance, base, 'USD', s)
+  const balanceUSD = toBase(balance, base, 'USD', s, currentMonth)
   const tasaAhorro = totalIngresos > 0 ? ((totalIngresos - totalEgresos) / totalIngresos) * 100 : 0
   const pctGastado = totalIngresos > 0 ? Math.min((totalEgresos / totalIngresos) * 100, 100) : 0
 
@@ -161,7 +161,7 @@ export default function DashboardPage() {
     const ids = new Set(ingresos.map((i) => i.id))
     return egresos
       .filter((e) => !e.asignaciones.some((a) => ids.has(a.ingresoId)))
-      .reduce((sum, t) => sum + toBase(t.monto, t.moneda, base, s), 0)
+      .reduce((sum, t) => sum + txToBase(t, base, s), 0)
   }, [ingresos, egresos, base, s])
 
   const recientes = [...transactions]
@@ -172,7 +172,7 @@ export default function DashboardPage() {
   const porGrupo = new Map<string, number>()
   for (const t of egresos) {
     const id = getParentGroup(t.categoria, s.categoriasGasto)?.id ?? t.categoria
-    porGrupo.set(id, (porGrupo.get(id) ?? 0) + toBase(t.monto, t.moneda, base, s))
+    porGrupo.set(id, (porGrupo.get(id) ?? 0) + txToBase(t, base, s))
   }
   const categorias = [...porGrupo.entries()]
     .map(([id, total]) => {
@@ -195,8 +195,8 @@ export default function DashboardPage() {
     .map((b) => {
       const gastado = egresos
         .filter((t) => t.categoria === b.categoria || getParentGroup(t.categoria, s.categoriasGasto)?.id === b.categoria)
-        .reduce((sum, t) => sum + toBase(t.monto, t.moneda, base, s), 0)
-      const enMoneda = toBase(gastado, base, b.moneda as Currency, s)
+        .reduce((sum, t) => sum + txToBase(t, base, s), 0)
+      const enMoneda = toBase(gastado, base, b.moneda as Currency, s, b.mes)
       return { b, cat: getCatFromSettings(b.categoria, s), gastado: enMoneda, pct: (enMoneda / b.limite) * 100 }
     })
     .sort((a, b) => b.pct - a.pct)

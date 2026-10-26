@@ -8,7 +8,7 @@ import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import TAccountView from '@/components/transactions/TAccountView'
 import AssignmentTab from '@/components/assignment/AssignmentTab'
-import { toBase } from '@finanzas/core/lib/currency'
+import { toBase, txToBase } from '@finanzas/core/lib/currency'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { Currency } from '@finanzas/core/types'
 import { Money } from '@/components/ui/AnimatedNumber'
@@ -38,14 +38,14 @@ export default function DashboardPage() {
 
   const totalIngresos = transactions
     .filter((t) => t.tipo === 'ingreso')
-    .reduce((sum, t) => sum + toBase(t.monto, t.moneda, base, s), 0)
+    .reduce((sum, t) => sum + txToBase(t, base, s), 0)
 
   const totalEgresos = transactions
     .filter((t) => t.tipo === 'egreso')
-    .reduce((sum, t) => sum + toBase(t.monto, t.moneda, base, s), 0)
+    .reduce((sum, t) => sum + txToBase(t, base, s), 0)
 
   const balance    = totalIngresos - totalEgresos
-  const balanceUSD = toBase(balance, base, 'USD', s)
+  const balanceUSD = toBase(balance, base, 'USD', s, currentMonth)
   const pctGastado = totalIngresos > 0 ? Math.min((totalEgresos / totalIngresos) * 100, 100) : 0
   const pctColor   = pctGastado >= 90 ? '#fda4af' : pctGastado >= 70 ? '#fcd34d' : '#6ee7b7'
 

@@ -6,7 +6,7 @@ import { motion } from 'motion/react'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
-import { toBase } from '@finanzas/core/lib/currency'
+import { toBase, txToBase } from '@finanzas/core/lib/currency'
 import { monthLabel } from '@finanzas/core/lib/constants'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { MoneyText } from '@/components/MoneyText'
@@ -31,16 +31,16 @@ export function LedgerStats() {
   const ingresos = transactions.filter((t) => t.tipo === 'ingreso')
   const egresos = transactions.filter((t) => t.tipo === 'egreso')
 
-  const totalIn = ingresos.reduce((s, t) => s + toBase(t.monto, t.moneda, base, settings), 0)
-  const totalOut = egresos.reduce((s, t) => s + toBase(t.monto, t.moneda, base, settings), 0)
+  const totalIn = ingresos.reduce((s, t) => s + txToBase(t, base, settings), 0)
+  const totalOut = egresos.reduce((s, t) => s + txToBase(t, base, settings), 0)
   const balance = totalIn - totalOut
-  const balanceUSD = Math.round(toBase(balance, base, 'USD', settings))
+  const balanceUSD = Math.round(toBase(balance, base, 'USD', settings, currentMonth))
 
   // Huérfanos (asignados a un ingreso que ya no existe) cuentan como sin asignar,
   // igual que el badge de la barra lateral.
   const ingresoIds = new Set(ingresos.map((t) => t.id))
   const sinAsignarList = egresos.filter((t) => !t.asignaciones.some((a) => ingresoIds.has(a.ingresoId)))
-  const sinAsignar = sinAsignarList.reduce((s, t) => s + toBase(t.monto, t.moneda, base, settings), 0)
+  const sinAsignar = sinAsignarList.reduce((s, t) => s + txToBase(t, base, settings), 0)
 
   const share = totalIn > 0 ? Math.round((totalOut / totalIn) * 100) : 0
 

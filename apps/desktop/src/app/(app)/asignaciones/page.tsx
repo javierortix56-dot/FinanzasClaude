@@ -14,7 +14,7 @@ import ProgressBar from '@/components/ui/ProgressBar'
 import { MoneyText } from '@/components/MoneyText'
 import { LedgerStats, LedgerTabs } from '@/components/ledger/LedgerHeader'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
-import { toBase } from '@finanzas/core/lib/currency'
+import { toBase, txToBase, txMonth } from '@finanzas/core/lib/currency'
 import { getCatFromSettings } from '@finanzas/core/lib/constants'
 import { planAutoAssign } from '@finanzas/core/lib/autoAssign'
 import { updateAsignacionesWithUndo } from '@finanzas/core/lib/undo'
@@ -53,8 +53,8 @@ export default function AsignacionesPage() {
   const ingresoIds = useMemo(() => new Set(ingresos.map((i) => i.id)), [ingresos])
   const sinAsignar = egresos.filter((e) => !e.asignaciones.some((a) => ingresoIds.has(a.ingresoId)))
 
-  const totalEgresos = egresos.reduce((s, t) => s + toBase(t.monto, t.moneda, base, settings), 0)
-  const sinAsignarTotal = sinAsignar.reduce((s, t) => s + toBase(t.monto, t.moneda, base, settings), 0)
+  const totalEgresos = egresos.reduce((s, t) => s + txToBase(t, base, settings), 0)
+  const sinAsignarTotal = sinAsignar.reduce((s, t) => s + txToBase(t, base, settings), 0)
   const asignados = totalEgresos - sinAsignarTotal
   const pctAsignado = totalEgresos > 0 ? (asignados / totalEgresos) * 100 : 0
 
@@ -65,8 +65,8 @@ export default function AsignacionesPage() {
       const asignados = egresos.filter((e) => e.asignaciones.some((a) => a.ingresoId === ing.id))
       const total = egresos.reduce((s, e) => s + e.asignaciones
         .filter((a) => a.ingresoId === ing.id)
-        .reduce((x, a) => x + toBase(a.monto, e.moneda, base, settings), 0), 0)
-      const ingresoTotal = toBase(ing.monto, ing.moneda, base, settings)
+        .reduce((x, a) => x + toBase(a.monto, e.moneda, base, settings, txMonth(e)), 0), 0)
+      const ingresoTotal = txToBase(ing, base, settings)
       return { ingreso: ing, asignados, total, ingresoTotal }
     })
   }, [ingresos, egresos, settings, base])

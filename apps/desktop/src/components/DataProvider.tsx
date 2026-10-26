@@ -9,6 +9,7 @@ import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { initAuth } from '@finanzas/core/lib/auth'
 import { subscribeToTransactions } from '@finanzas/core/lib/transactions'
 import { subscribeToSettings, getOrInitSettings } from '@finanzas/core/lib/settings'
+import { syncCotizaciones } from '@finanzas/core/lib/cotizaciones'
 import { subscribeToAssets } from '@finanzas/core/lib/assets'
 import { subscribeToBudgets } from '@finanzas/core/lib/budgets'
 import { Settings } from '@finanzas/core/types'
@@ -46,6 +47,8 @@ export default function DataProvider({ children }: { children: React.ReactNode }
         const settings = await getOrInitSettings('shared')
         if (cancelled) return
         apply(settings)
+        // Cotización del día + historial mensual (MEP/TRM); el realtime trae el resultado
+        syncCotizaciones(settings)
         settingsUnsub.current = subscribeToSettings('shared', apply)
         assetsUnsub.current   = subscribeToAssets(setAssets)
       } catch (err) {

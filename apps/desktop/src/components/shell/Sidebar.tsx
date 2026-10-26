@@ -11,10 +11,12 @@ import {
   Settings,
   Link2,
   Keyboard,
+  FileText,
 } from 'lucide-react'
 import { cn } from '@finanzas/core/lib/utils'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
+import { haceCuanto } from '@finanzas/core/lib/cotizaciones'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 
 export const NAV_ITEMS = [
@@ -23,6 +25,7 @@ export const NAV_ITEMS = [
   { href: '/asignaciones',  label: 'Asignaciones', icon: Link2 },
   { href: '/cuentas',       label: 'Cuentas',      icon: Wallet },
   { href: '/analisis',      label: 'Análisis',     icon: PieChart },
+  { href: '/resumenes',     label: 'Resúmenes',    icon: FileText },
   { href: '/ajustes',       label: 'Ajustes',      icon: Settings },
 ]
 
@@ -106,7 +109,12 @@ export function Sidebar({ onShowShortcuts }: { onShowShortcuts: () => void }) {
       </nav>
 
       <div className="mx-3 rounded-2xl bg-surface-2 px-3 py-[11px] flex flex-col gap-2.5">
-        <div className="eyebrow">Tipo de cambio</div>
+        <div className="flex items-center justify-between">
+          <div className="eyebrow">Tipo de cambio</div>
+          <span className="rounded-full bg-primary/12 px-1.5 py-px text-[10px] font-semibold text-primary uppercase" title={`Actualizado ${haceCuanto(settings.cambioActualizado)}`}>
+            {settings.fuenteCambio === 'manual' ? 'Manual' : (settings.fuenteCambio ?? 'mep').toUpperCase()}
+          </span>
+        </div>
         <div className="flex justify-between text-[13px] tabular-nums">
           <span className="text-muted">USD / ARS</span>
           <strong className="text-foreground">

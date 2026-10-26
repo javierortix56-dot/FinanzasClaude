@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { ChevronDown, Unlink, Check, Split } from 'lucide-react'
 import { Transaction, Settings, Currency } from '@finanzas/core/types'
 import { getCatFromSettings, formatAmount } from '@finanzas/core/lib/constants'
-import { toBase } from '@finanzas/core/lib/currency'
+import { toBase, txToBase, txMonth } from '@finanzas/core/lib/currency'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { markEjecutado } from '@finanzas/core/lib/transactions'
 import { haptic } from '@/lib/haptics'
@@ -50,10 +50,10 @@ export default function AssignmentGroup({
   const isUnassigned = income === null
 
   const totalGastado = items.reduce(
-    (sum, { exp, montoAsignado }) => sum + toBase(montoAsignado, exp.moneda, monedaBase, settings),
+    (sum, { exp, montoAsignado }) => sum + toBase(montoAsignado, exp.moneda, monedaBase, settings, txMonth(exp)),
     0
   )
-  const incomeBase = income ? toBase(income.monto, income.moneda, monedaBase, settings) : 0
+  const incomeBase = income ? txToBase(income, monedaBase, settings) : 0
   const disponible  = incomeBase - totalGastado
   const usedPercent = incomeBase > 0 ? Math.min((totalGastado / incomeBase) * 100, 100) : 0
   const isOver      = disponible < 0
@@ -224,11 +224,11 @@ export default function AssignmentGroup({
                   <div className="flex-shrink-0 flex items-center gap-2">
                     <div className="text-right">
                       <p className={`text-xs font-bold text-rose-500 tabular-nums ${blur} ${exp.ejecutado ? 'line-through' : ''}`}>
-                        -{formatAmount(toBase(montoAsignado, exp.moneda, monedaBase, settings), monedaBase)}
+                        -{formatAmount(toBase(montoAsignado, exp.moneda, monedaBase, settings, txMonth(exp)), monedaBase)}
                       </p>
                       {esParcial && (
                         <p className={`text-[10px] text-gray-400 tabular-nums leading-tight ${blur}`}>
-                          de {formatAmount(toBase(exp.monto, exp.moneda, monedaBase, settings), monedaBase)}
+                          de {formatAmount(txToBase(exp, monedaBase, settings), monedaBase)}
                         </p>
                       )}
                     </div>

@@ -6,16 +6,18 @@ import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import HistoricoTab from '@/components/analisis/HistoricoTab'
 import PilotoTab    from '@/components/analisis/PilotoTab'
 import CuotasTab    from '@/components/cuotas/CuotasTab'
+import ResumenesTab from '@/components/resumenes/ResumenesTab'
 import PageHeader, { MonthSwitcher } from '@/components/ui/PageHeader'
 import Segmented from '@/components/ui/Segmented'
 
-type Tab = 'historico' | 'cuotas' | 'piloto'
+type Tab = 'historico' | 'cuotas' | 'resumenes' | 'piloto'
 
-const TABS: Tab[] = ['historico', 'cuotas', 'piloto']
+const TABS: Tab[] = ['historico', 'cuotas', 'resumenes', 'piloto']
 
 const TAB_LABELS: Record<Tab, string> = {
   historico: 'Histórico',
   cuotas:    'Cuotas',
+  resumenes: 'Resúmenes',
   piloto:    'Piloto',
 }
 
@@ -61,7 +63,7 @@ export default function AnalisisPage() {
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
             className="h-full"
           >
-            {tab === 'historico' ? <HistoricoTab /> : tab === 'cuotas' ? <CuotasTab /> : <PilotoTab />}
+            {tab === 'historico' ? <HistoricoTab /> : tab === 'cuotas' ? <CuotasTab /> : tab === 'resumenes' ? <ResumenesTab /> : <PilotoTab />}
           </motion.div>
         </AnimatePresence>
       </div>

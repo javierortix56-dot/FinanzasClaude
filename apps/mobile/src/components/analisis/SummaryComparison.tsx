@@ -2,7 +2,7 @@
 
 import { ArrowUp, ArrowDown } from 'lucide-react'
 import { Transaction, Settings, Currency } from '@finanzas/core/types'
-import { toBase } from '@finanzas/core/lib/currency'
+import { txToBase } from '@finanzas/core/lib/currency'
 import { Money } from '@/components/ui/AnimatedNumber'
 
 interface Props {
@@ -14,7 +14,7 @@ interface Props {
 
 function sum(txs: Transaction[], tipo: 'ingreso' | 'egreso', s: Settings, base: Currency) {
   return txs.filter((t) => t.tipo === tipo).reduce(
-    (acc, t) => acc + toBase(t.monto, t.moneda, base, s),
+    (acc, t) => acc + txToBase(t, base, s),
     0
   )
 }

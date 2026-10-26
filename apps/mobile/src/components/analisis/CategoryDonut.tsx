@@ -8,7 +8,7 @@ import {
   getCatFromSettings, formatAmount,
   DEFAULT_GASTO_CATEGORY_GROUPS, DEFAULT_INGRESO_CATEGORY_GROUPS,
 } from '@finanzas/core/lib/constants'
-import { toBase, toUSD } from '@finanzas/core/lib/currency'
+import { toBase, toUSD, txToBase } from '@finanzas/core/lib/currency'
 import { useBudgetStore } from '@finanzas/core/store/useBudgetStore'
 import DonutChart, { DonutSlice } from './DonutChart'
 import BudgetModal from './BudgetModal'
@@ -85,7 +85,7 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
       const map = new Map<string, number>()
       filtered.forEach((t) => {
         const groupId = idToGroup.get(t.categoria) ?? t.categoria
-        const val = toBase(t.monto, t.moneda, monedaBase, settings)
+        const val = txToBase(t, monedaBase, settings)
         map.set(groupId, (map.get(groupId) ?? 0) + val)
       })
       const tot = [...map.values()].reduce((a, b) => a + b, 0)
@@ -108,7 +108,7 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
     filtered.forEach((t) => {
       const gId = idToGroup.get(t.categoria) ?? t.categoria
       if (gId !== selectedGroup) return
-      const val = toBase(t.monto, t.moneda, monedaBase, settings)
+      const val = txToBase(t, monedaBase, settings)
       map.set(t.categoria, (map.get(t.categoria) ?? 0) + val)
     })
     const tot = [...map.values()].reduce((a, b) => a + b, 0)
@@ -136,7 +136,7 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
     ? filtered.filter((t) => t.categoria === selectedSub)
     : []
   const detailTotal = detailTxs.reduce(
-    (s, t) => s + toBase(t.monto, t.moneda, monedaBase, settings),
+    (s, t) => s + txToBase(t, monedaBase, settings),
     0
   )
 
@@ -236,7 +236,7 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
                 <p className="text-xs text-gray-400">Sin movimientos en esta categoría</p>
               ) : (
                 detailTxs.map((tx) => {
-                  const amt = toBase(tx.monto, tx.moneda, monedaBase, settings)
+                  const amt = txToBase(tx, monedaBase, settings)
                   const pct = detailTotal > 0 ? (amt / detailTotal) * 100 : 0
                   const cat = getCatFromSettings(tx.categoria, settings)
                   return (
@@ -270,10 +270,10 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
                   let budgetPct = 0
                   let spentInBudgetMoneda = 0
                   if (budget) {
-                    const spentUSD   = toUSD(slice.amount, monedaBase, settings)
-                    const limiteUSD  = toUSD(budget.limite, budget.moneda as Currency, settings)
+                    const spentUSD   = toUSD(slice.amount, monedaBase, settings, budget.mes)
+                    const limiteUSD  = toUSD(budget.limite, budget.moneda as Currency, settings, budget.mes)
                     budgetPct        = limiteUSD > 0 ? Math.min((spentUSD / limiteUSD) * 100, 100) : 0
-                    spentInBudgetMoneda = toBase(spentUSD, 'USD', budget.moneda as Currency, settings)
+                    spentInBudgetMoneda = toBase(spentUSD, 'USD', budget.moneda as Currency, settings, budget.mes)
                   }
                   const budgetColor = budgetPct >= 100 ? '#f43f5e' : budgetPct >= 80 ? '#f59e0b' : '#10b981'
 

@@ -200,7 +200,7 @@ export function proyeccionMeta(
 
   const recientes = (asset.snapshots ?? []).slice(-6)
   if (recientes.length === 0) return null
-  const aportes = recientes.map((s) => toUSD(s.aporte, asset.moneda, settings))
+  const aportes = recientes.map((s) => toUSD(s.aporte, asset.moneda, settings, s.month))
   const promedio = aportes.reduce((a, b) => a + b, 0) / aportes.length
   if (promedio <= 0) return null
 
