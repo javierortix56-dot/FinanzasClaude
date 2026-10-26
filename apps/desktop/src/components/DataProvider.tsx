@@ -13,6 +13,7 @@ import { subscribeToAssets } from '@finanzas/core/lib/assets'
 import { subscribeToBudgets } from '@finanzas/core/lib/budgets'
 import { Settings } from '@finanzas/core/types'
 import LoginScreen from '@/components/auth/LoginScreen'
+import { motion } from 'motion/react'
 
 export default function DataProvider({ children }: { children: React.ReactNode }) {
   const { user, authReady, setMonedaBase } = useAuthStore()
@@ -75,8 +76,14 @@ export default function DataProvider({ children }: { children: React.ReactNode }
 
   if (!authReady) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+      <div className="min-h-screen flex items-center justify-center">
+        <motion.div
+          className="h-14 w-14 rounded-2xl bg-brand shadow-card-lg flex items-center justify-center"
+          animate={{ scale: [1, 1.06, 1] }}
+          transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          <span className="text-white font-black text-sm">J&amp;M</span>
+        </motion.div>
       </div>
     )
   }

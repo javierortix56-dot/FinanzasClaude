@@ -12,18 +12,18 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variants: Record<Variant, string> = {
-  primary:   'bg-primary text-primary-foreground hover:bg-primary-hover',
-  secondary: 'bg-surface text-foreground border border-border hover:bg-surface-2',
+  primary:   'bg-brand text-primary-foreground shadow-card hover:brightness-110',
+  secondary: 'glass text-foreground hover:bg-surface',
   ghost:     'text-foreground hover:bg-surface-2',
-  danger:    'bg-expense text-white hover:bg-red-700',
+  danger:    'bg-expense text-white hover:brightness-110',
   outline:   'border border-border-strong bg-transparent text-foreground hover:bg-surface-2',
 }
 
 const sizes: Record<Size, string> = {
-  sm:   'h-8 px-3 text-sm rounded-md',
-  md:   'h-10 px-4 text-sm rounded-md',
-  lg:   'h-11 px-5 text-base rounded-lg',
-  icon: 'h-9 w-9 rounded-md',
+  sm:   'h-8 px-3 text-sm rounded-[10px]',
+  md:   'h-10 px-4 text-sm rounded-xl',
+  lg:   'h-11 px-5 text-base rounded-xl',
+  icon: 'h-9 w-9 rounded-xl',
 }
 
 export const Button = forwardRef<HTMLButtonElement, Props>(function Button(
@@ -34,7 +34,7 @@ export const Button = forwardRef<HTMLButtonElement, Props>(function Button(
     <button
       ref={ref}
       className={cn(
-        'inline-flex items-center justify-center gap-2 font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+        'inline-flex items-center justify-center gap-2 font-semibold transition-[background-color,filter,transform] active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         variants[variant],
         sizes[size],
         className,

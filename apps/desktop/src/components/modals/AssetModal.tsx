@@ -5,9 +5,12 @@ import { Trash2 } from 'lucide-react'
 import { Modal } from '@/components/ui/modal'
 import { Input, Select, Label } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { Segmented } from '@/components/ui/segmented'
+import Collapse from '@/components/ui/Collapse'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
-import { addAsset, updateAsset, deleteAsset } from '@finanzas/core/lib/assets'
+import { addAsset, updateAsset, deleteAsset, restoreAsset } from '@finanzas/core/lib/assets'
+import { offerUndo } from '@finanzas/core/lib/undo'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { Asset, Currency } from '@finanzas/core/types'
 import { toLocalDateString } from '@finanzas/core/lib/constants'
@@ -22,18 +25,19 @@ export function AssetModal({
       open={open}
       onClose={onClose}
       title={editing ? 'Editar cuenta' : 'Nueva cuenta'}
+      description={editing ? `${editing.clase === 'activo' ? 'Activo' : 'Pasivo'} · ${editing.tipo}` : undefined}
       size="md"
     >
-      {open && (
-        <Form
-          key={editing?.id ?? 'new'}
-          editing={editing ?? null}
-          onClose={onClose}
-        />
-      )}
+      <Form
+        key={editing?.id ?? 'new'}
+        editing={editing ?? null}
+        onClose={onClose}
+      />
     </Modal>
   )
 }
+
+const parseNum = (v: string) => parseFloat(v.replace(',', '.'))
 
 function Form({ editing, onClose }: { editing: Asset | null; onClose: () => void }) {
   const settings = useSettingsStore((s) => s.settings) ?? DEFAULT_SETTINGS
@@ -41,7 +45,7 @@ function Form({ editing, onClose }: { editing: Asset | null; onClose: () => void
 
   const [nombre, setNombre]       = useState(editing?.nombre ?? '')
   const [clase, setClase]         = useState<'activo' | 'pasivo'>(editing?.clase ?? 'activo')
-  const [tipo, setTipo]           = useState(editing?.tipo ?? 'Banco')
+  const [tipo, setTipo]           = useState(editing?.tipo ?? settings.tiposActivo[0] ?? 'Banco')
   const [moneda, setMoneda]       = useState<Currency>(editing?.moneda ?? 'ARS')
   const [saldo, setSaldo]         = useState(editing ? String(editing.saldo) : '')
   const [fechaAlta, setFechaAlta] = useState(
@@ -53,20 +57,40 @@ function Form({ editing, onClose }: { editing: Asset | null; onClose: () => void
 
   const tiposDisponibles = clase === 'activo' ? settings.tiposActivo : settings.tiposPasivo
 
+  function changeClase(c: 'activo' | 'pasivo') {
+    setClase(c)
+    const tipos = c === 'activo' ? settings.tiposActivo : settings.tiposPasivo
+    if (!tipos.includes(tipo)) setTipo(tipos[0] ?? '')
+  }
+
+  const saldoNum = saldo.trim() === '' ? 0 : parseNum(saldo)
+  const metaNum = meta.trim() === '' ? null : parseNum(meta)
+  const invalid = !nombre.trim() || Number.isNaN(saldoNum) || (metaNum !== null && (Number.isNaN(metaNum) || metaNum <= 0))
+
   async function handleSave() {
     if (!nombre.trim()) return showToast('Ingresá un nombre', 'error')
-    const s = parseFloat(saldo || '0')
-    const payload = {
+    if (invalid) return showToast('Revisá los montos', 'error')
+    const altaDate = new Date(fechaAlta + 'T12:00:00')
+    const altaMonth = fechaAlta.slice(0, 7)
+    // Antes se enviaba `snapshots: []` también al editar, lo que borraba todo
+    // el historial de la cuenta. Ahora se conservan y, si no hay snapshot del
+    // mes de alta, se crea uno con el saldo inicial (igual que mobile).
+    const baseSnaps = editing?.snapshots ?? []
+    const snapshots = baseSnaps.some((sn) => sn.month === altaMonth)
+      ? baseSnaps
+      : [...baseSnaps, { month: altaMonth, aporte: saldoNum, saldo: saldoNum }]
+          .sort((a, b) => a.month.localeCompare(b.month))
+    const payload: Omit<Asset, 'id'> = {
       userId: 'shared',
       nombre: nombre.trim(),
       clase,
       tipo,
       moneda,
-      saldo: s,
-      fechaAlta: { toDate: () => new Date(fechaAlta + 'T12:00:00') },
-      metaObjetivo: meta ? parseFloat(meta) : null,
-      metaMoneda: meta ? metaMoneda : null,
-      snapshots: [],
+      saldo: saldoNum,
+      fechaAlta: { toDate: () => altaDate },
+      metaObjetivo: clase === 'activo' ? metaNum : null,
+      metaMoneda: clase === 'activo' && metaNum !== null ? metaMoneda : null,
+      snapshots,
     }
     setSaving(true)
     try {
@@ -81,14 +105,15 @@ function Form({ editing, onClose }: { editing: Asset | null; onClose: () => void
     }
   }
 
+  // Sin confirm(): se borra y el toast permite deshacer (restaura mismo id + historial)
   async function handleDelete() {
     if (!editing?.id) return
-    if (!confirm('¿Eliminar esta cuenta?')) return
+    const borrada = editing
     setSaving(true)
     try {
-      await deleteAsset(editing.id)
-      showToast('Cuenta eliminada')
+      await deleteAsset(borrada.id!)
       onClose()
+      offerUndo(`"${borrada.nombre}" eliminada`, () => restoreAsset(borrada))
     } catch {
       showToast('Error al eliminar', 'error')
     } finally {
@@ -97,67 +122,92 @@ function Form({ editing, onClose }: { editing: Asset | null; onClose: () => void
   }
 
   return (
-    <div className="space-y-4">
+    <form
+      className="space-y-4"
+      onSubmit={(e) => { e.preventDefault(); handleSave() }}
+    >
+      <Segmented
+        id="asset-clase"
+        value={clase}
+        onChange={changeClase}
+        className="w-full"
+        options={[
+          { value: 'activo', label: 'Activo', activeColor: 'var(--income)' },
+          { value: 'pasivo', label: 'Pasivo', activeColor: 'var(--expense)' },
+        ]}
+      />
       <div>
-        <Label>Nombre</Label>
-        <Input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej: Banco Galicia" />
+        <Label htmlFor="asset-nombre">Nombre</Label>
+        <Input id="asset-nombre" autoFocus value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej: Banco Galicia" />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <Label>Clase</Label>
-          <Select value={clase} onChange={(e) => setClase(e.target.value as 'activo' | 'pasivo')}>
-            <option value="activo">Activo</option>
-            <option value="pasivo">Pasivo</option>
-          </Select>
-        </div>
-        <div>
-          <Label>Tipo</Label>
-          <Select value={tipo} onChange={(e) => setTipo(e.target.value)}>
+          <Label htmlFor="asset-tipo">Tipo</Label>
+          <Select id="asset-tipo" value={tipo} onChange={(e) => setTipo(e.target.value)}>
             {tiposDisponibles.map((t) => <option key={t} value={t}>{t}</option>)}
           </Select>
         </div>
-      </div>
-      <div className="grid grid-cols-3 gap-3">
-        <div className="col-span-2">
-          <Label>Saldo</Label>
-          <Input type="number" value={saldo} onChange={(e) => setSaldo(e.target.value)} placeholder="0.00" />
-        </div>
         <div>
-          <Label>Moneda</Label>
-          <Select value={moneda} onChange={(e) => setMoneda(e.target.value as Currency)}>
-            {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
-          </Select>
+          <Label htmlFor="asset-alta">Fecha de alta</Label>
+          <Input id="asset-alta" type="date" value={fechaAlta} onChange={(e) => setFechaAlta(e.target.value)} />
         </div>
       </div>
       <div>
-        <Label>Fecha de alta</Label>
-        <Input type="date" value={fechaAlta} onChange={(e) => setFechaAlta(e.target.value)} />
+        <Label htmlFor="asset-saldo">Saldo actual</Label>
+        <div className="flex gap-2">
+          <Input
+            id="asset-saldo"
+            inputMode="decimal"
+            value={saldo}
+            onChange={(e) => setSaldo(e.target.value)}
+            placeholder="0"
+            className="flex-1 text-base font-semibold tnum"
+          />
+          <Segmented
+            id="asset-moneda"
+            value={moneda}
+            onChange={setMoneda}
+            className="h-10 items-center"
+            options={CURRENCIES.map((c) => ({ value: c, label: c }))}
+          />
+        </div>
+        {editing && (
+          <p className="mt-1.5 text-[11px] text-muted-2">
+            Para registrar el saldo de un mes (aporte y revalorización) usá “Actualizar saldo”.
+          </p>
+        )}
       </div>
-      {clase === 'activo' && (
-        <div className="border-t border-border pt-4">
-          <Label>Meta de ahorro (opcional)</Label>
-          <div className="grid grid-cols-3 gap-3">
-            <div className="col-span-2">
-              <Input type="number" value={meta} onChange={(e) => setMeta(e.target.value)} placeholder="Objetivo" />
-            </div>
-            <Select value={metaMoneda} onChange={(e) => setMetaMoneda(e.target.value as Currency)}>
+
+      <Collapse open={clase === 'activo'}>
+        <div className="border-t border-hairline pt-4">
+          <Label htmlFor="asset-meta">Meta de ahorro (opcional)</Label>
+          <div className="flex gap-2">
+            <Input
+              id="asset-meta"
+              inputMode="decimal"
+              value={meta}
+              onChange={(e) => setMeta(e.target.value)}
+              placeholder="Objetivo"
+              className="flex-1 tnum"
+            />
+            <Select value={metaMoneda} onChange={(e) => setMetaMoneda(e.target.value as Currency)} className="w-24" aria-label="Moneda de la meta">
               {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </Select>
           </div>
         </div>
-      )}
+      </Collapse>
 
-      <div className="flex items-center justify-between gap-2 pt-3 border-t border-border -mx-6 px-6 -mb-5 pb-5 mt-5">
+      <div className="flex items-center justify-between gap-2 pt-4 border-t border-hairline">
         {editing ? (
-          <Button variant="ghost" onClick={handleDelete} disabled={saving}>
-            <Trash2 className="h-4 w-4 text-expense" /><span className="text-expense">Eliminar</span>
+          <Button type="button" variant="ghost" onClick={handleDelete} disabled={saving} className="text-expense">
+            <Trash2 className="h-4 w-4" /> Eliminar
           </Button>
         ) : <span />}
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={onClose} disabled={saving}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</Button>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button type="submit" disabled={saving || invalid}>{saving ? 'Guardando…' : 'Guardar'}</Button>
         </div>
       </div>
-    </div>
+    </form>
   )
 }

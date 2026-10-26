@@ -1,17 +1,22 @@
 'use client'
 
-import { useState } from 'react'
-import { Plus, Search, X, Check, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
+import { Plus, Search, X, Check, MoreHorizontal, Pencil, Trash2, Link2 } from 'lucide-react'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { Select } from '@/components/ui/input'
 import { MoneyText } from '@/components/MoneyText'
 import { TransactionModal } from '@/components/modals/TransactionModal'
-import { LedgerStats, LedgerTabs, FilterPill } from '@/components/ledger/LedgerHeader'
+import { LedgerStats, LedgerTabs } from '@/components/ledger/LedgerHeader'
+import { Segmented } from '@/components/ui/segmented'
+import { CategoryIcon } from '@finanzas/core/lib/categoryIcons'
+import { deleteTransactionsWithUndo } from '@finanzas/core/lib/undo'
+import { stagger } from '@/components/ui/motion'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { getCatFromSettings, SHARED_USERS } from '@finanzas/core/lib/constants'
-import { markEjecutado, deleteTransaction } from '@finanzas/core/lib/transactions'
+import { markEjecutado } from '@finanzas/core/lib/transactions'
 import { toBase } from '@finanzas/core/lib/currency'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { cn } from '@finanzas/core/lib/utils'
@@ -19,11 +24,11 @@ import { Currency, Settings, Transaction, TransactionType } from '@finanzas/core
 
 type Filter = 'todas' | 'pendientes' | 'javier' | 'mary'
 
-const FILTERS: { key: Filter; label: string }[] = [
-  { key: 'todas', label: 'Todas' },
-  { key: 'pendientes', label: 'Pendientes' },
-  { key: 'javier', label: 'Javier' },
-  { key: 'mary', label: 'Mary' },
+const FILTERS: { value: Filter; label: string }[] = [
+  { value: 'todas', label: 'Todas' },
+  { value: 'pendientes', label: 'Pendientes' },
+  { value: 'javier', label: 'Javier' },
+  { value: 'mary', label: 'Mary' },
 ]
 
 export default function MovimientosPage() {
@@ -41,6 +46,16 @@ export default function MovimientosPage() {
   const [initialType, setInitialType] = useState<TransactionType>('egreso')
 
   const base = monedaBase as Currency
+
+  // Escape limpia la selección del libro (si no hay un diálogo abierto)
+  useEffect(() => {
+    if (!selected) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !document.querySelector('[role="dialog"]')) setSelected(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selected])
 
   function matches(t: Transaction) {
     if (filter === 'pendientes' && t.ejecutado) return false
@@ -105,12 +120,13 @@ export default function MovimientosPage() {
     }
   }
 
+  // Sin confirm() nativo: se borra al instante (revirtiendo el saldo de la
+  // cuenta de ahorro si corresponde) y el toast ofrece "Deshacer" (⌘Z).
   async function handleDelete(t: Transaction) {
     if (!t.id) return
-    if (!confirm('¿Eliminar este movimiento?')) return
+    if (selected === t.id) setSelected(null)
     try {
-      await deleteTransaction(t.id)
-      showToast('Movimiento eliminado')
+      await deleteTransactionsWithUndo([t])
     } catch {
       showToast('Error al eliminar', 'error')
     }
@@ -129,31 +145,30 @@ export default function MovimientosPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar movimientos…"
-            className="w-full rounded-[10px] border border-border bg-surface py-[6px] pl-[30px] pr-8 text-[13px] text-foreground placeholder:text-muted-2 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="glass w-full rounded-xl py-[7px] pl-[30px] pr-8 text-[13px] text-foreground placeholder:text-muted-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
+          <AnimatePresence>
           {search && (
-            <button
+            <motion.button
+              initial={{ opacity: 0, scale: 0.6 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.6 }}
               onClick={() => setSearch('')}
               className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
               aria-label="Limpiar búsqueda"
             >
               <X className="h-[15px] w-[15px]" />
-            </button>
+            </motion.button>
           )}
+          </AnimatePresence>
         </div>
 
-        <div className="flex gap-[3px] rounded-[10px] bg-surface-2 p-[3px]">
-          {FILTERS.map((f) => (
-            <FilterPill key={f.key} active={filter === f.key} onClick={() => setFilter(f.key)}>
-              {f.label}
-            </FilterPill>
-          ))}
-        </div>
+        <Segmented id="mov-filter" size="sm" value={filter} onChange={setFilter} options={FILTERS} />
 
         <Select
           value={categoria}
           onChange={(e) => setCategoria(e.target.value)}
-          className="h-[31px] w-44 rounded-[10px] py-0 text-[12.5px]"
+          className="h-[33px] w-44 rounded-xl py-0 text-[12.5px]"
         >
           <option value="">Todas las categorías</option>
           {allCategories.map((c) => (
@@ -164,13 +179,13 @@ export default function MovimientosPage() {
         <div className="flex gap-2">
           <button
             onClick={() => openNew('ingreso')}
-            className="inline-flex items-center gap-1 rounded-[10px] border border-border bg-surface px-3 py-[6px] text-[12.5px] font-semibold text-income transition-colors hover:bg-surface-2"
+            className="glass inline-flex items-center gap-1 rounded-xl px-3 py-[7px] text-[12.5px] font-semibold text-income transition-[filter,transform] hover:brightness-105 active:scale-[0.97]"
           >
             <Plus className="h-3.5 w-3.5" /> Ingreso
           </button>
           <button
             onClick={() => openNew('egreso')}
-            className="inline-flex items-center gap-1 rounded-[10px] bg-primary px-3 py-[6px] text-[12.5px] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
+            className="bg-brand inline-flex items-center gap-1 rounded-xl px-3 py-[7px] text-[12.5px] font-semibold text-primary-foreground shadow-card transition-[filter,transform] hover:brightness-110 active:scale-[0.97]"
           >
             <Plus className="h-3.5 w-3.5" /> Egreso
           </button>
@@ -207,9 +222,15 @@ export default function MovimientosPage() {
           onEdit={(t) => { setEditing(t); setOpen(true) }}
           onDelete={handleDelete}
           footer={
-            selectedTx
-              ? `${selectedTx.descripcion || '(sin descripción)'} seleccionado · se resaltan las partidas vinculadas`
-              : 'Clic en un movimiento para ver su contrapartida · clic en el círculo para marcarlo ejecutado'
+            selectedTx ? (
+              <span className="flex items-center gap-1.5">
+                <Link2 className="h-3.5 w-3.5 text-primary shrink-0" />
+                <span className="truncate">
+                  <b className="font-semibold text-foreground">{selectedTx.descripcion || '(sin descripción)'}</b>
+                  {' · '}{linkedIds.size - 1} {linkedIds.size - 1 === 1 ? 'partida vinculada' : 'partidas vinculadas'} · Esc para limpiar
+                </span>
+              </span>
+            ) : 'Clic en un movimiento para ver su contrapartida · clic en el círculo para marcarlo ejecutado'
           }
         />
       </div>
@@ -233,7 +254,7 @@ function LedgerColumn({
   rows: Transaction[]
   total: number
   headerSub?: string
-  footer?: string
+  footer?: React.ReactNode
   base: Currency
   settings: Settings
   selected: string | null
@@ -245,7 +266,12 @@ function LedgerColumn({
 }) {
   const income = kind === 'in'
   return (
-    <section className="flex min-h-0 flex-col overflow-hidden rounded-[14px] border border-border bg-surface shadow-card">
+    <motion.section
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, delay: income ? 0.05 : 0.1, ease: [0.22, 1, 0.36, 1] }}
+      className="glass flex min-h-0 flex-col overflow-hidden rounded-[18px]"
+    >
       <header
         className={cn(
           'flex items-baseline justify-between border-b px-3.5 py-2.5',
@@ -264,8 +290,8 @@ function LedgerColumn({
           <span className="text-xs tabular-nums text-muted">({rows.length})</span>
         </div>
         <div className="flex flex-col items-end gap-0.5">
-          <div className={cn('text-[15px] font-bold tabular-nums', income ? 'text-income' : 'text-expense')}>
-            <MoneyText amount={total} currency={base} />
+          <div className={cn('text-[15px] font-bold tnum', income ? 'text-income' : 'text-expense')}>
+            <MoneyText amount={total} currency={base} animated />
           </div>
           {headerSub && <div className="whitespace-nowrap text-[11px] text-muted-2">{headerSub}</div>}
         </div>
@@ -277,9 +303,11 @@ function LedgerColumn({
             Sin {income ? 'ingresos' : 'egresos'} que coincidan con los filtros.
           </p>
         ) : (
-          rows.map((t) => (
+          <AnimatePresence initial={false}>
+          {rows.map((t, i) => (
             <LedgerRow
               key={t.id}
+              index={i}
               t={t}
               kind={kind}
               settings={settings}
@@ -291,20 +319,22 @@ function LedgerColumn({
               onEdit={() => onEdit(t)}
               onDelete={() => onDelete(t)}
             />
-          ))
+          ))}
+          </AnimatePresence>
         )}
       </div>
 
       {footer && (
-        <div className="border-t border-border px-3.5 py-2 text-[11.5px] text-muted">{footer}</div>
+        <div className="border-t border-hairline px-3.5 py-2 text-[11.5px] text-muted">{footer}</div>
       )}
-    </section>
+    </motion.section>
   )
 }
 
 function LedgerRow({
-  t, kind, settings, isSelected, isLinked, dimmed, onSelect, onToggle, onEdit, onDelete,
+  index, t, kind, settings, isSelected, isLinked, dimmed, onSelect, onToggle, onEdit, onDelete,
 }: {
+  index: number
   t: Transaction
   kind: 'in' | 'out'
   settings: Settings
@@ -329,17 +359,25 @@ function LedgerRow({
   const meta = [cat?.nombre ?? '—', fecha, persona, ...(done ? [] : ['pendiente'])].join(' · ')
 
   return (
-    <div
+    <motion.div
+      layout="position"
       onClick={onSelect}
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: dimmed ? 0.34 : 1, y: 0 }}
+      exit={{ opacity: 0, x: income ? -24 : 24, height: 0, paddingTop: 0, paddingBottom: 0 }}
+      transition={{ duration: 0.25, delay: stagger(index, 0.015, 0.2), ease: [0.22, 1, 0.36, 1] }}
       className={cn(
-        'group grid cursor-pointer grid-cols-[3px_1fr_auto_auto] items-center gap-2.5 border-b border-border py-[7px] pr-3.5 transition-colors last:border-0',
+        'group relative grid cursor-pointer grid-cols-[3px_1fr_auto_auto] items-center gap-2.5 overflow-hidden border-b border-hairline py-[7px] pr-3.5 transition-colors last:border-0',
         income ? 'hover:bg-income-tint' : 'hover:bg-expense-tint',
-        isSelected && 'bg-primary/5',
-        dimmed && 'opacity-[0.34]',
+        isSelected && 'bg-primary/8',
+        menuOpen && 'overflow-visible z-10',
       )}
     >
-      <span
-        className={cn('h-7 rounded-r-[3px]', isLinked ? 'bg-primary' : 'bg-transparent')}
+      <motion.span
+        initial={false}
+        animate={{ scaleY: isLinked ? 1 : 0, opacity: isLinked ? 1 : 0 }}
+        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+        className="h-7 rounded-r-[3px] bg-primary origin-center"
       />
 
       <span className="flex min-w-0 flex-col gap-px pl-[11px]">
@@ -353,9 +391,11 @@ function LedgerRow({
         </span>
         <span className="flex min-w-0 items-center gap-1.5 truncate text-[10.5px] text-muted-2">
           <span
-            className="h-[5px] w-[5px] shrink-0 rounded-full"
-            style={{ background: cat?.color ?? '#94a3b8' }}
-          />
+            className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[5px]"
+            style={{ background: `${cat?.color ?? '#94a3b8'}22`, color: cat?.color ?? '#94a3b8' }}
+          >
+            {cat && <CategoryIcon cat={cat} size={10} />}
+          </span>
           <span className="truncate">{meta}</span>
         </span>
       </span>
@@ -363,14 +403,14 @@ function LedgerRow({
       <span className="flex flex-col items-end gap-px text-right">
         <span
           className={cn(
-            'text-[12.5px] font-bold tabular-nums',
+            'text-[12.5px] font-bold tnum',
             done ? 'text-muted-2 line-through' : income ? 'text-income' : 'text-expense',
           )}
         >
           {income ? '' : '−'}
           <MoneyText amount={t.monto} currency={t.moneda} />
         </span>
-        <span className="text-[10px] tabular-nums text-muted-2">
+        <span className="text-[10px] tnum text-muted-2">
           <MoneyText amount={usd} currency="USD" />
         </span>
       </span>
@@ -383,7 +423,8 @@ function LedgerRow({
         >
           <MoreHorizontal className="h-4 w-4" />
         </button>
-        <button
+        <motion.button
+          whileTap={{ scale: 0.8 }}
           onClick={(e) => { e.stopPropagation(); onToggle() }}
           title={done ? 'Marcar pendiente' : income ? 'Marcar recibido' : 'Marcar pagado'}
           className={cn(
@@ -396,28 +437,50 @@ function LedgerRow({
           )}
         >
           <Check className="h-2 w-2" strokeWidth={4} />
-        </button>
+        </motion.button>
 
-        {menuOpen && (
-          <>
-            <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setMenuOpen(false) }} />
-            <div className="absolute right-0 top-6 z-20 w-36 rounded-md border border-border bg-surface py-1 shadow-card-lg">
-              <button
-                onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onEdit() }}
-                className="inline-flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-surface-2"
+        <AnimatePresence>
+          {menuOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setMenuOpen(false) }} />
+              <motion.div
+                role="menu"
+                initial={{ opacity: 0, scale: 0.92, y: -4 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -4, transition: { duration: 0.12 } }}
+                transition={{ type: 'spring', stiffness: 500, damping: 32 }}
+                className="glass-strong absolute right-0 top-6 z-20 w-40 origin-top-right rounded-xl p-1"
               >
-                <Pencil className="h-3.5 w-3.5" /> Editar
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onDelete() }}
-                className="inline-flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-expense hover:bg-surface-2"
-              >
-                <Trash2 className="h-3.5 w-3.5" /> Eliminar
-              </button>
-            </div>
-          </>
-        )}
+                <MenuItem icon={Pencil} onClick={() => { setMenuOpen(false); onEdit() }}>Editar</MenuItem>
+                <MenuItem icon={Check} onClick={() => { setMenuOpen(false); onToggle() }}>
+                  {done ? 'Marcar pendiente' : income ? 'Marcar recibido' : 'Marcar pagado'}
+                </MenuItem>
+                <MenuItem icon={Trash2} danger onClick={() => { setMenuOpen(false); onDelete() }}>Eliminar</MenuItem>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
       </span>
-    </div>
+    </motion.div>
+  )
+}
+
+function MenuItem({ icon: Icon, danger, onClick, children }: {
+  icon: React.ComponentType<{ className?: string }>
+  danger?: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      role="menuitem"
+      onClick={(e) => { e.stopPropagation(); onClick() }}
+      className={cn(
+        'inline-flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition-colors hover:bg-surface-2',
+        danger ? 'text-expense' : 'text-foreground',
+      )}
+    >
+      <Icon className="h-3.5 w-3.5" /> {children}
+    </button>
   )
 }
