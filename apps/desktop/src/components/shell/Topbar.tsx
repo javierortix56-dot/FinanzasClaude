@@ -21,6 +21,7 @@ const titles: Record<string, string> = {
   '/asignaciones': 'Asignación de egresos',
   '/cuentas':      'Cuentas y patrimonio',
   '/analisis':     'Análisis',
+  '/resumenes':    'Resúmenes',
   '/ajustes':      'Ajustes',
 }
 

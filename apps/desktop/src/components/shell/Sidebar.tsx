@@ -11,6 +11,7 @@ import {
   Settings,
   Link2,
   Keyboard,
+  FileText,
 } from 'lucide-react'
 import { cn } from '@finanzas/core/lib/utils'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
@@ -24,6 +25,7 @@ export const NAV_ITEMS = [
   { href: '/asignaciones',  label: 'Asignaciones', icon: Link2 },
   { href: '/cuentas',       label: 'Cuentas',      icon: Wallet },
   { href: '/analisis',      label: 'Análisis',     icon: PieChart },
+  { href: '/resumenes',     label: 'Resúmenes',    icon: FileText },
   { href: '/ajustes',       label: 'Ajustes',      icon: Settings },
 ]
 

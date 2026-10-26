@@ -152,3 +152,42 @@ export interface Budget {
   limite: number
   moneda: string
 }
+
+/** Resumen de tarjeta o cuenta importado (PDF/CSV/Excel) */
+export type ResumenTipo = 'tarjeta' | 'cuenta'
+
+export type ResumenItemTipo =
+  | 'consumo' | 'debito_automatico' | 'pago' | 'impuesto' | 'interes'
+  | 'comision' | 'devolucion' | 'transferencia' | 'otro'
+
+export interface ResumenItem {
+  id?: string
+  resumenId?: string
+  /** YYYY-MM-DD */
+  fecha: string
+  descripcion: string
+  /** Nombre normalizado para agrupar entre meses */
+  comercio: string
+  /** Positivo = gasto/débito; negativo = pago, devolución o crédito */
+  monto: number
+  moneda: Currency
+  cuotaActual: number | null
+  cuotaTotal: number | null
+  tipo: ResumenItemTipo
+  /** id de categoría sugerida (gasto) */
+  categoria: string | null
+}
+
+export interface Resumen {
+  id?: string
+  emisor: string
+  tipo: ResumenTipo
+  /** YYYY-MM del cierre */
+  periodo: string
+  moneda: Currency
+  total: number | null
+  archivo: string
+  creadoPor: string
+  createdAt?: string
+  items: ResumenItem[]
+}

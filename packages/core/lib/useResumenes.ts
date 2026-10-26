@@ -1,0 +1,152 @@
+// Estado de la vista "Resúmenes" (compartido por mobile y desktop; cada app
+// pone su propia UI encima).
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { fetchMonthTransactions } from './analytics'
+import { useTransactionStore } from '../store/useTransactionStore'
+import { useUIStore } from '../store/useUIStore'
+import { addComprasCuotas, subscribeToCuotas } from './cuotas'
+import { shiftMonth } from './constants'
+import { analizarPeriodo, mesesDeItems, noCargados } from './resumenAnalisis'
+import { borrarResumen, cargarComoMovimiento, existeResumen, extraerResumen, fetchResumenes, guardarResumen } from './resumenes'
+import { CompraCuotas, Currency, Resumen, ResumenItem, Settings, Transaction } from '../types'
+
+export type EstadoSubida =
+  | { paso: 'inactivo' }
+  | { paso: 'leyendo'; archivo: string }
+  | { paso: 'revisar'; resumen: Resumen; reemplaza: boolean }
+  | { paso: 'guardando'; resumen: Resumen; reemplaza: boolean }
+  | { paso: 'error'; mensaje: string }
+
+export function useResumenes(s: Settings, base: Currency, creadoPor: string) {
+  const [resumenes, setResumenes] = useState<Resumen[] | null>(null)
+  const [errorCarga, setErrorCarga] = useState<string | null>(null)
+  const [periodoElegido, setPeriodo] = useState<string | null>(null)
+  const [txs, setTxs] = useState<Transaction[]>([])
+  const [txsVersion, setTxsVersion] = useState(0)
+  const [subida, setSubida] = useState<EstadoSubida>({ paso: 'inactivo' })
+  // Cambios en los movimientos (alta, borrado, deshacer) refrescan "no cargados"
+  const storeTxs = useTransactionStore((st) => st.transactions)
+  const [compras, setCompras] = useState<CompraCuotas[]>([])
+
+  useEffect(() => subscribeToCuotas(setCompras), [])
+
+  const recargar = useCallback(async () => {
+    try {
+      setResumenes(await fetchResumenes())
+      setErrorCarga(null)
+    } catch (err) {
+      setErrorCarga(err instanceof Error ? err.message : String(err))
+      setResumenes([])
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancel = false
+    fetchResumenes()
+      .then((r) => { if (!cancel) { setResumenes(r); setErrorCarga(null) } })
+      .catch((err) => { if (!cancel) { setErrorCarga(err instanceof Error ? err.message : String(err)); setResumenes([]) } })
+    return () => { cancel = true }
+  }, [])
+
+  const periodos = useMemo(
+    () => [...new Set((resumenes ?? []).map((r) => r.periodo))].sort().reverse(),
+    [resumenes],
+  )
+  const periodo = periodoElegido && periodos.includes(periodoElegido) ? periodoElegido : periodos[0] ?? null
+
+  const analisis = useMemo(
+    () => (resumenes && periodo ? analizarPeriodo(resumenes, periodo, base, s) : null),
+    [resumenes, periodo, base, s],
+  )
+
+  const itemsPeriodo = useMemo(() => analisis?.resumenes.flatMap((r) => r.items) ?? [], [analisis])
+
+  // Movimientos de la app en los meses que cubre el resumen (para "no cargados")
+  useEffect(() => {
+    const meses = mesesDeItems(itemsPeriodo)
+    if (meses.length === 0) return
+    let cancel = false
+    Promise.all(meses.map(fetchMonthTransactions)).then((porMes) => {
+      if (!cancel) setTxs(porMes.flat())
+    })
+    return () => { cancel = true }
+  }, [itemsPeriodo, txsVersion, storeTxs])
+
+  const faltantes = useMemo(() => noCargados(itemsPeriodo, txs), [itemsPeriodo, txs])
+
+  // Cuotas del resumen que todavía no están en la sección Cuotas de la app
+  const cuotasNuevas = useMemo(() => (analisis?.cuotas ?? []).filter((c) => !compras.some((p) =>
+    p.moneda === c.moneda && p.totalCuotas === c.total && Math.abs(p.montoCuota - c.montoCuota) <= Math.max(1, c.montoCuota * 0.01),
+  )), [analisis, compras])
+
+  async function registrarCuotas() {
+    if (!analisis || cuotasNuevas.length === 0) return
+    const n = await addComprasCuotas(cuotasNuevas.map((c) => ({
+      descripcion: c.comercio,
+      tarjeta: c.emisor,
+      moneda: c.moneda,
+      montoCuota: c.montoCuota,
+      totalCuotas: c.total,
+      primerMes: shiftMonth(analisis.periodo, -(c.actual - 1)),
+      creadoPor,
+    })))
+    useUIStore.getState().showToast(`${n} compra${n !== 1 ? 's' : ''} en cuotas agregada${n !== 1 ? 's' : ''}`)
+  }
+
+  async function subir(file: File) {
+    setSubida({ paso: 'leyendo', archivo: file.name })
+    try {
+      const resumen = await extraerResumen(file, s, creadoPor)
+      const reemplaza = await existeResumen(resumen.emisor, resumen.periodo)
+      setSubida({ paso: 'revisar', resumen, reemplaza })
+    } catch (err) {
+      setSubida({ paso: 'error', mensaje: err instanceof Error ? err.message : String(err) })
+    }
+  }
+
+  async function confirmar() {
+    if (subida.paso !== 'revisar') return
+    const { resumen, reemplaza } = subida
+    setSubida({ paso: 'guardando', resumen, reemplaza })
+    try {
+      await guardarResumen(resumen)
+      await recargar()
+      setPeriodo(resumen.periodo)
+      setSubida({ paso: 'inactivo' })
+    } catch (err) {
+      setSubida({ paso: 'error', mensaje: err instanceof Error ? err.message : String(err) })
+    }
+  }
+
+  const descartar = () => setSubida({ paso: 'inactivo' })
+
+  async function borrar(r: Resumen) {
+    await borrarResumen(r)
+    await recargar()
+  }
+
+  async function cargar(item: ResumenItem, categoriaFallback: string) {
+    await cargarComoMovimiento(item, categoriaFallback, creadoPor)
+    setTxsVersion((v) => v + 1)
+  }
+
+  return {
+    cargando: resumenes === null,
+    errorCarga,
+    resumenes: resumenes ?? [],
+    periodos,
+    periodo,
+    setPeriodo,
+    analisis,
+    faltantes,
+    cuotasNuevas,
+    registrarCuotas,
+    subida,
+    subir,
+    confirmar,
+    descartar,
+    borrar,
+    cargar,
+    refrescarMovimientos: () => setTxsVersion((v) => v + 1),
+  }
+}

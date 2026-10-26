@@ -71,3 +71,15 @@ update auth.users
 set encrypted_password = extensions.crypt('NUEVA_CONTRASEÑA', extensions.gen_salt('bf'))
 where email = 'EMAIL';
 ```
+
+## Resúmenes (análisis con IA)
+
+- Tablas `resumenes` y `resumen_items` (migración `20261026_resumenes.sql`, aplicada el 2026-10-26).
+- Edge Function `analizar-resumen` (código en `functions/analizar-resumen/`): lee el PDF/CSV
+  con la API de Claude y devuelve los renglones. Valida que el usuario esté en `allowed_users`.
+- **Paso manual:** cargar la clave de la API de Claude (console.anthropic.com → API Keys):
+
+```sql
+insert into public.app_secrets (key, value) values ('anthropic_api_key', 'sk-ant-...')
+on conflict (key) do update set value = excluded.value;
+```
