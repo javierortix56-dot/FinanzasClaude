@@ -1,5 +1,6 @@
 'use client'
 
+import { txLabel } from '@/lib/txLabel'
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Plus, Search, X, Check, MoreHorizontal, Pencil, Trash2, Link2 } from 'lucide-react'
@@ -226,7 +227,7 @@ export default function MovimientosPage() {
               <span className="flex items-center gap-1.5">
                 <Link2 className="h-3.5 w-3.5 text-primary shrink-0" />
                 <span className="truncate">
-                  <b className="font-semibold text-foreground">{selectedTx.descripcion || '(sin descripción)'}</b>
+                  <b className="font-semibold text-foreground">{txLabel(selectedTx, settings)}</b>
                   {' · '}{linkedIds.size - 1} {linkedIds.size - 1 === 1 ? 'partida vinculada' : 'partidas vinculadas'} · Esc para limpiar
                 </span>
               </span>
@@ -387,7 +388,7 @@ function LedgerRow({
             done ? 'text-muted-2 line-through' : 'text-foreground',
           )}
         >
-          {t.descripcion || '(sin descripción)'}
+          {txLabel(t, settings)}
         </span>
         <span className="flex min-w-0 items-center gap-1.5 truncate text-[10.5px] text-muted-2">
           <span
