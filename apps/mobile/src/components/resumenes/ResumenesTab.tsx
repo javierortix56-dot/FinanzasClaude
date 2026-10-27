@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   Upload, FileText, Repeat, Bug, Store, CreditCard, Landmark, AlertCircle, Trash2,
@@ -14,10 +14,11 @@ import { GrupoComercio } from '@finanzas/core/lib/comercioReglas'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { getCatFromSettings, monthLabel } from '@finanzas/core/lib/constants'
 import { CategoryIcon } from '@/lib/categoryIcons'
-import { Currency, Resumen, ResumenItem, Settings } from '@finanzas/core/types'
+import { CompraCuotas, Currency, Resumen, ResumenItem, Settings } from '@finanzas/core/types'
 import { ETIQUETA_CARGO, conciliacion, mesCorto } from '@finanzas/core/lib/resumenAnalisis'
 import { toBase } from '@finanzas/core/lib/currency'
 import Card from '@/components/ui/Card'
+import CuotaModal from '@/components/cuotas/CuotaModal'
 import Sheet from '@/components/ui/Sheet'
 import ProgressBar from '@/components/ui/ProgressBar'
 import { Money } from '@/components/ui/AnimatedNumber'
@@ -46,6 +47,8 @@ export default function ResumenesTab() {
   const base = monedaBase as Currency
   const r = useResumenes(s, base, usuarioId(user))
   const inputRef = useRef<HTMLInputElement>(null)
+  // Cuota cargada a mano: null = cerrado, 'nueva' = alta
+  const [cuotaManual, setCuotaManual] = useState<CompraCuotas | 'nueva' | null>(null)
   const a = r.analisis
   const leyendo = r.subida.paso === 'leyendo'
 
@@ -161,16 +164,34 @@ export default function ResumenesTab() {
           </Card>
 
           <Card title="Gastos hormiga" delay={0.12}>
-            {a.hormiga.cantidad === 0 ? <Vacio texto="Sin compras chicas este mes." ok /> : (
+            {a.hormiga.totalBase === 0 ? <Vacio texto="Sin hábitos ni compras chicas este mes." ok /> : (
               <>
                 <p className="mb-2 rounded-2xl bg-amber-500/10 px-3 py-2.5 text-xs text-gray-700 leading-relaxed">
-                  <b>{a.hormiga.cantidad} compras</b> chicas suman <b><Money value={a.hormiga.totalBase} currency={base} /></b>:
-                  el <b>{a.hormiga.pctDelPeriodo.toFixed(1)}%</b> del mes (≈ <Money value={a.hormiga.totalBase * 12} currency={base} /> al año).
+                  Suman <b><Money value={a.hormiga.totalBase} currency={base} /></b>: el <b>{a.hormiga.pctDelPeriodo.toFixed(1)}%</b> del mes
+                  (≈ <Money value={a.hormiga.anualBase} currency={base} /> al año).
                 </p>
-                {a.hormiga.comercios.slice(0, 6).map((c) => (
-                  <Fila key={c.clave} titulo={c.comercio} meta={`${c.veces} ${c.veces === 1 ? 'compra' : 'compras'}`}
-                    derecha={<p className="text-[13px] font-bold text-gray-900"><Money value={c.totalBase} currency={base} /></p>} />
+                {a.hormiga.habitos.length > 0 && <p className="eyebrow mt-1">Hábitos ({a.hormiga.minCompras}+ compras, con propinas)</p>}
+                {a.hormiga.habitos.map((h) => (
+                  <div key={h.clave} className="flex items-center justify-between gap-3 py-2 border-b border-hairline last:border-0">
+                    <div className="min-w-0">
+                      <p className="truncate text-[13px] font-semibold text-gray-900">{h.comercio}</p>
+                      <p className="truncate text-[11px] text-gray-400">{h.veces} compras · ticket <Money value={h.ticketBase} currency={base} animated={false} /></p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-[13px] font-bold text-gray-900"><Money value={h.totalBase} currency={base} /></p>
+                      <p className="text-[10.5px] text-gray-400"><Money value={h.anualBase} currency={base} animated={false} />/año</p>
+                    </div>
+                  </div>
                 ))}
+                {a.hormiga.chicas.cantidad > 0 && (
+                  <>
+                    <p className="eyebrow mt-3">Compras chicas sueltas (hasta USD {a.hormiga.topeUsd}) · {a.hormiga.chicas.cantidad}</p>
+                    {a.hormiga.chicas.comercios.slice(0, 5).map((c) => (
+                      <Fila key={c.clave} titulo={c.comercio} meta={`${c.veces} ${c.veces === 1 ? 'compra' : 'compras'}`}
+                        derecha={<p className="text-[13px] font-bold text-gray-900"><Money value={c.totalBase} currency={base} /></p>} />
+                    ))}
+                  </>
+                )}
               </>
             )}
           </Card>
@@ -187,13 +208,12 @@ export default function ResumenesTab() {
             ))}
           </Card>
 
-          {(a.cuotas.length > 0 || a.compromiso.length > 0) && (
-            <Card title="Cuotas en curso" delay={0.2}
-              action={r.cuotasNuevas.length > 0 ? (
-                <button onClick={() => { haptic('success'); r.registrarCuotas() }} className="text-[11px] font-bold text-primary inline-flex items-center gap-1">
-                  <Plus size={12} /> Agregar {r.cuotasNuevas.length} a Cuotas
+          <Card title="Cuotas en curso" delay={0.2}
+              action={
+                <button onClick={() => { haptic(); setCuotaManual('nueva') }} className="text-[11px] font-bold text-primary inline-flex items-center gap-1">
+                  <Plus size={12} /> Agregar cuota
                 </button>
-              ) : undefined}>
+              }>
               <p className="mb-2 text-xs text-gray-500 leading-relaxed">
                 Falta pagar <b className="text-gray-900"><Money value={a.cuotas.reduce((t, c) => t + toBase(c.restante, c.moneda, base, s), 0)} currency={base} /></b>
                 {a.libreDesde && <> · la última cuota vence en <b className="text-gray-900">{monthLabel(a.libreDesde)}</b></>}
@@ -221,8 +241,10 @@ export default function ResumenesTab() {
               )}
               {a.cuotas.map((c, k) => {
                 const cat = c.categoria ? getCatFromSettings(c.categoria, s) : undefined
-                return (
-                  <Fila key={k} titulo={c.comercio} meta={`${c.emisor} · ${c.actual}/${c.total} · ${cat?.nombre ?? 'sin categoría'}`}
+                const cuota = c.actual === 0 ? `empieza ${mesCorto(c.manual!.primerMes)}` : `${c.actual}/${c.total}`
+                const fila = (
+                  <Fila key={k} titulo={c.comercio}
+                    meta={c.manual ? `manual · ${c.emisor} · ${cuota}` : `${c.emisor} · ${cuota} · ${cat?.nombre ?? 'sin categoría'}`}
                     derecha={<>
                       <p className="text-[13px] font-bold text-gray-900"><Money value={c.montoCuota} currency={c.moneda} /></p>
                       <p className="text-[10.5px] text-gray-400">
@@ -230,9 +252,12 @@ export default function ResumenesTab() {
                       </p>
                     </>} />
                 )
+                return c.manual ? (
+                  <button key={k} type="button" onClick={() => { haptic(); setCuotaManual(c.manual!) }} className="block w-full text-left">{fila}</button>
+                ) : fila
               })}
-            </Card>
-          )}
+              {a.cuotas.length === 0 && <Vacio texto="No hay cuotas en curso en este período." ok />}
+          </Card>
 
           {a.financiaciones.length > 0 && (
             <Card title="Refinanciaciones" delay={0.22}>
@@ -330,6 +355,8 @@ export default function ResumenesTab() {
             grupos={r.gruposRevision} onEditar={r.editarEnRevision} />
         )}
       </Sheet>
+
+      <CuotaModal open={cuotaManual !== null} editing={cuotaManual === 'nueva' ? null : cuotaManual} onClose={() => setCuotaManual(null)} />
     </div>
   )
 }

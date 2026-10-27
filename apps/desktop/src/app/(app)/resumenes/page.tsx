@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   Upload, FileText, Repeat, Bug, Store, CreditCard, Landmark, AlertCircle, Trash2,
@@ -12,9 +12,11 @@ import { useResumenes } from '@finanzas/core/lib/useResumenes'
 import { categoriasDeGasto, usuarioId } from '@finanzas/core/lib/resumenes'
 import { GrupoComercio } from '@finanzas/core/lib/comercioReglas'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
+import { addCompraCuotas, deleteCompraCuotas, restoreCompraCuotas, updateCompraCuotas } from '@finanzas/core/lib/cuotas'
+import { offerUndo } from '@finanzas/core/lib/undo'
 import { getCatFromSettings, monthLabel } from '@finanzas/core/lib/constants'
 import { CategoryIcon } from '@finanzas/core/lib/categoryIcons'
-import { Currency, Resumen, ResumenItem, Settings } from '@finanzas/core/types'
+import { CompraCuotas, Currency, Resumen, ResumenItem, Settings } from '@finanzas/core/types'
 import { toBase } from '@finanzas/core/lib/currency'
 import { ETIQUETA_CARGO, conciliacion, mesCorto } from '@finanzas/core/lib/resumenAnalisis'
 import { Card } from '@/components/ui/card'
@@ -50,6 +52,7 @@ export default function ResumenesPage() {
   const base = monedaBase as Currency
   const r = useResumenes(s, base, usuarioId(user))
   const inputRef = useRef<HTMLInputElement>(null)
+  const [cuotaManual, setCuotaManual] = useState<CompraCuotas | 'nueva' | null>(null)
   const a = r.analisis
   const leyendo = r.subida.paso === 'leyendo'
 
@@ -136,7 +139,7 @@ export default function ResumenesPage() {
             </div>
             <div className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-3">
               <Kpi icon={Repeat} tone="primary" label="Suscripciones / año" value={<MoneyText amount={a.suscripciones.reduce((t, x) => t + x.anualBase, 0)} currency={base} />} sub={`${a.suscripciones.length} detectadas`} />
-              <Kpi icon={Bug} tone="warning" label="Gastos hormiga" value={<MoneyText amount={a.hormiga.totalBase} currency={base} />} sub={`${a.hormiga.cantidad} compras · ${a.hormiga.pctDelPeriodo.toFixed(1)}%`} />
+              <Kpi icon={Bug} tone="warning" label="Gastos hormiga" value={<MoneyText amount={a.hormiga.totalBase} currency={base} />} sub={`${a.hormiga.pctDelPeriodo.toFixed(1)}% del mes · ${a.hormiga.habitos.length} hábitos`} />
               <Kpi icon={AlertCircle} tone="expense" label="No cargados en la app" value={String(r.faltantes.length)} sub={r.faltantes.length ? 'revisar abajo' : 'todo cargado'} />
               <Kpi icon={Landmark} tone="neutral" label="Impuestos y cargos" value={<MoneyText amount={a.cargos.totalBase} currency={base} />} sub={`${a.cargos.items.length} renglones`} />
             </div>
@@ -175,17 +178,33 @@ export default function ResumenesPage() {
               ))}
             </Seccion>
 
-            <Seccion icon={Bug} titulo="Gastos hormiga" sub={<>Compras sueltas por debajo de <MoneyText amount={a.hormiga.umbralBase} currency={base} /> (1 % del mes)</>} delay={0.12}>
-              {a.hormiga.cantidad === 0 ? <Vacio texto="Sin compras chicas este mes." ok /> : (
+            <Seccion icon={Bug} titulo="Gastos hormiga"
+              sub={<>Hábitos ({a.hormiga.minCompras}+ compras en el mes, propinas incluidas) y compras sueltas de hasta USD {a.hormiga.topeUsd} (≈ <MoneyText amount={a.hormiga.topeBase} currency={base} />)</>}
+              delay={0.12}>
+              {a.hormiga.totalBase === 0 ? <Vacio texto="Sin hábitos ni compras chicas este mes." ok /> : (
                 <>
                   <div className="mb-3 rounded-xl bg-unassigned-tint px-3 py-2.5 text-sm">
-                    <b className="tnum">{a.hormiga.cantidad} compras</b> chicas suman <b><MoneyText amount={a.hormiga.totalBase} currency={base} /></b>: el <b>{a.hormiga.pctDelPeriodo.toFixed(1)}%</b> del gasto del mes
-                    {' '}(≈ <MoneyText amount={a.hormiga.totalBase * 12} currency={base} /> al año).
+                    Suman <b><MoneyText amount={a.hormiga.totalBase} currency={base} /></b>: el <b>{a.hormiga.pctDelPeriodo.toFixed(1)}%</b> del gasto del mes
+                    {' '}(≈ <MoneyText amount={a.hormiga.anualBase} currency={base} /> al año).
                   </div>
-                  {a.hormiga.comercios.slice(0, 8).map((c) => (
-                    <Fila key={c.clave} titulo={c.comercio} meta={`${c.veces} ${c.veces === 1 ? 'compra' : 'compras'}`}
-                      derecha={<div className="font-semibold tnum"><MoneyText amount={c.totalBase} currency={base} /></div>} />
+                  {a.hormiga.habitos.length > 0 && <div className="eyebrow !text-[10px] pt-1">Hábitos</div>}
+                  {a.hormiga.habitos.map((h) => (
+                    <Fila key={h.clave} titulo={h.comercio}
+                      meta={<>{h.veces} compras · ticket promedio <MoneyText amount={h.ticketBase} currency={base} /> · {h.pct.toFixed(1)}% del mes</>}
+                      derecha={<>
+                        <div className="font-semibold tnum"><MoneyText amount={h.totalBase} currency={base} /></div>
+                        <div className="text-[11px] text-muted tnum"><MoneyText amount={h.anualBase} currency={base} />/año</div>
+                      </>} />
                   ))}
+                  {a.hormiga.chicas.cantidad > 0 && (
+                    <>
+                      <div className="eyebrow !text-[10px] pt-3">Compras chicas sueltas · {a.hormiga.chicas.cantidad} por <MoneyText amount={a.hormiga.chicas.totalBase} currency={base} /></div>
+                      {a.hormiga.chicas.comercios.slice(0, 6).map((c) => (
+                        <Fila key={c.clave} titulo={c.comercio} meta={`${c.veces} ${c.veces === 1 ? 'compra' : 'compras'}`}
+                          derecha={<div className="font-semibold tnum"><MoneyText amount={c.totalBase} currency={base} /></div>} />
+                      ))}
+                    </>
+                  )}
                 </>
               )}
             </Seccion>
@@ -202,16 +221,13 @@ export default function ResumenesPage() {
               ))}
             </Seccion>
 
-            {(a.cuotas.length > 0 || a.compromiso.length > 0) && (
-              <Seccion icon={CreditCard} titulo="Cuotas en curso"
+            <Seccion icon={CreditCard} titulo="Cuotas en curso"
                 sub={<>Falta pagar <MoneyText amount={a.cuotas.reduce((t, c) => t + toBase(c.restante, c.moneda, base, s), 0)} currency={base} />
                   {a.libreDesde && <> · la última cuota vence en <b className="text-foreground">{monthLabel(a.libreDesde)}</b></>}</>} delay={0.2}>
-                {r.cuotasNuevas.length > 0 && (
-                  <div className="mb-2 flex items-center justify-between gap-3 rounded-xl bg-primary/8 px-3 py-2 text-xs">
-                    <span>{r.cuotasNuevas.length} {r.cuotasNuevas.length === 1 ? 'compra no está' : 'compras no están'} en Cuotas.</span>
-                    <Button size="sm" variant="secondary" onClick={r.registrarCuotas}><Plus className="h-3.5 w-3.5" /> Agregar a Cuotas</Button>
-                  </div>
-                )}
+                <div className="mb-2 flex items-center justify-between gap-3 rounded-xl bg-surface-2 px-3 py-2 text-xs text-muted">
+                  <span>¿Una cuota que no figura en ningún resumen (préstamo, Mercado Pago…)?</span>
+                  <Button size="sm" variant="secondary" onClick={() => setCuotaManual('nueva')}><Plus className="h-3.5 w-3.5" /> Agregar cuota</Button>
+                </div>
                 {a.compromiso.length > 0 && (
                   <div className="mb-3 rounded-xl bg-surface-2 px-3 py-3">
                     <div className="eyebrow !text-[10px] mb-2">Ya comprometido en los próximos resúmenes</div>
@@ -235,9 +251,13 @@ export default function ResumenesPage() {
                 )}
                 {a.cuotas.map((c, k) => {
                   const cat = c.categoria ? getCatFromSettings(c.categoria, s) : undefined
-                  return (
+                  const fila = (
                     <Fila key={k} titulo={c.comercio}
-                      meta={<>{c.emisor} · cuota {c.actual} de {c.total} · {cat?.nombre ?? 'sin categoría'}</>}
+                      meta={<>
+                        {c.manual && <span className="mr-1.5 rounded-full bg-primary/12 px-1.5 py-px font-semibold text-primary">manual</span>}
+                        {c.emisor} · {c.actual === 0 ? `empieza en ${monthLabel(c.manual!.primerMes)}` : `cuota ${c.actual} de ${c.total}`}
+                        {!c.manual && <> · {cat?.nombre ?? 'sin categoría'}</>}
+                      </>}
                       derecha={<>
                         <div className="font-semibold tnum"><MoneyText amount={c.montoCuota} currency={c.moneda} /></div>
                         <div className="text-[11px] text-muted tnum">
@@ -245,9 +265,13 @@ export default function ResumenesPage() {
                         </div>
                       </>} />
                   )
+                  return c.manual ? (
+                    <button key={k} type="button" onClick={() => setCuotaManual(c.manual!)} title="Editar cuota manual"
+                      className="block w-full text-left rounded-lg hover:bg-surface-2 -mx-2 px-2 transition-colors">{fila}</button>
+                  ) : fila
                 })}
-              </Seccion>
-            )}
+                {a.cuotas.length === 0 && <Vacio texto="No hay cuotas en curso en este período." ok />}
+            </Seccion>
 
             {a.financiaciones.length > 0 && (
               <Seccion icon={RefreshCcw} titulo="Refinanciaciones" sub="Saldo pasado a cuotas (Plan V, financiación de saldo): cada cuota incluye intereses" delay={0.22}>
@@ -347,7 +371,102 @@ export default function ResumenesPage() {
             grupos={r.gruposRevision} onEditar={r.editarEnRevision} />
         )}
       </Modal>
+      <CuotaManualModal value={cuotaManual} creadoPor={usuarioId(user)} onClose={() => setCuotaManual(null)} />
     </PageScroll>
+  )
+}
+
+/** Alta y edición de una cuota que no figura en ningún resumen subido */
+function CuotaManualModal({ value, creadoPor, onClose }: { value: CompraCuotas | 'nueva' | null; creadoPor: string; onClose: () => void }) {
+  const editando = value && value !== 'nueva' ? value : null
+  return (
+    <Modal open={value !== null} onClose={onClose} title={editando ? 'Editar cuota' : 'Agregar cuota'}
+      description="Para cuotas que no aparecen en los resúmenes que sube (préstamos, Mercado Pago, otra tarjeta).">
+      {value !== null && <FormCuota key={editando?.id ?? 'nueva'} editando={editando} creadoPor={creadoPor} onClose={onClose} />}
+    </Modal>
+  )
+}
+
+function FormCuota({ editando, creadoPor, onClose }: { editando: CompraCuotas | null; creadoPor: string; onClose: () => void }) {
+  const [descripcion, setDescripcion] = useState(editando?.descripcion ?? '')
+  const [tarjeta, setTarjeta] = useState(editando?.tarjeta ?? '')
+  const [moneda, setMoneda] = useState<Currency>(editando?.moneda ?? 'ARS')
+  const [monto, setMonto] = useState(editando ? String(editando.montoCuota) : '')
+  const [total, setTotal] = useState(editando ? String(editando.totalCuotas) : '')
+  const [primerMes, setPrimerMes] = useState(editando?.primerMes ?? new Date().toISOString().slice(0, 7))
+  const [error, setError] = useState<string | null>(null)
+  const [guardando, setGuardando] = useState(false)
+  const montoN = parseFloat(monto.replace(/\./g, '').replace(',', '.'))
+  const totalN = parseInt(total, 10)
+  const valido = descripcion.trim() !== '' && montoN > 0 && totalN >= 1 && /^\d{4}-\d{2}$/.test(primerMes)
+
+  async function guardar() {
+    if (!valido) return
+    setGuardando(true)
+    setError(null)
+    try {
+      const data = { descripcion: descripcion.trim(), tarjeta: tarjeta.trim(), moneda, montoCuota: montoN, totalCuotas: totalN, primerMes, creadoPor: editando?.creadoPor ?? creadoPor }
+      if (editando?.id) await updateCompraCuotas(editando.id, data)
+      else await addCompraCuotas(data)
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+      setGuardando(false)
+    }
+  }
+
+  async function borrar() {
+    if (!editando?.id) return
+    setGuardando(true)
+    try {
+      await deleteCompraCuotas(editando.id)
+      offerUndo(`"${editando.descripcion}" eliminada`, async () => { await restoreCompraCuotas(editando) })
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+      setGuardando(false)
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="eyebrow block mb-1.5">Descripción</label>
+        <Input value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Préstamo auto, heladera…" autoFocus />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="eyebrow block mb-1.5">Dónde (opcional)</label>
+          <Input value={tarjeta} onChange={(e) => setTarjeta(e.target.value)} placeholder="Mercado Pago" />
+        </div>
+        <div>
+          <label className="eyebrow block mb-1.5">Moneda</label>
+          <Select value={moneda} onChange={(e) => setMoneda(e.target.value as Currency)}>
+            <option value="ARS">ARS</option><option value="USD">USD</option><option value="COP">COP</option>
+          </Select>
+        </div>
+        <div>
+          <label className="eyebrow block mb-1.5">Monto de cada cuota</label>
+          <Input inputMode="decimal" value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="100.000" />
+        </div>
+        <div>
+          <label className="eyebrow block mb-1.5">Cantidad de cuotas</label>
+          <Input inputMode="numeric" value={total} onChange={(e) => setTotal(e.target.value)} placeholder="12" />
+        </div>
+        <div className="col-span-2">
+          <label className="eyebrow block mb-1.5">Mes de la primera cuota</label>
+          <Input type="month" value={primerMes} onChange={(e) => setPrimerMes(e.target.value)} />
+        </div>
+      </div>
+      {error && <p className="text-xs text-expense">{error}</p>}
+      <div className="flex justify-between gap-2 pt-1">
+        {editando ? <Button variant="ghost" onClick={borrar} disabled={guardando}><Trash2 className="h-4 w-4" /> Eliminar</Button> : <span />}
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+          <Button onClick={guardar} disabled={!valido || guardando}>{guardando ? 'Guardando…' : 'Guardar'}</Button>
+        </div>
+      </div>
+    </div>
   )
 }
 

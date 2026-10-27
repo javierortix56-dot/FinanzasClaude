@@ -5,7 +5,7 @@ import {
   ChevronRight, ChevronLeft, Plus, Pencil,
   Copy, RotateCcw, Lock, Trash2, Check, Download, Upload, LogOut,
   UserRound, Bell, ArrowLeftRight, Tags, Coins, Layers, PiggyBank, CalendarCog, DatabaseBackup,
-  Palette, Sparkles, RefreshCw,
+  Palette, Sparkles, RefreshCw, Bug,
 } from 'lucide-react'
 import { AnimatePresence, motion, type PanInfo } from 'motion/react'
 import PageHeader from '@/components/ui/PageHeader'
@@ -34,11 +34,12 @@ import {
 import { exportBackup, downloadBackup, importBackup, parseBackupFile } from '@finanzas/core/lib/backup'
 import { monthLabel, SHARED_USER_ID } from '@finanzas/core/lib/constants'
 import dynamic from 'next/dynamic'
-import { Category, CategoryGroup, AhorroLink, Currency, FuenteCambio } from '@finanzas/core/types'
+import { Category, CategoryGroup, AhorroLink, Currency, FuenteCambio, Settings } from '@finanzas/core/types'
+import { HORMIGA_DEFAULT } from '@finanzas/core/lib/resumenAnalisis'
 
 const CategoryModal = dynamic(() => import('@/components/ajustes/CategoryModal'), { ssr: false })
 
-type Section = 'cuenta' | 'apariencia' | 'notif' | 'cambio' | 'categorias' | 'categorias_ing' | 'tipos' | 'ahorro_links' | 'mes' | 'datos' | null
+type Section = 'cuenta' | 'apariencia' | 'notif' | 'cambio' | 'hormiga' | 'categorias' | 'categorias_ing' | 'tipos' | 'ahorro_links' | 'mes' | 'datos' | null
 
 // ── Modal state types ─────────────────────────────────────────────────────────
 type GroupModalState = {
@@ -695,6 +696,21 @@ export default function AjustesPage() {
             </div>
           </Section>
 
+          {/* ── Gastos hormiga ── */}
+          <Section
+            label="Gastos hormiga"
+            icon={<Bug size={15} />}
+            tint="#f59e0b"
+            hint={`Hasta USD ${(s.hormiga ?? HORMIGA_DEFAULT).topeUsd} · hábito desde ${(s.hormiga ?? HORMIGA_DEFAULT).minCompras} compras`}
+            open={openSection === 'hormiga'}
+            onToggle={() => toggle('hormiga')}
+          >
+            <HormigaAjustes key={JSON.stringify(s.hormiga ?? null)} s={s} onGuardar={async (hormiga) => {
+              await updateSettings(SHARED_USER_ID, { hormiga })
+              setSettings({ ...s, hormiga })
+            }} />
+          </Section>
+
           </SectionGroup>
 
           <SectionGroup title="Organización">
@@ -1103,6 +1119,43 @@ function Section({ label, icon, tint, hint, open, onToggle, children }: {
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  )
+}
+
+/** Criterio de gastos hormiga del análisis de Resúmenes */
+function HormigaAjustes({ s, onGuardar }: { s: Settings; onGuardar: (h: { topeUsd: number; minCompras: number }) => Promise<void> }) {
+  const actual = { ...HORMIGA_DEFAULT, ...s.hormiga }
+  const [tope, setTope] = useState(String(actual.topeUsd))
+  const [min, setMin] = useState(String(actual.minCompras))
+  const [estado, setEstado] = useState<'idle' | 'guardando' | 'ok' | 'error'>('idle')
+  const topeN = parseFloat(tope.replace(',', '.'))
+  const minN = parseInt(min, 10)
+  const valido = topeN > 0 && minN >= 2
+
+  async function guardar() {
+    if (!valido) return
+    setEstado('guardando')
+    try {
+      await onGuardar({ topeUsd: topeN, minCompras: minN })
+      setEstado('ok')
+    } catch {
+      setEstado('error')
+    }
+  }
+
+  return (
+    <div className="space-y-3 pt-1">
+      <p className="text-[11px] text-gray-500 leading-snug">
+        Hábitos: comercios con muchas compras en el mes (las propinas se suman al comercio). Compras chicas: sueltas hasta un tope en dólares, así la inflación no cambia el criterio.
+      </p>
+      <RateInput label="Compra chica: hasta USD" value={tope} onChange={(v) => { setTope(v); setEstado('idle') }} />
+      <RateInput label="Hábito: desde N compras/mes" value={min} onChange={(v) => { setMin(v); setEstado('idle') }} />
+      <button onClick={guardar} disabled={!valido || estado === 'guardando'}
+        className={`w-full h-11 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2 text-white shadow-soft disabled:opacity-60 ${estado === 'ok' ? 'bg-emerald-500' : 'bg-brand'}`}>
+        {estado === 'ok' ? <><Check size={14} /> Guardado</> : estado === 'guardando' ? 'Guardando…' : 'Guardar criterio'}
+      </button>
+      {estado === 'error' && <p className="text-xs text-rose-500">No se pudo guardar.</p>}
     </div>
   )
 }

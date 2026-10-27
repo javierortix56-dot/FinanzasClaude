@@ -8,7 +8,8 @@
 // calculado cuando existe.
 import { toBase } from './currency'
 import { shiftMonth } from './constants'
-import { Currency, Resumen, ResumenItem, Settings, Transaction } from '../types'
+import { cuotaEnMes } from './cuotas'
+import { CompraCuotas, Currency, Resumen, ResumenItem, Settings, Transaction } from '../types'
 
 /** Clave estable para agrupar un comercio entre meses */
 export function claveComercio(nombre: string): string {
@@ -47,12 +48,41 @@ export interface Suscripcion {
 
 export interface ComercioTotal { clave: string; comercio: string; veces: number; totalBase: number; pct: number }
 
+/** Comercio al que se le compra seguido (propinas incluidas) */
+export interface Habito {
+  clave: string
+  comercio: string
+  veces: number
+  totalBase: number
+  /** Ticket promedio */
+  ticketBase: number
+  anualBase: number
+  pct: number
+}
+
+/**
+ * Gastos hormiga: lo que se va sin darse cuenta. Dos partes que no se pisan:
+ * hábitos (comercios con muchas compras en el mes, sin importar el monto) y
+ * compras chicas sueltas (hasta un tope en dólares, para que la inflación no
+ * mueva el criterio). Quedan afuera cuotas y suscripciones.
+ */
 export interface Hormiga {
-  umbralBase: number
-  cantidad: number
+  topeUsd: number
+  topeBase: number
+  minCompras: number
+  habitos: Habito[]
+  chicas: { cantidad: number; totalBase: number; comercios: ComercioTotal[] }
   totalBase: number
   pctDelPeriodo: number
-  comercios: ComercioTotal[]
+  anualBase: number
+}
+
+export const HORMIGA_DEFAULT = { topeUsd: 10, minCompras: 4 }
+
+/** Las propinas se suman al comercio ("Rappi (propina)" → Rappi) */
+function claveHabito(nombre: string): string {
+  const k = claveComercio(nombre)
+  return k.replace(/\bpropinas?\b/g, ' ').replace(/\s+/g, ' ').trim() || k
 }
 
 export interface CuotaEnCurso {
@@ -62,6 +92,8 @@ export interface CuotaEnCurso {
   finMes: string
   /** id de categoría sugerida (null si no hay una razonable) */
   categoria: string | null
+  /** Cuota cargada a mano (no figura en ningún resumen subido) */
+  manual?: CompraCuotas
 }
 
 /**
@@ -110,7 +142,9 @@ export interface AnalisisPeriodo {
  * Analiza el período elegido usando todos los resúmenes guardados (las
  * suscripciones necesitan varios meses para detectarse).
  */
-export function analizarPeriodo(todos: Resumen[], periodo: string, base: Currency, s: Settings): AnalisisPeriodo {
+export function analizarPeriodo(
+  todos: Resumen[], periodo: string, base: Currency, s: Settings, manuales: CompraCuotas[] = [],
+): AnalisisPeriodo {
   const delPeriodo = todos.filter((r) => r.periodo === periodo)
   const items = delPeriodo.flatMap((r) => r.items.map((i) => ({ ...i, emisor: r.emisor })))
   const enBase = (i: ResumenItem) => toBase(i.monto, i.moneda, base, s, periodo)
@@ -193,28 +227,54 @@ export function analizarPeriodo(todos: Resumen[], periodo: string, base: Currenc
     .map((c) => ({ ...c, pct: pct(c.totalBase) }))
     .sort((a, b) => b.totalBase - a.totalBase)
 
-  // ── Gastos hormiga: compras sueltas (sin cuotas, sin suscripciones) por
-  // debajo del 1 % del gasto del período.
+  // ── Gastos hormiga (ver interfaz Hormiga)
+  const cfg = { ...HORMIGA_DEFAULT, ...s.hormiga }
   const clavesSusc = new Set(suscripciones.map((x) => x.clave.split('|')[0]))
-  const umbralBase = totalGastosBase * 0.01
-  const chicas = gastos.filter((i) => !esCuota(i) && !clavesSusc.has(claveComercio(i.comercio)) && enBase(i) <= umbralBase)
-  const hormigaPorComercio = new Map<string, ComercioTotal>()
+  const sueltas = gastos.filter((i) => !esCuota(i) && !clavesSusc.has(claveComercio(i.comercio)))
+  const porHabito = new Map<string, typeof sueltas>()
+  for (const i of sueltas) {
+    const k = claveHabito(i.comercio)
+    porHabito.set(k, [...(porHabito.get(k) ?? []), i])
+  }
+  const habitos: Habito[] = []
+  const enHabito = new Set<string>()
+  for (const [k, xs] of porHabito) {
+    if (xs.length < cfg.minCompras) continue
+    enHabito.add(k)
+    const totalBase = xs.reduce((a, i) => a + enBase(i), 0)
+    // Nombre: el de una compra que no sea propina, si la hay
+    const nombre = (xs.find((i) => claveComercio(i.comercio) === k) ?? xs[0]).comercio
+    habitos.push({
+      clave: k, comercio: nombre, veces: xs.length, totalBase, ticketBase: totalBase / xs.length,
+      anualBase: totalBase * 12, pct: pct(totalBase),
+    })
+  }
+  habitos.sort((a, b) => b.totalBase - a.totalBase)
+  const topeBase = toBase(cfg.topeUsd, 'USD', base, s, periodo)
+  const chicas = sueltas.filter((i) => !enHabito.has(claveHabito(i.comercio)) && enBase(i) <= topeBase)
+  const chicasPorComercio = new Map<string, ComercioTotal>()
   for (const i of chicas) {
-    const k = claveComercio(i.comercio)
-    const c = hormigaPorComercio.get(k) ?? { clave: k, comercio: i.comercio, veces: 0, totalBase: 0, pct: 0 }
+    const k = claveHabito(i.comercio)
+    const c = chicasPorComercio.get(k) ?? { clave: k, comercio: i.comercio, veces: 0, totalBase: 0, pct: 0 }
     c.veces += 1
     c.totalBase += enBase(i)
-    hormigaPorComercio.set(k, c)
+    chicasPorComercio.set(k, c)
   }
-  const hormigaTotal = chicas.reduce((a, i) => a + enBase(i), 0)
+  const chicasTotal = chicas.reduce((a, i) => a + enBase(i), 0)
+  const hormigaTotal = chicasTotal + habitos.reduce((a, h) => a + h.totalBase, 0)
   const hormiga: Hormiga = {
-    umbralBase,
-    cantidad: chicas.length,
+    topeUsd: cfg.topeUsd,
+    topeBase,
+    minCompras: cfg.minCompras,
+    habitos,
+    chicas: {
+      cantidad: chicas.length,
+      totalBase: chicasTotal,
+      comercios: [...chicasPorComercio.values()].map((c) => ({ ...c, pct: pct(c.totalBase) })).sort((a, b) => b.totalBase - a.totalBase),
+    },
     totalBase: hormigaTotal,
     pctDelPeriodo: pct(hormigaTotal),
-    comercios: [...hormigaPorComercio.values()]
-      .map((c) => ({ ...c, pct: pct(c.totalBase) }))
-      .sort((a, b) => b.totalBase - a.totalBase),
+    anualBase: hormigaTotal * 12,
   }
 
   // ── Cuotas en curso (compras y refinanciaciones)
@@ -234,7 +294,23 @@ export function analizarPeriodo(todos: Resumen[], periodo: string, base: Currenc
     // Primero las que terminan más tarde (las que más pesan en el tiempo)
     .sort((a, b) => b.finMes.localeCompare(a.finMes) || b.restante - a.restante)
   const sinMarca = ({ financiacion: _f, ...c }: CuotaEnCurso & { financiacion: boolean }): CuotaEnCurso => c
-  const cuotas = enCurso.filter((c) => !c.financiacion).map(sinMarca)
+
+  // Cuotas cargadas a mano: las que siguen vigentes o todavía no empezaron
+  const deManuales: CuotaEnCurso[] = manuales.flatMap((c) => {
+    const actual = cuotaEnMes(c, periodo) ?? 0
+    const futuras = Array.from({ length: c.totalCuotas }, (_, k) => shiftMonth(periodo, k + 1))
+      .filter((mes) => cuotaEnMes(c, mes) !== null)
+    if (actual === 0 && futuras.length === 0) return []
+    return [{
+      comercio: c.descripcion, emisor: c.tarjeta || 'Manual', moneda: c.moneda,
+      actual, total: c.totalCuotas, montoCuota: c.montoCuota,
+      restantes: futuras.length, restante: futuras.length * c.montoCuota,
+      finMes: futuras[futuras.length - 1] ?? periodo,
+      categoria: null, manual: c,
+    }]
+  })
+  const cuotas = [...enCurso.filter((c) => !c.financiacion).map(sinMarca), ...deManuales]
+    .sort((a, b) => b.finMes.localeCompare(a.finMes) || b.restante - a.restante)
   const financiaciones = enCurso.filter((c) => c.financiacion).map(sinMarca)
 
   // Compromiso mes a mes. Por cada resumen: el cuadro del banco si lo trae;
@@ -263,8 +339,14 @@ export function analizarPeriodo(todos: Resumen[], periodo: string, base: Currenc
       for (let k = 1; k <= c.restantes; k++) sumar(shiftMonth(periodo, k), c.montoCuota, c.moneda, 1)
     }
   }
+  for (const c of deManuales) {
+    for (let k = 1; k <= c.total; k++) {
+      const mes = shiftMonth(periodo, k)
+      if (cuotaEnMes(c.manual!, mes) !== null) sumar(mes, c.montoCuota, c.moneda, 1)
+    }
+  }
   const compromiso = [...compromisoPorMes.values()].sort((a, b) => a.mes.localeCompare(b.mes))
-  const libreDesde = enCurso.reduce<string | null>((max, c) => (c.restantes > 0 && (!max || c.finMes > max) ? c.finMes : max), null)
+  const libreDesde = [...enCurso, ...deManuales].reduce<string | null>((max, c) => (c.restantes > 0 && (!max || c.finMes > max) ? c.finMes : max), null)
 
   // ── Cargos bancarios (impuestos, percepciones, intereses, comisiones). Las
   // percepciones se netean con sus devoluciones (vienen con monto negativo).
