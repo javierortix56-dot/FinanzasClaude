@@ -7,7 +7,10 @@ import { useUIStore } from '../store/useUIStore'
 import { addComprasCuotas, subscribeToCuotas } from './cuotas'
 import { shiftMonth } from './constants'
 import { analizarPeriodo, mesesDeItems, noCargados } from './resumenAnalisis'
-import { borrarResumen, cargarComoMovimiento, existeResumen, extraerResumen, fetchResumenes, guardarResumen } from './resumenes'
+import { borrarResumen, cargarComoMovimiento, categoriasDeGasto, existeResumen, extraerResumen, fetchResumenes, guardarResumen } from './resumenes'
+import {
+  Reglas, agruparComercios, aplicarReglas, editarGrupo, fetchReglas, guardarReglas, recategorizarComercio, reglasDe,
+} from './comercioReglas'
 import { CompraCuotas, Currency, Resumen, ResumenItem, Settings, Transaction } from '../types'
 
 export type EstadoSubida =
@@ -27,6 +30,10 @@ export function useResumenes(s: Settings, base: Currency, creadoPor: string) {
   // Cambios en los movimientos (alta, borrado, deshacer) refrescan "no cargados"
   const storeTxs = useTransactionStore((st) => st.transactions)
   const [compras, setCompras] = useState<CompraCuotas[]>([])
+  // Nombre y categoría elegidos para cada comercio (si falla la carga, se
+  // sigue sin reglas: todo aparece como nuevo)
+  const [reglas, setReglas] = useState<Reglas>(new Map())
+  useEffect(() => { fetchReglas().then(setReglas).catch(() => {}) }, [])
 
   useEffect(() => subscribeToCuotas(setCompras), [])
 
@@ -96,7 +103,9 @@ export function useResumenes(s: Settings, base: Currency, creadoPor: string) {
   async function subir(file: File) {
     setSubida({ paso: 'leyendo', archivo: file.name })
     try {
-      const resumen = await extraerResumen(file, s, creadoPor)
+      const extraido = await extraerResumen(file, s, creadoPor)
+      const validas = new Set(categoriasDeGasto(s).map((c) => c.id))
+      const resumen = { ...extraido, items: aplicarReglas(extraido.items, reglas, validas) }
       const reemplaza = await existeResumen(resumen.emisor, resumen.periodo)
       setSubida({ paso: 'revisar', resumen, reemplaza })
     } catch (err) {
@@ -109,7 +118,10 @@ export function useResumenes(s: Settings, base: Currency, creadoPor: string) {
     const { resumen, reemplaza } = subida
     setSubida({ paso: 'guardando', resumen, reemplaza })
     try {
+      // Lo revisado queda como regla para los próximos resúmenes
+      await guardarReglas(reglasDe(resumen.items))
       await guardarResumen(resumen)
+      setReglas(await fetchReglas())
       await recargar()
       setPeriodo(resumen.periodo)
       setSubida({ paso: 'inactivo' })
@@ -119,6 +131,30 @@ export function useResumenes(s: Settings, base: Currency, creadoPor: string) {
   }
 
   const descartar = () => setSubida({ paso: 'inactivo' })
+
+  // Comercios del resumen en revisión (nuevos primero) y su edición
+  const gruposRevision = useMemo(
+    () => (subida.paso === 'revisar' || subida.paso === 'guardando' ? agruparComercios(subida.resumen.items, reglas) : []),
+    [subida, reglas],
+  )
+  function editarEnRevision(clave: string, nombre: string, categoria: string | null) {
+    setSubida((st) => st.paso === 'revisar'
+      ? { ...st, resumen: { ...st.resumen, items: editarGrupo(st.resumen.items, clave, nombre, categoria) } }
+      : st)
+  }
+
+  // Comercios del período ya guardado, para recategorizar
+  const comercios = useMemo(() => agruparComercios(itemsPeriodo, reglas), [itemsPeriodo, reglas])
+  async function recategorizar(clave: string, nombre: string, categoria: string | null) {
+    try {
+      await recategorizarComercio(resumenes ?? [], clave, nombre, categoria)
+      await recargar()
+      setReglas(await fetchReglas())
+      useUIStore.getState().showToast('Comercio actualizado en todos los resúmenes')
+    } catch (err) {
+      useUIStore.getState().showToast(`No se pudo actualizar: ${err instanceof Error ? err.message : String(err)}`, 'error')
+    }
+  }
 
   async function borrar(r: Resumen) {
     await borrarResumen(r)
@@ -143,6 +179,10 @@ export function useResumenes(s: Settings, base: Currency, creadoPor: string) {
     registrarCuotas,
     subida,
     subir,
+    gruposRevision,
+    editarEnRevision,
+    comercios,
+    recategorizar,
     confirmar,
     descartar,
     borrar,

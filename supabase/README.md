@@ -77,7 +77,8 @@ where email = 'EMAIL';
 - Tablas `resumenes` y `resumen_items` (migración `20261026_resumenes.sql`, aplicada el 2026-10-26).
   `20261027_resumenes_detalle.sql` (aplicada el 2026-10-27) agrega `resumenes.detalle` (jsonb con la
   cabecera: saldos, vencimientos, límites, tasas, cuotas a vencer, planes ofrecidos y avisos del banco)
-  y `resumen_items.titular`.
+  y `resumen_items.titular`. `20261027_comercio_reglas.sql` (aplicada el 2026-10-27) guarda el nombre
+  y la categoría que el usuario eligió para cada comercio; se aplican solos a los resúmenes siguientes.
 - Edge Function `analizar-resumen` (código en `functions/analizar-resumen/`): lee el PDF/CSV con IA
   y devuelve la cabecera y los renglones. Valida que el usuario esté en `allowed_users`. Al desplegar
   hay que subir `index.ts` y `gemini.ts`.

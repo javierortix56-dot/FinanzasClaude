@@ -116,8 +116,8 @@ function mapDetalle(d: DetalleCrudo | null | undefined): ResumenDetalle | null {
   }
 }
 
-/** Categorías de gasto (grupos y subcategorías activas) para que el modelo sugiera una */
-function categoriasParaModelo(s: Settings) {
+/** Categorías de gasto activas (grupos sin subcategorías y subcategorías), con nombre para mostrar */
+export function categoriasDeGasto(s: Settings) {
   const out: { id: string; nombre: string }[] = []
   for (const g of s.categoriasGasto) {
     if (!g.activa) continue
@@ -146,7 +146,7 @@ export function periodoDelResumen(periodo: string, fechaCierre: string | null): 
 export async function extraerResumen(file: File, s: Settings, creadoPor: string): Promise<Resumen> {
   const archivo = await archivoAPayload(file)
   const { data, error } = await supabase.functions.invoke('analizar-resumen', {
-    body: { archivo, categorias: categoriasParaModelo(s) },
+    body: { archivo, categorias: categoriasDeGasto(s) },
   })
   if (error) {
     // La función responde { error } con el detalle; supabase-js lo deja en context
@@ -159,7 +159,7 @@ export async function extraerResumen(file: File, s: Settings, creadoPor: string)
     throw new Error(detalle)
   }
   const r = (data as { resultado: ResultadoCrudo }).resultado
-  const validas = new Set(categoriasParaModelo(s).map((c) => c.id))
+  const validas = new Set(categoriasDeGasto(s).map((c) => c.id))
   const detalle = mapDetalle(r.detalle)
   return {
     emisor: r.emisor.trim() || 'Resumen',

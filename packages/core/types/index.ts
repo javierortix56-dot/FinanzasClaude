@@ -213,6 +213,8 @@ export interface ResumenItem {
   categoria: string | null
   /** Titular o adicional, si el resumen separa los consumos por persona */
   titular: string | null
+  /** Nombre que propuso la IA (solo durante la revisión; no se guarda) */
+  comercioOriginal?: string
 }
 
 export interface Resumen {

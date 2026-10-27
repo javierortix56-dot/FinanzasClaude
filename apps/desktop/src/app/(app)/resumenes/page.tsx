@@ -4,12 +4,13 @@ import { useRef } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   Upload, FileText, Repeat, Bug, Store, CreditCard, Landmark, AlertCircle, Trash2,
-  Plus, Sparkles, TrendingUp, Loader2, CheckCircle2, CalendarClock, Megaphone, PieChart, RefreshCcw,
+  Plus, Sparkles, TrendingUp, Loader2, CheckCircle2, CalendarClock, Megaphone, PieChart, RefreshCcw, Tags,
 } from 'lucide-react'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useResumenes } from '@finanzas/core/lib/useResumenes'
-import { usuarioId } from '@finanzas/core/lib/resumenes'
+import { categoriasDeGasto, usuarioId } from '@finanzas/core/lib/resumenes'
+import { GrupoComercio } from '@finanzas/core/lib/comercioReglas'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { getCatFromSettings, monthLabel } from '@finanzas/core/lib/constants'
 import { CategoryIcon } from '@finanzas/core/lib/categoryIcons'
@@ -19,6 +20,7 @@ import { ETIQUETA_CARGO, conciliacion, mesCorto } from '@finanzas/core/lib/resum
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
+import { Input, Select } from '@/components/ui/input'
 import ProgressBar from '@/components/ui/ProgressBar'
 import { MoneyText } from '@/components/MoneyText'
 import { PageScroll } from '@/components/shell/PageScroll'
@@ -288,6 +290,16 @@ export default function ResumenesPage() {
               )}
             </Seccion>
 
+            <Seccion icon={Tags} titulo="Comercios y categorías"
+              sub="Cambie el nombre o la categoría: se aplica a todos los resúmenes y a los próximos" delay={0.23}>
+              <div className="max-h-[420px] overflow-y-auto -mx-1 px-1">
+                {r.comercios.map((g) => (
+                  <EditorComercio key={g.clave} g={g} s={s} onCambiar={(nombre, categoria) => r.recategorizar(g.clave, nombre, categoria)}
+                    etiquetaNuevo="sin revisar" />
+                ))}
+              </div>
+            </Seccion>
+
             {a.cargos.items.length > 0 && (
               <Seccion icon={Landmark} titulo="Impuestos, intereses y comisiones"
                 sub={<>Lo que cobra el banco además de los consumos: <MoneyText amount={a.cargos.totalBase} currency={base} /> ({a.cargos.pctDelTotal.toFixed(1)}% de lo cobrado)</>} delay={0.24}>
@@ -330,7 +342,10 @@ export default function ResumenesPage() {
           </div>
         }
       >
-        {(r.subida.paso === 'revisar' || r.subida.paso === 'guardando') && <Revision resumen={r.subida.resumen} reemplaza={r.subida.reemplaza} s={s} />}
+        {(r.subida.paso === 'revisar' || r.subida.paso === 'guardando') && (
+          <Revision resumen={r.subida.resumen} reemplaza={r.subida.reemplaza} s={s}
+            grupos={r.gruposRevision} onEditar={r.editarEnRevision} />
+        )}
       </Modal>
     </PageScroll>
   )
@@ -450,8 +465,13 @@ function FilaNoCargado({ item, s, onCargar }: { item: ResumenItem; s: Settings; 
   )
 }
 
-function Revision({ resumen, reemplaza, s }: { resumen: Resumen; reemplaza: boolean; s: Settings }) {
+function Revision({ resumen, reemplaza, s, grupos, onEditar }: {
+  resumen: Resumen; reemplaza: boolean; s: Settings
+  grupos: GrupoComercio[]; onEditar: (clave: string, nombre: string, categoria: string | null) => void
+}) {
   const gastos = resumen.items.filter((i) => i.monto > 0)
+  const nuevos = grupos.filter((g) => g.nuevo)
+  const conocidos = grupos.filter((g) => !g.nuevo)
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
@@ -465,8 +485,34 @@ function Revision({ resumen, reemplaza, s }: { resumen: Resumen; reemplaza: bool
           Ya hay un resumen de {resumen.emisor} para {mesLabel(resumen.periodo)}: se va a reemplazar.
         </div>
       )}
-      <div className="text-xs text-muted">{resumen.items.length} renglones · {gastos.length} gastos</div>
-      <div className="max-h-[45vh] overflow-y-auto rounded-xl bg-surface-2 divide-y divide-hairline">
+      {nuevos.length > 0 ? (
+        <div>
+          <div className="text-sm font-semibold">Comercios nuevos ({nuevos.length})</div>
+          <div className="text-xs text-muted mb-1">Revise el nombre y la categoría. Lo que elija se aplica solo en los próximos resúmenes.</div>
+          <div className="max-h-[38vh] overflow-y-auto">
+            {nuevos.map((g) => <EditorComercio key={g.clave} g={g} s={s} onCambiar={(n, c) => onEditar(g.clave, n, c)} />)}
+          </div>
+        </div>
+      ) : grupos.length > 0 && (
+        <div className="flex items-center gap-2 rounded-xl bg-income-soft/60 px-3 py-2 text-xs font-medium text-income">
+          <CheckCircle2 className="h-4 w-4 shrink-0" /> Todos los comercios ya son conocidos: se aplicaron sus nombres y categorías.
+        </div>
+      )}
+      {conocidos.length > 0 && (
+        <details className="group">
+          <summary className="cursor-pointer text-xs font-semibold text-muted hover:text-foreground">
+            Comercios conocidos ({conocidos.length}): ver o cambiar
+          </summary>
+          <div className="mt-1 max-h-[30vh] overflow-y-auto">
+            {conocidos.map((g) => <EditorComercio key={g.clave} g={g} s={s} onCambiar={(n, c) => onEditar(g.clave, n, c)} />)}
+          </div>
+        </details>
+      )}
+      <details>
+        <summary className="cursor-pointer text-xs font-semibold text-muted hover:text-foreground">
+          Ver los {resumen.items.length} renglones ({gastos.length} gastos)
+        </summary>
+      <div className="mt-2 max-h-[45vh] overflow-y-auto rounded-xl bg-surface-2 divide-y divide-hairline">
         {resumen.items.map((i, k) => {
           const cat = i.categoria ? getCatFromSettings(i.categoria, s) : undefined
           return (
@@ -485,6 +531,42 @@ function Revision({ resumen, reemplaza, s }: { resumen: Resumen; reemplaza: bool
           )
         })}
       </div>
+      </details>
+    </div>
+  )
+}
+
+/** Fila editable de un comercio: nombre (se confirma al salir o con Enter) y categoría */
+function EditorComercio({ g, s, onCambiar, etiquetaNuevo = 'nuevo' }: {
+  g: GrupoComercio; s: Settings; onCambiar: (nombre: string, categoria: string | null) => void; etiquetaNuevo?: string
+}) {
+  const categorias = categoriasDeGasto(s)
+  const confirmarNombre = (v: string) => { if (v.trim() && v.trim() !== g.nombre) onCambiar(v.trim(), g.categoria) }
+  return (
+    <div className="grid grid-cols-[1fr_200px] items-center gap-3 py-2 border-b border-hairline last:border-0">
+      <div className="min-w-0">
+        <Input
+          key={g.nombre}
+          defaultValue={g.nombre}
+          aria-label={`Nombre de ${g.nombre}`}
+          className="h-9 font-medium"
+          onBlur={(e) => confirmarNombre(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+        />
+        <div className="mt-1 truncate text-[11px] text-muted-2 px-1" title={g.descripciones.join(' · ')}>
+          {g.nuevo && <span className="mr-1.5 rounded-full bg-primary/12 px-1.5 py-px font-semibold text-primary">{etiquetaNuevo}</span>}
+          {g.cantidad}× · <MoneyText amount={g.total} currency={g.moneda} /> · {g.descripciones.join(' · ')}
+        </div>
+      </div>
+      <Select
+        value={g.categoria ?? ''}
+        aria-label={`Categoría de ${g.nombre}`}
+        className={cn('h-9', !g.categoria && 'text-muted')}
+        onChange={(e) => onCambiar(g.nombre, e.target.value || null)}
+      >
+        <option value="">Sin categoría</option>
+        {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre.split(' › ').pop()}</option>)}
+      </Select>
     </div>
   )
 }

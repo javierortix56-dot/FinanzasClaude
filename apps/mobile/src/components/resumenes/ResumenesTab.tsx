@@ -9,7 +9,8 @@ import {
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useResumenes } from '@finanzas/core/lib/useResumenes'
-import { usuarioId } from '@finanzas/core/lib/resumenes'
+import { categoriasDeGasto, usuarioId } from '@finanzas/core/lib/resumenes'
+import { GrupoComercio } from '@finanzas/core/lib/comercioReglas'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { getCatFromSettings, monthLabel } from '@finanzas/core/lib/constants'
 import { CategoryIcon } from '@/lib/categoryIcons'
@@ -273,6 +274,14 @@ export default function ResumenesTab() {
             )}
           </Card>
 
+          <Card title="Comercios y categorías" delay={0.23}>
+            <p className="mb-1 text-xs text-gray-500">Cambie nombre o categoría: se aplica a todos los resúmenes y a los próximos.</p>
+            {r.comercios.map((g) => (
+              <EditorComercio key={g.clave} g={g} s={s} etiquetaNuevo="sin revisar"
+                onCambiar={(nombre, categoria) => { haptic(); return r.recategorizar(g.clave, nombre, categoria) }} />
+            ))}
+          </Card>
+
           {a.cargos.items.length > 0 && (
             <Card title="Impuestos, intereses y comisiones" delay={0.24}>
               <p className="mb-2 text-xs text-gray-500 leading-relaxed">
@@ -317,7 +326,8 @@ export default function ResumenesTab() {
         }
       >
         {(r.subida.paso === 'revisar' || r.subida.paso === 'guardando') && (
-          <Revision resumen={r.subida.resumen} reemplaza={r.subida.reemplaza} s={s} />
+          <Revision resumen={r.subida.resumen} reemplaza={r.subida.reemplaza} s={s}
+            grupos={r.gruposRevision} onEditar={r.editarEnRevision} />
         )}
       </Sheet>
     </div>
@@ -383,7 +393,12 @@ function FilaNoCargado({ item, s, onCargar }: { item: ResumenItem; s: Settings; 
   )
 }
 
-function Revision({ resumen, reemplaza, s }: { resumen: Resumen; reemplaza: boolean; s: Settings }) {
+function Revision({ resumen, reemplaza, s, grupos, onEditar }: {
+  resumen: Resumen; reemplaza: boolean; s: Settings
+  grupos: GrupoComercio[]; onEditar: (clave: string, nombre: string, categoria: string | null) => void
+}) {
+  const nuevos = grupos.filter((g) => g.nuevo)
+  const conocidos = grupos.filter((g) => !g.nuevo)
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-2">
@@ -405,8 +420,26 @@ function Revision({ resumen, reemplaza, s }: { resumen: Resumen; reemplaza: bool
           Ya hay un resumen de {resumen.emisor} para {mesLabel(resumen.periodo)}: se va a reemplazar.
         </p>
       )}
-      <p className="text-[11px] text-gray-400">{resumen.items.length} renglones</p>
-      <div className="rounded-2xl bg-gray-500/[0.05] divide-y divide-hairline">
+      {nuevos.length > 0 ? (
+        <div>
+          <p className="text-[13px] font-bold text-gray-900">Comercios nuevos ({nuevos.length})</p>
+          <p className="text-[11px] text-gray-500">Revise nombre y categoría: se aplica solo en los próximos resúmenes.</p>
+          {nuevos.map((g) => <EditorComercio key={g.clave} g={g} s={s} onCambiar={(n, c) => onEditar(g.clave, n, c)} />)}
+        </div>
+      ) : grupos.length > 0 && (
+        <p className="flex items-center gap-2 rounded-2xl bg-emerald-500/10 px-3 py-2 text-[11px] font-semibold text-emerald-600">
+          <CheckCircle2 size={14} className="shrink-0" /> Todos los comercios ya son conocidos: se aplicaron sus elecciones.
+        </p>
+      )}
+      {conocidos.length > 0 && (
+        <details>
+          <summary className="text-[12px] font-semibold text-gray-500">Comercios conocidos ({conocidos.length}): ver o cambiar</summary>
+          {conocidos.map((g) => <EditorComercio key={g.clave} g={g} s={s} onCambiar={(n, c) => onEditar(g.clave, n, c)} />)}
+        </details>
+      )}
+      <details>
+        <summary className="text-[12px] font-semibold text-gray-500">Ver los {resumen.items.length} renglones</summary>
+      <div className="mt-2 rounded-2xl bg-gray-500/[0.05] divide-y divide-hairline">
         {resumen.items.map((i, k) => {
           const cat = i.categoria ? getCatFromSettings(i.categoria, s) : undefined
           return (
@@ -425,6 +458,43 @@ function Revision({ resumen, reemplaza, s }: { resumen: Resumen; reemplaza: bool
           )
         })}
       </div>
+      </details>
+    </div>
+  )
+}
+
+/** Fila editable de un comercio: nombre (se confirma al salir del campo) y categoría */
+function EditorComercio({ g, s, onCambiar, etiquetaNuevo = 'nuevo' }: {
+  g: GrupoComercio; s: Settings; onCambiar: (nombre: string, categoria: string | null) => unknown; etiquetaNuevo?: string
+}) {
+  const categorias = categoriasDeGasto(s)
+  const confirmarNombre = (v: string) => { if (v.trim() && v.trim() !== g.nombre) onCambiar(v.trim(), g.categoria) }
+  return (
+    <div className="py-2 border-b border-hairline last:border-0">
+      <div className="flex items-center gap-2">
+        <input
+          key={g.nombre}
+          defaultValue={g.nombre}
+          aria-label={`Nombre de ${g.nombre}`}
+          enterKeyHint="done"
+          className="min-w-0 flex-1 h-9 rounded-xl bg-gray-500/[0.07] px-2.5 text-[13px] font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-primary/30"
+          onBlur={(e) => confirmarNombre(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+        />
+        <select
+          value={g.categoria ?? ''}
+          aria-label={`Categoría de ${g.nombre}`}
+          className={`w-[42%] h-9 rounded-xl bg-gray-500/[0.07] px-2 text-[12px] outline-none ${g.categoria ? 'text-gray-900' : 'text-gray-400'}`}
+          onChange={(e) => onCambiar(g.nombre, e.target.value || null)}
+        >
+          <option value="">Sin categoría</option>
+          {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre.split(' › ').pop()}</option>)}
+        </select>
+      </div>
+      <p className="mt-1 truncate text-[10.5px] text-gray-400 px-1">
+        {g.nuevo && <span className="mr-1 rounded-full bg-primary/12 px-1.5 font-bold text-primary">{etiquetaNuevo}</span>}
+        {g.cantidad}× · <Money value={g.total} currency={g.moneda} animated={false} /> · {g.descripciones.join(' · ')}
+      </p>
     </div>
   )
 }
