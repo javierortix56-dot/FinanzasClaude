@@ -17,7 +17,8 @@ import { cloneMonthTransactions, createRecurringTransactions, countMonthTransact
 import { shiftMonth, monthLabel } from '@finanzas/core/lib/constants'
 import { CategoryIcon } from '@finanzas/core/lib/categoryIcons'
 import { currentThemePref, setThemePref, subscribeTheme, ThemePref } from '@/lib/theme'
-import { CategoryGroup, FuenteCambio } from '@finanzas/core/types'
+import { CategoryGroup, FuenteCambio, Settings } from '@finanzas/core/types'
+import { HORMIGA_DEFAULT } from '@finanzas/core/lib/resumenAnalisis'
 import { cambiarFuenteCambio, syncCotizaciones, haceCuanto, FUENTES_CAMBIO } from '@finanzas/core/lib/cotizaciones'
 import { PageScroll } from '@/components/shell/PageScroll'
 
@@ -181,6 +182,10 @@ export default function AjustesPage() {
         )}
       </Section>
 
+      <Section title="Gastos hormiga" sub="Criterio que usa el análisis de Resúmenes." delay={0.06}>
+        <HormigaAjustes settings={settings} onGuardado={() => showToast('Criterio de gastos hormiga guardado')} onError={() => showToast('Error al guardar', 'error')} />
+      </Section>
+
       <Section title="Operaciones del mes" sub={`Sobre ${monthLabel(currentMonth)}.`} delay={0.08}>
         <div className="space-y-2">
           <ActionRow
@@ -246,6 +251,43 @@ function RateValue({ label, value }: { label: string; value: number }) {
       <div className="eyebrow mb-2">{label}</div>
       <div className="text-[22px] font-semibold tnum">{value.toLocaleString('es-AR')}</div>
     </div>
+  )
+}
+
+/** Tope por compra (USD) y mínimo de compras para considerar un hábito */
+function HormigaAjustes({ settings, onGuardado, onError }: { settings: Settings; onGuardado: () => void; onError: () => void }) {
+  const actual = { ...HORMIGA_DEFAULT, ...settings.hormiga }
+  const [tope, setTope] = useState(String(actual.topeUsd))
+  const [min, setMin] = useState(String(actual.minCompras))
+  const [guardando, setGuardando] = useState(false)
+  const topeN = parseFloat(tope.replace(',', '.'))
+  const minN = parseInt(min, 10)
+  const valido = topeN > 0 && minN >= 2
+  const cambiado = topeN !== actual.topeUsd || minN !== actual.minCompras
+
+  async function guardar() {
+    setGuardando(true)
+    try {
+      const hormiga = { topeUsd: topeN, minCompras: minN }
+      await updateSettings('shared', { hormiga })
+      useSettingsStore.getState().setSettings({ ...settings, hormiga })
+      onGuardado()
+    } catch {
+      onError()
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); if (valido && cambiado) guardar() }}
+      className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] items-end gap-4">
+      <RateInput id="hormiga-tope" label="Compra chica: hasta (USD)" value={tope} onChange={setTope} invalid={!(topeN > 0)} />
+      <RateInput id="hormiga-min" label="Hábito: desde (compras/mes)" value={min} onChange={setMin} invalid={!(minN >= 2)} />
+      <Button type="submit" disabled={guardando || !valido || !cambiado}>
+        <Save className="h-4 w-4" /> {guardando ? 'Guardando…' : 'Guardar'}
+      </Button>
+    </form>
   )
 }
 

@@ -1,4 +1,4 @@
-import { parseMonto } from './extracto'
+import { parseMonto } from './montos'
 
 /**
  * Parser heurístico del texto OCR de un ticket/factura de compra.

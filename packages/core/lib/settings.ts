@@ -65,6 +65,9 @@ function rowToSettings(row: Record<string, any>): Settings {
     tiposPasivo:  Array.isArray(accountCats.tiposPasivo) ? accountCats.tiposPasivo : DEFAULT_SETTINGS.tiposPasivo,
     mesesCerrados: Array.isArray(row.closed_months) ? row.closed_months : [],
     ahorroLinks: Array.isArray(appSettings.ahorroLinks) ? appSettings.ahorroLinks : [],
+    hormiga: appSettings.hormiga && appSettings.hormiga.topeUsd > 0 && appSettings.hormiga.minCompras > 1
+      ? { topeUsd: Number(appSettings.hormiga.topeUsd), minCompras: Number(appSettings.hormiga.minCompras) }
+      : undefined,
   }
 }
 
@@ -77,6 +80,7 @@ function settingsToRow(settings: Settings) {
       monedaBase: settings.monedaBase ?? 'ARS',
       fuenteCambio: settings.fuenteCambio ?? 'mep',
       cambioActualizado: settings.cambioActualizado ?? null,
+      ...(settings.hormiga ? { hormiga: settings.hormiga } : {}),
     },
     monthly_rates:   settings.historialTipoCambio,
     transaction_cats: settings.categoriasGasto,

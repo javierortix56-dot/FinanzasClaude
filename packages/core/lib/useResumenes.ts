@@ -4,8 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fetchMonthTransactions } from './analytics'
 import { useTransactionStore } from '../store/useTransactionStore'
 import { useUIStore } from '../store/useUIStore'
-import { addComprasCuotas, subscribeToCuotas } from './cuotas'
-import { shiftMonth } from './constants'
+import { subscribeToCuotas } from './cuotas'
 import { analizarPeriodo, mesesDeItems, noCargados } from './resumenAnalisis'
 import { borrarResumen, cargarComoMovimiento, categoriasDeGasto, existeResumen, extraerResumen, fetchResumenes, guardarResumen } from './resumenes'
 import {
@@ -62,8 +61,8 @@ export function useResumenes(s: Settings, base: Currency, creadoPor: string) {
   const periodo = periodoElegido && periodos.includes(periodoElegido) ? periodoElegido : periodos[0] ?? null
 
   const analisis = useMemo(
-    () => (resumenes && periodo ? analizarPeriodo(resumenes, periodo, base, s) : null),
-    [resumenes, periodo, base, s],
+    () => (resumenes && periodo ? analizarPeriodo(resumenes, periodo, base, s, compras) : null),
+    [resumenes, periodo, base, s, compras],
   )
 
   const itemsPeriodo = useMemo(() => analisis?.resumenes.flatMap((r) => r.items) ?? [], [analisis])
@@ -80,25 +79,6 @@ export function useResumenes(s: Settings, base: Currency, creadoPor: string) {
   }, [itemsPeriodo, txsVersion, storeTxs])
 
   const faltantes = useMemo(() => noCargados(itemsPeriodo, txs), [itemsPeriodo, txs])
-
-  // Cuotas del resumen que todavía no están en la sección Cuotas de la app
-  const cuotasNuevas = useMemo(() => (analisis?.cuotas ?? []).filter((c) => !compras.some((p) =>
-    p.moneda === c.moneda && p.totalCuotas === c.total && Math.abs(p.montoCuota - c.montoCuota) <= Math.max(1, c.montoCuota * 0.01),
-  )), [analisis, compras])
-
-  async function registrarCuotas() {
-    if (!analisis || cuotasNuevas.length === 0) return
-    const n = await addComprasCuotas(cuotasNuevas.map((c) => ({
-      descripcion: c.comercio,
-      tarjeta: c.emisor,
-      moneda: c.moneda,
-      montoCuota: c.montoCuota,
-      totalCuotas: c.total,
-      primerMes: shiftMonth(analisis.periodo, -(c.actual - 1)),
-      creadoPor,
-    })))
-    useUIStore.getState().showToast(`${n} compra${n !== 1 ? 's' : ''} en cuotas agregada${n !== 1 ? 's' : ''}`)
-  }
 
   async function subir(file: File) {
     setSubida({ paso: 'leyendo', archivo: file.name })
@@ -175,8 +155,6 @@ export function useResumenes(s: Settings, base: Currency, creadoPor: string) {
     setPeriodo,
     analisis,
     faltantes,
-    cuotasNuevas,
-    registrarCuotas,
     subida,
     subir,
     gruposRevision,

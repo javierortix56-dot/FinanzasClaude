@@ -1,15 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
-import { ArrowDownRight, ArrowUpRight, Lightbulb, CalendarClock } from 'lucide-react'
+import { motion } from 'motion/react'
+import { ArrowDownRight, ArrowUpRight, Lightbulb } from 'lucide-react'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useBudgetStore } from '@finanzas/core/store/useBudgetStore'
 import { Card } from '@/components/ui/card'
 import { Segmented } from '@/components/ui/segmented'
-import ProgressBar from '@/components/ui/ProgressBar'
 import { MoneyText } from '@/components/MoneyText'
 import { Donut } from '@/components/charts/Donut'
 import { LineChart } from '@/components/charts/LineChart'
@@ -24,7 +23,6 @@ import { Currency, Transaction } from '@finanzas/core/types'
 import { PageScroll } from '@/components/shell/PageScroll'
 import { easeOut } from '@/components/ui/motion'
 
-type TabBig = 'historico' | 'piloto'
 type TabCat = 'gastos' | 'ingresos'
 
 export default function AnalisisPage() {
@@ -34,7 +32,6 @@ export default function AnalisisPage() {
   const { monedaBase } = useAuthStore()
   const base = monedaBase as Currency
 
-  const [tab, setTab] = useState<TabBig>('historico')
   const [tabCat, setTabCat] = useState<TabCat>('gastos')
   const [hover, setHover] = useState<number | null>(null)
   const [historico, setHistorico] = useState<Record<string, Transaction[]>>({})
@@ -102,19 +99,10 @@ export default function AnalisisPage() {
     <PageScroll className="space-y-5">
       <div className="flex items-center justify-between gap-4">
         <div className="eyebrow">{monthLabel(currentMonth)} · comparado con el mes anterior</div>
-        <Segmented
-          id="analisis-tab"
-          value={tab}
-          onChange={setTab}
-          options={[{ value: 'historico', label: 'Histórico' }, { value: 'piloto', label: 'Piloto' }]}
-        />
       </div>
 
-      <AnimatePresence mode="wait" initial={false}>
-        {tab === 'historico' ? (
           <motion.div
-            key="historico"
-            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
             transition={easeOut}
             className="space-y-5"
           >
@@ -197,16 +185,6 @@ export default function AnalisisPage() {
               </Card>
             </div>
           </motion.div>
-        ) : (
-          <motion.div
-            key="piloto"
-            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
-            transition={easeOut}
-          >
-            <PilotoView ingresos={ingresosCur} egresos={egresosCur} base={base} month={currentMonth} />
-          </motion.div>
-        )}
-      </AnimatePresence>
     </PageScroll>
   )
 }
@@ -245,91 +223,6 @@ function ComparisonCard({
           </>
         )}
       </div>
-    </Card>
-  )
-}
-
-/**
- * Proyección lineal al cierre del mes visible. Antes usaba siempre la fecha
- * de hoy: en un mes pasado proyectaba de más y en uno futuro dividía por un
- * avance que no corresponde. Ahora un mes cerrado vale 100 % y uno futuro 0 %.
- */
-function PilotoView({ ingresos, egresos, base, month }: { ingresos: number; egresos: number; base: Currency; month: string }) {
-  const today = new Date()
-  const [y, m] = month.split('-').map(Number)
-  const totalDays = new Date(y, m, 0).getDate()
-  const cmp = y * 12 + m - (today.getFullYear() * 12 + today.getMonth() + 1)
-  const elapsed = cmp < 0 ? 1 : cmp > 0 ? 0 : today.getDate() / totalDays
-  const proy = (n: number) => (elapsed > 0 ? n / elapsed : n)
-  const proyIngresos = proy(ingresos)
-  const proyEgresos  = proy(egresos)
-  const proyBalance  = proyIngresos - proyEgresos
-  const balance = ingresos - egresos
-  const usoProy = proyIngresos > 0 ? (proyEgresos / proyIngresos) * 100 : 0
-
-  const estado = cmp < 0 ? 'Mes cerrado: la proyección coincide con lo real.'
-    : cmp > 0 ? 'Mes futuro: todavía no hay avance para proyectar.'
-    : `Día ${today.getDate()} de ${totalDays}.`
-
-  return (
-    <div className="space-y-5">
-      <Card className="px-6 py-5">
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            <span className="h-10 w-10 rounded-xl bg-primary/12 text-primary inline-flex items-center justify-center">
-              <CalendarClock className="h-5 w-5" />
-            </span>
-            <div>
-              <div className="eyebrow">Avance del mes</div>
-              <div className="text-sm text-muted mt-1.5">{estado}</div>
-            </div>
-          </div>
-          <div className="text-2xl font-semibold tnum">{Math.round(elapsed * 100)}%</div>
-        </div>
-        <ProgressBar value={elapsed * 100} className="mt-4" height={8} color="linear-gradient(90deg, var(--primary-2), var(--primary))" />
-      </Card>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <ProyCard delay={0.04} label="Proyección ingresos" tone="text-income" value={proyIngresos} actual={ingresos} base={base} />
-        <ProyCard delay={0.08} label="Proyección egresos" tone="text-expense" value={proyEgresos} actual={egresos} base={base} />
-        <ProyCard delay={0.12} label="Balance proyectado" tone={proyBalance >= 0 ? 'text-foreground' : 'text-expense'} value={proyBalance} actual={balance} base={base} />
-      </div>
-
-      {proyIngresos > 0 && (
-        <Card delay={0.16} className="px-6 py-5">
-          <div className="flex items-center justify-between">
-            <div className="eyebrow">Egresos proyectados sobre ingresos</div>
-            <div className={`text-sm font-semibold tnum ${usoProy > 100 ? 'text-expense' : usoProy > 85 ? 'text-unassigned' : 'text-income'}`}>
-              {usoProy.toFixed(0)}%
-            </div>
-          </div>
-          <ProgressBar
-            value={usoProy}
-            className="mt-3"
-            height={8}
-            color={usoProy > 100 ? 'var(--expense)' : usoProy > 85 ? 'var(--unassigned)' : 'var(--income)'}
-          />
-          <p className="text-xs text-muted mt-3">
-            {usoProy > 100
-              ? 'A este ritmo, el mes cierra gastando más de lo que ingresa.'
-              : 'A este ritmo, el mes cierra dentro de lo ingresado.'}
-          </p>
-        </Card>
-      )}
-    </div>
-  )
-}
-
-function ProyCard({ label, tone, value, actual, base, delay }: {
-  label: string; tone: string; value: number; actual: number; base: Currency; delay?: number
-}) {
-  return (
-    <Card delay={delay} className="px-5 py-4">
-      <div className="eyebrow">{label}</div>
-      <div className={`mt-2.5 text-[22px] font-semibold tnum ${tone}`}>
-        <MoneyText amount={value} currency={base} animated />
-      </div>
-      <div className="text-xs text-muted mt-1.5">Actual: <MoneyText amount={actual} currency={base} /></div>
     </Card>
   )
 }

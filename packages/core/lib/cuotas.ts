@@ -70,16 +70,6 @@ export async function addCompraCuotas(data: Omit<CompraCuotas, 'id'>): Promise<s
   return row.id as string
 }
 
-/** Inserta varias compras de una (importación desde extracto) */
-export async function addComprasCuotas(items: Omit<CompraCuotas, 'id'>[]): Promise<number> {
-  if (items.length === 0) return 0
-  const { error } = await supabase
-    .from('compras_cuotas')
-    .insert(items.map(compraToRow))
-  if (error) throw error
-  return items.length
-}
-
 export async function updateCompraCuotas(id: string, data: Omit<CompraCuotas, 'id'>) {
   const { error } = await supabase
     .from('compras_cuotas')

@@ -127,6 +127,8 @@ export interface Settings {
   tiposPasivo: string[]
   mesesCerrados?: string[]
   ahorroLinks?: AhorroLink[]
+  /** Criterio de gastos hormiga en Resúmenes */
+  hormiga?: { topeUsd: number; minCompras: number }
 }
 
 /** Compra en cuotas con tarjeta de crédito */
