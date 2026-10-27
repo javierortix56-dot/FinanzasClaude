@@ -4,19 +4,23 @@ import { useRef } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   Upload, FileText, Repeat, Bug, Store, CreditCard, Landmark, AlertCircle, Trash2,
-  Plus, Sparkles, TrendingUp, Loader2, CheckCircle2,
+  Plus, Sparkles, TrendingUp, Loader2, CheckCircle2, CalendarClock, Megaphone, PieChart, RefreshCcw, Tags,
 } from 'lucide-react'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useResumenes } from '@finanzas/core/lib/useResumenes'
-import { usuarioId } from '@finanzas/core/lib/resumenes'
+import { categoriasDeGasto, usuarioId } from '@finanzas/core/lib/resumenes'
+import { GrupoComercio } from '@finanzas/core/lib/comercioReglas'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { getCatFromSettings, monthLabel } from '@finanzas/core/lib/constants'
 import { CategoryIcon } from '@finanzas/core/lib/categoryIcons'
 import { Currency, Resumen, ResumenItem, Settings } from '@finanzas/core/types'
+import { toBase } from '@finanzas/core/lib/currency'
+import { ETIQUETA_CARGO, conciliacion, mesCorto } from '@finanzas/core/lib/resumenAnalisis'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
+import { Input, Select } from '@/components/ui/input'
 import ProgressBar from '@/components/ui/ProgressBar'
 import { MoneyText } from '@/components/MoneyText'
 import { PageScroll } from '@/components/shell/PageScroll'
@@ -37,6 +41,8 @@ const mesLabel = (p: string) => { const l = monthLabel(p); return l.charAt(0).to
 
 const fechaCorta = (iso: string) =>
   new Date(iso + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })
+
+const pctFmt = (n: number) => `${n.toLocaleString('es-AR', { maximumFractionDigits: 2 })} %`
 
 export default function ResumenesPage() {
   const s = (useSettingsStore((st) => st.settings) ?? DEFAULT_SETTINGS) as Settings
@@ -136,6 +142,8 @@ export default function ResumenesPage() {
             </div>
           </Card>
 
+          {a.resumenes.filter((res) => res.detalle).map((res) => <EstadoCuenta key={res.id} r={res} />)}
+
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
             <Seccion icon={Repeat} titulo="Suscripciones y débitos" sub="Cobros que se repiten mes a mes" delay={0.04}>
               {a.suscripciones.length === 0 ? (
@@ -194,30 +202,125 @@ export default function ResumenesPage() {
               ))}
             </Seccion>
 
-            {a.cuotas.length > 0 && (
-              <Seccion icon={CreditCard} titulo="Cuotas en curso" sub={<>Falta pagar <MoneyText amount={a.cuotas.reduce((t, c) => t + c.restante, 0)} currency={base} /> (aprox., moneda del resumen)</>} delay={0.2}>
+            {(a.cuotas.length > 0 || a.compromiso.length > 0) && (
+              <Seccion icon={CreditCard} titulo="Cuotas en curso"
+                sub={<>Falta pagar <MoneyText amount={a.cuotas.reduce((t, c) => t + toBase(c.restante, c.moneda, base, s), 0)} currency={base} />
+                  {a.libreDesde && <> · la última cuota vence en <b className="text-foreground">{monthLabel(a.libreDesde)}</b></>}</>} delay={0.2}>
                 {r.cuotasNuevas.length > 0 && (
                   <div className="mb-2 flex items-center justify-between gap-3 rounded-xl bg-primary/8 px-3 py-2 text-xs">
                     <span>{r.cuotasNuevas.length} {r.cuotasNuevas.length === 1 ? 'compra no está' : 'compras no están'} en Cuotas.</span>
                     <Button size="sm" variant="secondary" onClick={r.registrarCuotas}><Plus className="h-3.5 w-3.5" /> Agregar a Cuotas</Button>
                   </div>
                 )}
-                {a.cuotas.map((c, k) => (
-                  <Fila key={k} titulo={c.comercio} meta={`${c.emisor} · cuota ${c.actual} de ${c.total}`}
+                {a.compromiso.length > 0 && (
+                  <div className="mb-3 rounded-xl bg-surface-2 px-3 py-3">
+                    <div className="eyebrow !text-[10px] mb-2">Ya comprometido en los próximos resúmenes</div>
+                    <div className="flex items-end gap-1.5 h-24">
+                      {a.compromiso.slice(0, 12).map((m) => {
+                        const max = Math.max(...a.compromiso.slice(0, 12).map((x) => x.totalBase))
+                        return (
+                          <div key={m.mes} className="h-full flex-1 min-w-0 flex flex-col items-center justify-end gap-1" title={m.cantidad === null ? monthLabel(m.mes) : `${monthLabel(m.mes)}: ${m.cantidad} cuota${m.cantidad !== 1 ? 's' : ''}`}>
+                            <div className="w-full rounded-t-md bg-primary/70" style={{ height: `${Math.max((m.totalBase / max) * 100, 6)}%` }} />
+                            <span className="text-[10px] text-muted-2">{mesCorto(m.mes)}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                    <div className="mt-2 text-[11px] text-muted">
+                      Próximo resumen: <b className="text-foreground tnum"><MoneyText amount={a.compromiso[0].totalBase} currency={base} /></b>
+                      {a.compromiso[0].cantidad !== null ? <> en {a.compromiso[0].cantidad} cuota{a.compromiso[0].cantidad !== 1 ? 's' : ''}</> : ' según el banco'}
+                      {a.compromisoResto && <> · desde {monthLabel(a.compromisoResto.mes)}: <b className="text-foreground tnum"><MoneyText amount={a.compromisoResto.totalBase} currency={base} /></b> más</>}
+                    </div>
+                  </div>
+                )}
+                {a.cuotas.map((c, k) => {
+                  const cat = c.categoria ? getCatFromSettings(c.categoria, s) : undefined
+                  return (
+                    <Fila key={k} titulo={c.comercio}
+                      meta={<>{c.emisor} · cuota {c.actual} de {c.total} · {cat?.nombre ?? 'sin categoría'}</>}
+                      derecha={<>
+                        <div className="font-semibold tnum"><MoneyText amount={c.montoCuota} currency={c.moneda} /></div>
+                        <div className="text-[11px] text-muted tnum">
+                          {c.restantes === 0 ? 'última cuota' : <>termina {monthLabel(c.finMes)} · restan <MoneyText amount={c.restante} currency={c.moneda} /></>}
+                        </div>
+                      </>} />
+                  )
+                })}
+              </Seccion>
+            )}
+
+            {a.financiaciones.length > 0 && (
+              <Seccion icon={RefreshCcw} titulo="Refinanciaciones" sub="Saldo pasado a cuotas (Plan V, financiación de saldo): cada cuota incluye intereses" delay={0.22}>
+                {a.financiaciones.map((c, k) => (
+                  <Fila key={k} titulo={c.comercio}
+                    meta={<>{c.emisor} · cuota {c.actual} de {c.total}</>}
                     derecha={<>
                       <div className="font-semibold tnum"><MoneyText amount={c.montoCuota} currency={c.moneda} /></div>
-                      <div className="text-[11px] text-muted tnum">restan <MoneyText amount={c.restante} currency={c.moneda} /></div>
+                      <div className="text-[11px] text-muted tnum">
+                        {c.restantes === 0 ? 'última cuota' : <>termina {monthLabel(c.finMes)} · restan <MoneyText amount={c.restante} currency={c.moneda} /></>}
+                      </div>
                     </>} />
                 ))}
               </Seccion>
             )}
 
-            {a.cargos.items.length > 0 && (
-              <Seccion icon={Landmark} titulo="Impuestos, intereses y comisiones" sub="Lo que cobra el banco además de los consumos" delay={0.24}>
-                {a.cargos.items.slice(0, 10).map((c, k) => (
-                  <Fila key={k} titulo={c.descripcion} meta={c.tipo === 'impuesto' ? 'Impuesto' : c.tipo === 'interes' ? 'Interés' : 'Comisión'}
-                    derecha={<div className="font-semibold tnum text-expense"><MoneyText amount={c.montoBase} currency={base} /></div>} />
+            <Seccion icon={PieChart} titulo="Gasto por categoría" sub={a.porTitular.length > 0 ? 'Y por titular o adicional' : 'Consumos del período según la categoría sugerida'} delay={0.22}>
+              {a.porCategoria.slice(0, 10).map((c) => {
+                const cat = c.clave ? getCatFromSettings(c.clave, s) : undefined
+                return (
+                  <div key={c.clave ?? '-'} className="py-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="truncate font-medium">{cat?.nombre ?? 'Sin categoría'}<span className="ml-2 text-xs text-muted-2">{c.pct.toFixed(1)}%</span></span>
+                      <span className="tnum font-semibold"><MoneyText amount={c.totalBase} currency={base} /></span>
+                    </div>
+                    <ProgressBar value={c.pct} className="mt-1.5" height={5} color={cat?.color ?? 'var(--muted-2)'} />
+                  </div>
+                )
+              })}
+              {a.porTitular.length > 0 && (
+                <div className="pt-3 grid grid-cols-2 gap-2">
+                  {a.porTitular.map((t) => (
+                    <div key={t.clave ?? '-'} className="rounded-xl bg-surface-2 px-3 py-2">
+                      <div className="eyebrow !text-[10px] truncate">{t.clave ?? 'Sin titular'}</div>
+                      <div className="mt-1.5 text-sm font-semibold tnum"><MoneyText amount={t.totalBase} currency={base} /></div>
+                      <div className="text-[11px] text-muted">{t.pct.toFixed(1)}% del gasto</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Seccion>
+
+            <Seccion icon={Tags} titulo="Comercios y categorías"
+              sub="Cambie el nombre o la categoría: se aplica a todos los resúmenes y a los próximos" delay={0.23}>
+              <div className="max-h-[420px] overflow-y-auto -mx-1 px-1">
+                {r.comercios.map((g) => (
+                  <EditorComercio key={g.clave} g={g} s={s} onCambiar={(nombre, categoria) => r.recategorizar(g.clave, nombre, categoria)}
+                    etiquetaNuevo="sin revisar" />
                 ))}
+              </div>
+            </Seccion>
+
+            {a.cargos.items.length > 0 && (
+              <Seccion icon={Landmark} titulo="Impuestos, intereses y comisiones"
+                sub={<>Lo que cobra el banco además de los consumos: <MoneyText amount={a.cargos.totalBase} currency={base} /> ({a.cargos.pctDelTotal.toFixed(1)}% de lo cobrado)</>} delay={0.24}>
+                <div className="mb-2 grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))' }}>
+                  {a.cargos.porTipo.map((t) => (
+                    <div key={t.tipo} className="rounded-xl bg-surface-2 px-3 py-2">
+                      <div className="eyebrow !text-[10px]">{ETIQUETA_CARGO[t.tipo].plural}</div>
+                      <div className="mt-1.5 text-sm font-semibold tnum"><MoneyText amount={t.totalBase} currency={base} /></div>
+                      <div className="text-[11px] text-muted">{t.cantidad} {t.cantidad === 1 ? 'renglón' : 'renglones'}</div>
+                    </div>
+                  ))}
+                </div>
+                {a.cargos.items.map((c, k) => (
+                  <Fila key={k} titulo={c.descripcion} meta={ETIQUETA_CARGO[c.tipo].singular}
+                    derecha={<div className={cn('font-semibold tnum', c.montoBase < 0 ? 'text-income' : 'text-expense')}><MoneyText amount={c.montoBase} currency={base} /></div>} />
+                ))}
+                {a.cargos.porTipo.some((t) => t.tipo === 'percepcion') && (
+                  <div className="pt-2.5 text-[11.5px] text-muted">
+                    Las percepciones (RG 5617) son a cuenta de Ganancias o Bienes Personales: se pueden computar o pedir la devolución a ARCA.
+                  </div>
+                )}
               </Seccion>
             )}
           </div>
@@ -239,7 +342,10 @@ export default function ResumenesPage() {
           </div>
         }
       >
-        {(r.subida.paso === 'revisar' || r.subida.paso === 'guardando') && <Revision resumen={r.subida.resumen} reemplaza={r.subida.reemplaza} s={s} />}
+        {(r.subida.paso === 'revisar' || r.subida.paso === 'guardando') && (
+          <Revision resumen={r.subida.resumen} reemplaza={r.subida.reemplaza} s={s}
+            grupos={r.gruposRevision} onEditar={r.editarEnRevision} />
+        )}
       </Modal>
     </PageScroll>
   )
@@ -359,8 +465,13 @@ function FilaNoCargado({ item, s, onCargar }: { item: ResumenItem; s: Settings; 
   )
 }
 
-function Revision({ resumen, reemplaza, s }: { resumen: Resumen; reemplaza: boolean; s: Settings }) {
+function Revision({ resumen, reemplaza, s, grupos, onEditar }: {
+  resumen: Resumen; reemplaza: boolean; s: Settings
+  grupos: GrupoComercio[]; onEditar: (clave: string, nombre: string, categoria: string | null) => void
+}) {
   const gastos = resumen.items.filter((i) => i.monto > 0)
+  const nuevos = grupos.filter((g) => g.nuevo)
+  const conocidos = grupos.filter((g) => !g.nuevo)
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
@@ -368,13 +479,40 @@ function Revision({ resumen, reemplaza, s }: { resumen: Resumen; reemplaza: bool
         <Dato label="Período" value={mesLabel(resumen.periodo)} />
         <Dato label="Total a pagar" value={resumen.total !== null ? <MoneyText amount={resumen.total} currency={resumen.moneda} /> : '—'} />
       </div>
+      {resumen.detalle && <Conciliacion r={resumen} />}
       {reemplaza && (
         <div className="rounded-xl bg-unassigned-tint px-3 py-2 text-xs text-unassigned font-medium">
           Ya hay un resumen de {resumen.emisor} para {mesLabel(resumen.periodo)}: se va a reemplazar.
         </div>
       )}
-      <div className="text-xs text-muted">{resumen.items.length} renglones · {gastos.length} gastos</div>
-      <div className="max-h-[45vh] overflow-y-auto rounded-xl bg-surface-2 divide-y divide-hairline">
+      {nuevos.length > 0 ? (
+        <div>
+          <div className="text-sm font-semibold">Comercios nuevos ({nuevos.length})</div>
+          <div className="text-xs text-muted mb-1">Revise el nombre y la categoría. Lo que elija se aplica solo en los próximos resúmenes.</div>
+          <div className="max-h-[38vh] overflow-y-auto">
+            {nuevos.map((g) => <EditorComercio key={g.clave} g={g} s={s} onCambiar={(n, c) => onEditar(g.clave, n, c)} />)}
+          </div>
+        </div>
+      ) : grupos.length > 0 && (
+        <div className="flex items-center gap-2 rounded-xl bg-income-soft/60 px-3 py-2 text-xs font-medium text-income">
+          <CheckCircle2 className="h-4 w-4 shrink-0" /> Todos los comercios ya son conocidos: se aplicaron sus nombres y categorías.
+        </div>
+      )}
+      {conocidos.length > 0 && (
+        <details className="group">
+          <summary className="cursor-pointer text-xs font-semibold text-muted hover:text-foreground">
+            Comercios conocidos ({conocidos.length}): ver o cambiar
+          </summary>
+          <div className="mt-1 max-h-[30vh] overflow-y-auto">
+            {conocidos.map((g) => <EditorComercio key={g.clave} g={g} s={s} onCambiar={(n, c) => onEditar(g.clave, n, c)} />)}
+          </div>
+        </details>
+      )}
+      <details>
+        <summary className="cursor-pointer text-xs font-semibold text-muted hover:text-foreground">
+          Ver los {resumen.items.length} renglones ({gastos.length} gastos)
+        </summary>
+      <div className="mt-2 max-h-[45vh] overflow-y-auto rounded-xl bg-surface-2 divide-y divide-hairline">
         {resumen.items.map((i, k) => {
           const cat = i.categoria ? getCatFromSettings(i.categoria, s) : undefined
           return (
@@ -393,6 +531,42 @@ function Revision({ resumen, reemplaza, s }: { resumen: Resumen; reemplaza: bool
           )
         })}
       </div>
+      </details>
+    </div>
+  )
+}
+
+/** Fila editable de un comercio: nombre (se confirma al salir o con Enter) y categoría */
+function EditorComercio({ g, s, onCambiar, etiquetaNuevo = 'nuevo' }: {
+  g: GrupoComercio; s: Settings; onCambiar: (nombre: string, categoria: string | null) => void; etiquetaNuevo?: string
+}) {
+  const categorias = categoriasDeGasto(s)
+  const confirmarNombre = (v: string) => { if (v.trim() && v.trim() !== g.nombre) onCambiar(v.trim(), g.categoria) }
+  return (
+    <div className="grid grid-cols-[1fr_200px] items-center gap-3 py-2 border-b border-hairline last:border-0">
+      <div className="min-w-0">
+        <Input
+          key={g.nombre}
+          defaultValue={g.nombre}
+          aria-label={`Nombre de ${g.nombre}`}
+          className="h-9 font-medium"
+          onBlur={(e) => confirmarNombre(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+        />
+        <div className="mt-1 truncate text-[11px] text-muted-2 px-1" title={g.descripciones.join(' · ')}>
+          {g.nuevo && <span className="mr-1.5 rounded-full bg-primary/12 px-1.5 py-px font-semibold text-primary">{etiquetaNuevo}</span>}
+          {g.cantidad}× · <MoneyText amount={g.total} currency={g.moneda} /> · {g.descripciones.join(' · ')}
+        </div>
+      </div>
+      <Select
+        value={g.categoria ?? ''}
+        aria-label={`Categoría de ${g.nombre}`}
+        className={cn('h-9', !g.categoria && 'text-muted')}
+        onChange={(e) => onCambiar(g.nombre, e.target.value || null)}
+      >
+        <option value="">Sin categoría</option>
+        {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre.split(' › ').pop()}</option>)}
+      </Select>
     </div>
   )
 }
@@ -403,5 +577,115 @@ function Dato({ label, value }: { label: string; value: React.ReactNode }) {
       <div className="eyebrow !text-[10px]">{label}</div>
       <div className="mt-1.5 text-sm font-semibold truncate">{value}</div>
     </div>
+  )
+}
+
+function Conciliacion({ r }: { r: Resumen }) {
+  const c = conciliacion(r)
+  const difs = ([['ARS', c.ars], ['USD', c.usd]] as const).filter(([, v]) => v !== null && v !== 0)
+  if (c.ars === null && c.usd === null) return null
+  return difs.length === 0 ? (
+    <div className="flex items-center gap-2 rounded-xl bg-income-soft/60 px-3 py-2 text-xs font-medium text-income">
+      <CheckCircle2 className="h-4 w-4 shrink-0" /> Los renglones cuadran con el saldo del resumen: no falta ni sobra nada.
+    </div>
+  ) : (
+    <div className="flex items-center gap-2 rounded-xl bg-unassigned-tint px-3 py-2 text-xs font-medium text-unassigned">
+      <AlertCircle className="h-4 w-4 shrink-0" />
+      <span>
+        Los renglones no cuadran con el saldo ({difs.map(([m, v]) => <MoneyText key={m} amount={v!} currency={m} />).reduce<React.ReactNode[]>((acc, x, i) => (i ? [...acc, ' y ', x] : [x]), [])} de diferencia):
+        puede faltar o estar repetido algún renglón.
+      </span>
+    </div>
+  )
+}
+
+function EstadoCuenta({ r }: { r: Resumen }) {
+  const d = r.detalle!
+  const saldo = d.saldoActualArs ?? r.total
+  const usoLimite = saldo !== null && d.limiteCompra ? (saldo / d.limiteCompra) * 100 : null
+  const tasas = ([['TNA', d.tna], ['TEM', d.tem], ['TEA', d.tea], ['CFTEA c/IVA', d.cftea]] as const).filter(([, v]) => v !== null)
+  return (
+    <Card delay={0.02} className="px-6 py-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <span className="h-9 w-9 rounded-xl bg-primary/12 text-primary inline-flex items-center justify-center shrink-0"><CalendarClock className="h-4 w-4" /></span>
+          <div>
+            <div className="text-[15px] font-semibold">Estado de cuenta · {r.emisor}</div>
+            <div className="text-xs text-muted mt-0.5">
+              {d.producto && <>{d.producto} · </>}
+              {d.fechaCierre && <>cerró el {fechaCorta(d.fechaCierre)}</>}
+              {d.fechaVencimiento && <> · vence el <b className="text-foreground">{fechaCorta(d.fechaVencimiento)}</b></>}
+              {d.proximoCierre && <> · próximo cierre {fechaCorta(d.proximoCierre)}</>}
+              {d.proximoVencimiento && <> (vence {fechaCorta(d.proximoVencimiento)})</>}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Dato label="Saldo a pagar" value={saldo !== null ? <MoneyText amount={saldo} currency={r.moneda} /> : '—'} />
+        <Dato label="Saldo en dólares" value={d.saldoActualUsd !== null ? <MoneyText amount={d.saldoActualUsd} currency="USD" /> : '—'} />
+        <Dato label="Pago mínimo" value={d.pagoMinimo !== null ? <MoneyText amount={d.pagoMinimo} currency={r.moneda} /> : '—'} />
+        <Dato label="Saldo anterior" value={d.saldoAnteriorArs !== null ? <MoneyText amount={d.saldoAnteriorArs} currency={r.moneda} /> : '—'} />
+      </div>
+
+      {usoLimite !== null && (
+        <div className="mt-4">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted">Uso del límite de compra (<MoneyText amount={d.limiteCompra!} currency={r.moneda} />)</span>
+            <span className="font-semibold tnum">{usoLimite.toFixed(0)}%</span>
+          </div>
+          <ProgressBar value={Math.min(usoLimite, 100)} className="mt-1.5" height={6} color={usoLimite > 80 ? 'var(--expense)' : usoLimite > 50 ? 'var(--unassigned)' : 'var(--primary)'} />
+        </div>
+      )}
+
+      {(tasas.length > 0 || d.tipoCambio !== null) && (
+        <div className="mt-4 flex flex-wrap gap-2 text-xs">
+          {tasas.map(([k, v]) => (
+            <span key={k} className="rounded-full bg-surface-2 px-2.5 py-1"><span className="text-muted">{k}</span> <b className="tnum">{pctFmt(v!)}</b></span>
+          ))}
+          {d.tipoCambio !== null && <span className="rounded-full bg-surface-2 px-2.5 py-1"><span className="text-muted">Dólar del resumen</span> <b className="tnum">${d.tipoCambio.toLocaleString('es-AR')}</b></span>}
+        </div>
+      )}
+
+      <div className="mt-4"><Conciliacion r={r} /></div>
+
+      {d.planesOfrecidos.length > 0 && (
+        <div className="mt-4">
+          <div className="eyebrow !text-[10px] mb-2">
+            Refinanciación que ofrece el banco{d.saldoFinanciable !== null && <> · saldo financiable <MoneyText amount={d.saldoFinanciable} currency={r.moneda} /></>}
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            {d.planesOfrecidos.map((p) => (
+              <div key={p.cuotas} className="rounded-xl bg-surface-2 px-3 py-2">
+                <div className="text-sm font-semibold tnum">{p.cuotas} × <MoneyText amount={p.montoCuota} currency={r.moneda} /></div>
+                <div className="text-[11px] text-muted tnum">
+                  total <MoneyText amount={p.cuotas * p.montoCuota} currency={r.moneda} />{p.cftea !== null && <> · CFTEA {pctFmt(p.cftea)}</>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {d.avisos.length > 0 && (
+        <div className="mt-4 space-y-2">
+          {d.avisos.map((av, k) => (
+            <div key={k} className="flex items-start gap-2.5 rounded-xl bg-unassigned-tint px-3 py-2.5 text-[12.5px]">
+              <Megaphone className="h-4 w-4 text-unassigned shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <span className="font-medium">{av.texto}</span>
+                {(av.vigencia || av.monto !== null) && (
+                  <span className="text-muted">
+                    {av.vigencia && <> · desde {fechaCorta(av.vigencia)}</>}
+                    {av.monto !== null && <> · <MoneyText amount={av.monto} currency={r.moneda} /></>}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
   )
 }

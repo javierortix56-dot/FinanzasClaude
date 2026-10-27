@@ -1,8 +1,13 @@
 // Análisis de resúmenes importados (compartido por mobile y desktop).
 // Todo se calcula en el cliente sobre los renglones guardados: suscripciones
 // (cobros que se repiten mes a mes), gastos hormiga, comercios principales,
-// cuotas en curso, cargos bancarios y consumos que no están cargados en la app.
+// cuotas y refinanciaciones en curso, cargos bancarios (impuestos, percepciones,
+// intereses, comisiones), gasto por categoría y por titular, y consumos que no
+// están cargados en la app. La cabecera que informa el banco (saldos, cuotas a
+// vencer, tasas, avisos) va en Resumen.detalle y tiene prioridad sobre lo
+// calculado cuando existe.
 import { toBase } from './currency'
+import { shiftMonth } from './constants'
 import { Currency, Resumen, ResumenItem, Settings, Transaction } from '../types'
 
 /** Clave estable para agrupar un comercio entre meses */
@@ -18,6 +23,8 @@ export function claveComercio(nombre: string): string {
 
 const esGasto = (i: ResumenItem) => i.monto > 0 && (i.tipo === 'consumo' || i.tipo === 'debito_automatico')
 const esCuota = (i: ResumenItem) => (i.cuotaTotal ?? 0) > 1
+const enCuotas = (i: ResumenItem) =>
+  esCuota(i) && i.monto > 0 && i.cuotaActual !== null && (i.tipo === 'consumo' || i.tipo === 'financiacion')
 
 export interface Suscripcion {
   clave: string
@@ -51,9 +58,23 @@ export interface Hormiga {
 export interface CuotaEnCurso {
   comercio: string; emisor: string; moneda: Currency
   actual: number; total: number; montoCuota: number; restantes: number; restante: number
+  /** Mes 'YYYY-MM' en que vence la última cuota */
+  finMes: string
+  /** id de categoría sugerida (null si no hay una razonable) */
+  categoria: string | null
 }
 
-export interface Cargo { tipo: 'impuesto' | 'interes' | 'comision'; descripcion: string; montoBase: number }
+/**
+ * Cuánto de los próximos resúmenes ya está comprometido por cuotas. Si el banco
+ * informa su cuadro de cuotas a vencer se usa ese (cantidad = null).
+ */
+export interface CompromisoMes { mes: string; totalBase: number; cantidad: number | null }
+
+export interface TotalPor { clave: string | null; totalBase: number; pct: number }
+
+export type TipoCargo = 'impuesto' | 'percepcion' | 'interes' | 'comision'
+export interface Cargo { tipo: TipoCargo; descripcion: string; montoBase: number }
+export interface CargoPorTipo { tipo: TipoCargo; cantidad: number; totalBase: number }
 
 export interface AnalisisPeriodo {
   periodo: string
@@ -62,8 +83,27 @@ export interface AnalisisPeriodo {
   suscripciones: Suscripcion[]
   hormiga: Hormiga
   topComercios: ComercioTotal[]
+  /** Cuotas de compras */
   cuotas: CuotaEnCurso[]
-  cargos: { totalBase: number; items: Cargo[] }
+  /** Refinanciaciones del saldo (Plan V, financiación de saldo…) */
+  financiaciones: CuotaEnCurso[]
+  /** Cuotas que siguen cayendo en los meses siguientes (hasta que terminan) */
+  compromiso: CompromisoMes[]
+  /** Acumulado "a partir de" que informa el banco después de su cuadro */
+  compromisoResto: CompromisoMes | null
+  /** Último mes con cuotas pendientes (null si no hay) */
+  libreDesde: string | null
+  /** Gasto por categoría (clave = id de categoría o null) */
+  porCategoria: TotalPor[]
+  /** Gasto por titular/adicional (vacío si el resumen no los separa) */
+  porTitular: TotalPor[]
+  cargos: {
+    totalBase: number
+    /** % sobre el gasto total del resumen */
+    pctDelTotal: number
+    porTipo: CargoPorTipo[]
+    items: Cargo[]
+  }
 }
 
 /**
@@ -177,24 +217,81 @@ export function analizarPeriodo(todos: Resumen[], periodo: string, base: Currenc
       .sort((a, b) => b.totalBase - a.totalBase),
   }
 
-  // ── Cuotas en curso
-  const cuotas: CuotaEnCurso[] = items
-    .filter((i) => esCuota(i) && i.monto > 0 && i.cuotaActual !== null)
+  // ── Cuotas en curso (compras y refinanciaciones)
+  const enCurso = items
+    .filter(enCuotas)
     .map((i) => {
       const restantes = Math.max(i.cuotaTotal! - i.cuotaActual!, 0)
       return {
         comercio: i.comercio, emisor: i.emisor, moneda: i.moneda,
         actual: i.cuotaActual!, total: i.cuotaTotal!, montoCuota: i.monto,
         restantes, restante: restantes * i.monto,
+        finMes: shiftMonth(periodo, restantes),
+        categoria: i.categoria,
+        financiacion: i.tipo === 'financiacion',
       }
     })
-    .sort((a, b) => b.restante - a.restante)
+    // Primero las que terminan más tarde (las que más pesan en el tiempo)
+    .sort((a, b) => b.finMes.localeCompare(a.finMes) || b.restante - a.restante)
+  const sinMarca = ({ financiacion: _f, ...c }: CuotaEnCurso & { financiacion: boolean }): CuotaEnCurso => c
+  const cuotas = enCurso.filter((c) => !c.financiacion).map(sinMarca)
+  const financiaciones = enCurso.filter((c) => c.financiacion).map(sinMarca)
 
-  // ── Cargos bancarios (impuestos, intereses, comisiones)
+  // Compromiso mes a mes. Por cada resumen: el cuadro del banco si lo trae;
+  // si no, cada cuota vuelve a caer en los `restantes` meses siguientes. Los
+  // meses futuros se convierten con la cotización actual.
+  const compromisoPorMes = new Map<string, CompromisoMes>()
+  const sumar = (mes: string, monto: number, moneda: Currency, cantidad: number | null) => {
+    const m = compromisoPorMes.get(mes) ?? { mes, totalBase: 0, cantidad: 0 }
+    m.totalBase += toBase(monto, moneda, base, s)
+    m.cantidad = m.cantidad === null || cantidad === null ? null : m.cantidad + cantidad
+    compromisoPorMes.set(mes, m)
+  }
+  let compromisoResto: CompromisoMes | null = null
+  for (const r of delPeriodo) {
+    const cuadro = r.detalle?.cuotasAVencer ?? []
+    if (cuadro.length > 0) {
+      for (const c of cuadro) {
+        if (!c.desde) { sumar(c.mes, c.monto, r.moneda, null); continue }
+        const totalBase: number = (compromisoResto?.totalBase ?? 0) + toBase(c.monto, r.moneda, base, s)
+        const mes: string = compromisoResto && compromisoResto.mes < c.mes ? compromisoResto.mes : c.mes
+        compromisoResto = { mes, totalBase, cantidad: null }
+      }
+      continue
+    }
+    for (const c of enCurso.filter((x) => x.emisor === r.emisor)) {
+      for (let k = 1; k <= c.restantes; k++) sumar(shiftMonth(periodo, k), c.montoCuota, c.moneda, 1)
+    }
+  }
+  const compromiso = [...compromisoPorMes.values()].sort((a, b) => a.mes.localeCompare(b.mes))
+  const libreDesde = enCurso.reduce<string | null>((max, c) => (c.restantes > 0 && (!max || c.finMes > max) ? c.finMes : max), null)
+
+  // ── Cargos bancarios (impuestos, percepciones, intereses, comisiones). Las
+  // percepciones se netean con sus devoluciones (vienen con monto negativo).
+  const TIPOS_CARGO: TipoCargo[] = ['impuesto', 'percepcion', 'interes', 'comision']
   const cargosItems: Cargo[] = items
-    .filter((i) => i.monto > 0 && (i.tipo === 'impuesto' || i.tipo === 'interes' || i.tipo === 'comision'))
-    .map((i) => ({ tipo: i.tipo as Cargo['tipo'], descripcion: i.descripcion, montoBase: enBase(i) }))
+    .filter((i) => (TIPOS_CARGO as string[]).includes(i.tipo) && (i.monto > 0 || i.tipo === 'percepcion'))
+    .map((i) => ({ tipo: i.tipo as TipoCargo, descripcion: i.descripcion, montoBase: enBase(i) }))
     .sort((a, b) => b.montoBase - a.montoBase)
+
+  const cargosTotal = cargosItems.reduce((a, c) => a + c.montoBase, 0)
+  const porTipo: CargoPorTipo[] = TIPOS_CARGO
+    .map((tipo) => {
+      const xs = cargosItems.filter((c) => c.tipo === tipo)
+      return { tipo, cantidad: xs.length, totalBase: xs.reduce((a, c) => a + c.montoBase, 0) }
+    })
+    .filter((t) => t.cantidad > 0)
+    .sort((a, b) => b.totalBase - a.totalBase)
+
+  // ── Gasto por categoría y por titular
+  const agrupar = (clave: (i: ResumenItem) => string | null): TotalPor[] => {
+    const m = new Map<string | null, number>()
+    for (const i of gastos) m.set(clave(i), (m.get(clave(i)) ?? 0) + enBase(i))
+    return [...m].map(([k, v]) => ({ clave: k, totalBase: v, pct: pct(v) })).sort((a, b) => b.totalBase - a.totalBase)
+  }
+  const porCategoria = agrupar((i) => i.categoria)
+  const titulares = agrupar((i) => i.titular)
+  const porTitular = titulares.filter((t) => t.clave).length > 1 ? titulares : []
 
   return {
     periodo,
@@ -204,7 +301,18 @@ export function analizarPeriodo(todos: Resumen[], periodo: string, base: Currenc
     hormiga,
     topComercios,
     cuotas,
-    cargos: { totalBase: cargosItems.reduce((a, c) => a + c.montoBase, 0), items: cargosItems },
+    financiaciones,
+    compromiso,
+    compromisoResto,
+    libreDesde,
+    porCategoria,
+    porTitular,
+    cargos: {
+      totalBase: cargosTotal,
+      pctDelTotal: totalGastosBase + cargosTotal > 0 ? (cargosTotal / (totalGastosBase + cargosTotal)) * 100 : 0,
+      porTipo,
+      items: cargosItems,
+    },
   }
 }
 
@@ -221,6 +329,22 @@ export function mesesDeItems(items: ResumenItem[]): string[] {
     m = mm === 12 ? `${y + 1}-01` : `${y}-${String(mm + 1).padStart(2, '0')}`
   }
   return out
+}
+
+/**
+ * Control de lectura: saldo anterior + renglones = saldo actual, por moneda.
+ * Devuelve la diferencia (0 = cuadra; null = el banco no informa los saldos).
+ * Una diferencia suele indicar un renglón que faltó o se duplicó.
+ */
+export function conciliacion(r: Resumen): { ars: number | null; usd: number | null } {
+  const d = r.detalle
+  const dif = (ant: number | null | undefined, act: number | null | undefined, moneda: Currency) => {
+    if (ant == null || act == null) return null
+    const suma = r.items.filter((i) => i.moneda === moneda).reduce((a, i) => a + i.monto, 0)
+    const v = Math.round((ant + suma - act) * 100) / 100
+    return Math.abs(v) < 1 ? 0 : v
+  }
+  return { ars: dif(d?.saldoAnteriorArs, d?.saldoActualArs, 'ARS'), usd: dif(d?.saldoAnteriorUsd, d?.saldoActualUsd, 'USD') }
 }
 
 const DIA = 86400000
@@ -248,4 +372,18 @@ export function noCargados(items: ResumenItem[], transacciones: Transaction[]): 
     else faltan.push(i)
   }
   return faltan.sort((a, b) => a.fecha.localeCompare(b.fecha))
+}
+
+export const ETIQUETA_CARGO: Record<TipoCargo, { singular: string; plural: string }> = {
+  impuesto: { singular: 'Impuesto', plural: 'Impuestos' },
+  percepcion: { singular: 'Percepción', plural: 'Percepciones' },
+  interes: { singular: 'Interés', plural: 'Intereses' },
+  comision: { singular: 'Comisión', plural: 'Comisiones' },
+}
+
+/** 'YYYY-MM' → "Oct 26" */
+export function mesCorto(mes: string): string {
+  const nombres = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+  const [y, m] = mes.split('-').map(Number)
+  return `${nombres[m - 1]} ${String(y).slice(2)}`
 }

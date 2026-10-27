@@ -1,14 +1,15 @@
 // Resúmenes de banco / tarjeta (compartido por mobile y desktop).
 //   1. El archivo se prepara en el navegador: PDF → base64; CSV/TXT → texto;
 //      Excel (.xlsx) → CSV por hoja.
-//   2. La Edge Function `analizar-resumen` lo lee con la API de Claude y
-//      devuelve los renglones estructurados.
+//   2. La Edge Function `analizar-resumen` lo lee con IA (Gemini o Claude) y
+//      devuelve la cabecera (saldos, tasas, cuotas a vencer, avisos) y los
+//      renglones estructurados.
 //   3. La app guarda el resultado (tablas resumenes / resumen_items, con RLS).
 import { supabase } from './supabase'
 import { addTransaction, deleteTransaction } from './transactions'
 import { offerUndo } from './undo'
-import { SHARED_USER_ID, SHARED_USERS } from './constants'
-import { Currency, Resumen, ResumenItem, ResumenItemTipo, ResumenTipo, Settings } from '../types'
+import { SHARED_USER_ID, SHARED_USERS, shiftMonth } from './constants'
+import { Currency, Resumen, ResumenDetalle, ResumenItem, ResumenItemTipo, ResumenTipo, Settings } from '../types'
 
 const MAX_BYTES = 15 * 1024 * 1024
 
@@ -60,13 +61,63 @@ export async function archivoAPayload(file: File): Promise<ArchivoPayload> {
 interface ItemCrudo {
   fecha: string; descripcion: string; comercio: string; monto: number; moneda: Currency
   cuota_actual: number | null; cuota_total: number | null; tipo: ResumenItemTipo; categoria: string | null
+  titular?: string | null
+}
+type N = number | null
+interface DetalleCrudo {
+  producto: string | null; fecha_cierre: string | null; fecha_vencimiento: string | null
+  proximo_cierre: string | null; proximo_vencimiento: string | null
+  saldo_anterior_ars: N; saldo_anterior_usd: N; saldo_actual_ars: N; saldo_actual_usd: N; pago_minimo: N
+  limite_compra: N; limite_financiacion: N; limite_adelanto: N; limite_cuotas: N
+  tna: N; tem: N; tea: N; cftea: N; tipo_cambio: N
+  cuotas_a_vencer?: { mes: string; monto: number; desde: boolean }[]
+  saldo_financiable: N
+  planes_ofrecidos?: { cuotas: number; monto_cuota: number; tna: N; cftea: N }[]
+  avisos?: ResumenDetalle['avisos']
 }
 interface ResultadoCrudo {
-  emisor: string; tipo: ResumenTipo; periodo: string; moneda: Currency; total: number | null; items: ItemCrudo[]
+  emisor: string; tipo: ResumenTipo; periodo: string; moneda: Currency; total: number | null
+  detalle?: DetalleCrudo | null; items: ItemCrudo[]
 }
 
-/** Categorías de gasto (grupos y subcategorías activas) para que el modelo sugiera una */
-function categoriasParaModelo(s: Settings) {
+const fechaOk = (f: string | null | undefined) => (f && /^\d{4}-\d{2}-\d{2}$/.test(f) ? f : null)
+const numOk = (n: N | undefined) => (typeof n === 'number' && Number.isFinite(n) ? n : null)
+
+function mapDetalle(d: DetalleCrudo | null | undefined): ResumenDetalle | null {
+  if (!d) return null
+  return {
+    producto: d.producto?.trim() || null,
+    fechaCierre: fechaOk(d.fecha_cierre),
+    fechaVencimiento: fechaOk(d.fecha_vencimiento),
+    proximoCierre: fechaOk(d.proximo_cierre),
+    proximoVencimiento: fechaOk(d.proximo_vencimiento),
+    saldoAnteriorArs: numOk(d.saldo_anterior_ars),
+    saldoAnteriorUsd: numOk(d.saldo_anterior_usd),
+    saldoActualArs: numOk(d.saldo_actual_ars),
+    saldoActualUsd: numOk(d.saldo_actual_usd),
+    pagoMinimo: numOk(d.pago_minimo),
+    limiteCompra: numOk(d.limite_compra),
+    limiteFinanciacion: numOk(d.limite_financiacion),
+    limiteAdelanto: numOk(d.limite_adelanto),
+    limiteCuotas: numOk(d.limite_cuotas),
+    tna: numOk(d.tna),
+    tem: numOk(d.tem),
+    tea: numOk(d.tea),
+    cftea: numOk(d.cftea),
+    tipoCambio: numOk(d.tipo_cambio),
+    cuotasAVencer: (d.cuotas_a_vencer ?? [])
+      .filter((c) => /^\d{4}-\d{2}$/.test(c.mes) && Number.isFinite(c.monto))
+      .sort((a, b) => a.mes.localeCompare(b.mes)),
+    saldoFinanciable: numOk(d.saldo_financiable),
+    planesOfrecidos: (d.planes_ofrecidos ?? [])
+      .filter((p) => p.cuotas > 0 && Number.isFinite(p.monto_cuota))
+      .map((p) => ({ cuotas: p.cuotas, montoCuota: p.monto_cuota, tna: numOk(p.tna), cftea: numOk(p.cftea) })),
+    avisos: (d.avisos ?? []).filter((a) => a.texto?.trim()).map((a) => ({ ...a, vigencia: fechaOk(a.vigencia) })),
+  }
+}
+
+/** Categorías de gasto activas (grupos sin subcategorías y subcategorías), con nombre para mostrar */
+export function categoriasDeGasto(s: Settings) {
   const out: { id: string; nombre: string }[] = []
   for (const g of s.categoriasGasto) {
     if (!g.activa) continue
@@ -77,11 +128,25 @@ function categoriasParaModelo(s: Settings) {
   return out
 }
 
+/**
+ * Mes al que corresponde el resumen. Es el del cierre, salvo que el cierre caiga
+ * en los primeros días del mes (p. ej. 1-Oct): ese resumen es de septiembre y
+ * el siguiente (29-Oct) es el de octubre; así no se pisan dos cierres del mismo
+ * mes y coincide con cómo el banco rotula el cuadro de cuotas a vencer.
+ */
+export function periodoDelResumen(periodo: string, fechaCierre: string | null): string {
+  if (fechaCierre) {
+    const mes = fechaCierre.slice(0, 7)
+    return Number(fechaCierre.slice(8, 10)) <= 7 ? shiftMonth(mes, -1) : mes
+  }
+  return /^\d{4}-\d{2}$/.test(periodo) ? periodo : new Date().toISOString().slice(0, 7)
+}
+
 /** Lee el archivo con la Edge Function y devuelve el resumen (sin guardar) */
 export async function extraerResumen(file: File, s: Settings, creadoPor: string): Promise<Resumen> {
   const archivo = await archivoAPayload(file)
   const { data, error } = await supabase.functions.invoke('analizar-resumen', {
-    body: { archivo, categorias: categoriasParaModelo(s) },
+    body: { archivo, categorias: categoriasDeGasto(s) },
   })
   if (error) {
     // La función responde { error } con el detalle; supabase-js lo deja en context
@@ -94,15 +159,17 @@ export async function extraerResumen(file: File, s: Settings, creadoPor: string)
     throw new Error(detalle)
   }
   const r = (data as { resultado: ResultadoCrudo }).resultado
-  const validas = new Set(categoriasParaModelo(s).map((c) => c.id))
+  const validas = new Set(categoriasDeGasto(s).map((c) => c.id))
+  const detalle = mapDetalle(r.detalle)
   return {
     emisor: r.emisor.trim() || 'Resumen',
     tipo: r.tipo,
-    periodo: /^\d{4}-\d{2}$/.test(r.periodo) ? r.periodo : new Date().toISOString().slice(0, 7),
+    periodo: periodoDelResumen(r.periodo, detalle?.fechaCierre ?? null),
     moneda: r.moneda,
     total: r.total,
     archivo: archivo.nombre,
     creadoPor,
+    detalle,
     items: r.items
       .filter((i) => /^\d{4}-\d{2}-\d{2}$/.test(i.fecha) && Number.isFinite(i.monto))
       .map((i) => ({
@@ -115,6 +182,7 @@ export async function extraerResumen(file: File, s: Settings, creadoPor: string)
         cuotaTotal: i.cuota_total,
         tipo: i.tipo,
         categoria: i.categoria && validas.has(i.categoria) ? i.categoria : null,
+        titular: i.titular?.trim() || null,
       })),
   }
 }
@@ -133,6 +201,7 @@ function rowToResumen(r: any): Resumen {
     archivo: r.archivo,
     creadoPor: r.creado_por,
     createdAt: r.created_at,
+    detalle: r.detalle ?? null,
     items: (r.resumen_items ?? []).map((i: any): ResumenItem => ({
       id: i.id,
       resumenId: i.resumen_id,
@@ -145,6 +214,7 @@ function rowToResumen(r: any): Resumen {
       cuotaTotal: i.cuota_total,
       tipo: i.tipo,
       categoria: i.categoria,
+      titular: i.titular ?? null,
     })).sort((a: ResumenItem, b: ResumenItem) => a.fecha.localeCompare(b.fecha)),
   }
 }
@@ -176,7 +246,7 @@ export async function guardarResumen(r: Resumen): Promise<string> {
     .from('resumenes')
     .insert({
       emisor: r.emisor, tipo: r.tipo, periodo: r.periodo, moneda: r.moneda,
-      total: r.total, archivo: r.archivo, creado_por: r.creadoPor,
+      total: r.total, archivo: r.archivo, creado_por: r.creadoPor, detalle: r.detalle,
     })
     .select('id')
     .single()
@@ -187,7 +257,7 @@ export async function guardarResumen(r: Resumen): Promise<string> {
       r.items.map((i) => ({
         resumen_id: id, fecha: i.fecha, descripcion: i.descripcion, comercio: i.comercio,
         monto: i.monto, moneda: i.moneda, cuota_actual: i.cuotaActual, cuota_total: i.cuotaTotal,
-        tipo: i.tipo, categoria: i.categoria,
+        tipo: i.tipo, categoria: i.categoria, titular: i.titular,
       })),
     )
     if (e2) {
