@@ -75,8 +75,12 @@ where email = 'EMAIL';
 ## Resúmenes (análisis con IA)
 
 - Tablas `resumenes` y `resumen_items` (migración `20261026_resumenes.sql`, aplicada el 2026-10-26).
-- Edge Function `analizar-resumen` (código en `functions/analizar-resumen/`): lee el PDF/CSV
-  con la API de Claude y devuelve los renglones. Valida que el usuario esté en `allowed_users`.
+  `20261027_resumenes_detalle.sql` (aplicada el 2026-10-27) agrega `resumenes.detalle` (jsonb con la
+  cabecera: saldos, vencimientos, límites, tasas, cuotas a vencer, planes ofrecidos y avisos del banco)
+  y `resumen_items.titular`.
+- Edge Function `analizar-resumen` (código en `functions/analizar-resumen/`): lee el PDF/CSV con IA
+  y devuelve la cabecera y los renglones. Valida que el usuario esté en `allowed_users`. Al desplegar
+  hay que subir `index.ts` y `gemini.ts`.
 - **Proveedor de IA:** usa Gemini (`gemini-3.8-flash`) si existe `gemini_api_key` en `app_secrets`;
   si no, Claude (`anthropic_api_key`). Con Gemini conviene tener **facturación activada** en el proyecto
   de Google: en el nivel gratuito, Google puede usar el contenido para mejorar sus productos y

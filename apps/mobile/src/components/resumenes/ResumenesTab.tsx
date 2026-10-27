@@ -4,7 +4,7 @@ import { useRef } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   Upload, FileText, Repeat, Bug, Store, CreditCard, Landmark, AlertCircle, Trash2,
-  Plus, Sparkles, CheckCircle2, Loader2,
+  Plus, Sparkles, CheckCircle2, Loader2, Megaphone,
 } from 'lucide-react'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
@@ -14,7 +14,7 @@ import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { getCatFromSettings, monthLabel } from '@finanzas/core/lib/constants'
 import { CategoryIcon } from '@/lib/categoryIcons'
 import { Currency, Resumen, ResumenItem, Settings } from '@finanzas/core/types'
-import { ETIQUETA_CARGO, mesCorto } from '@finanzas/core/lib/resumenAnalisis'
+import { ETIQUETA_CARGO, conciliacion, mesCorto } from '@finanzas/core/lib/resumenAnalisis'
 import { toBase } from '@finanzas/core/lib/currency'
 import Card from '@/components/ui/Card'
 import Sheet from '@/components/ui/Sheet'
@@ -35,6 +35,8 @@ const mesLabel = (p: string) => { const l = monthLabel(p); return l.charAt(0).to
 
 const fechaCorta = (iso: string) =>
   new Date(iso + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })
+
+const pctFmt = (n: number) => `${n.toLocaleString('es-AR', { maximumFractionDigits: 2 })} %`
 
 /** Pestaña "Resúmenes" de Análisis: subir resúmenes y ver el análisis */
 export default function ResumenesTab() {
@@ -129,6 +131,8 @@ export default function ResumenesTab() {
             </div>
           </Card>
 
+          {a.resumenes.filter((res) => res.detalle).map((res) => <EstadoCuenta key={res.id} r={res} />)}
+
           <Card title="Suscripciones y débitos" delay={0.04}>
             {a.suscripciones.length === 0 ? (
               <Vacio texto={r.periodos.length < 3 ? 'Con 3 meses de resúmenes se detectan con confianza.' : 'No se detectaron cobros recurrentes.'} />
@@ -182,7 +186,7 @@ export default function ResumenesTab() {
             ))}
           </Card>
 
-          {a.cuotas.length > 0 && (
+          {(a.cuotas.length > 0 || a.compromiso.length > 0) && (
             <Card title="Cuotas en curso" delay={0.2}
               action={r.cuotasNuevas.length > 0 ? (
                 <button onClick={() => { haptic('success'); r.registrarCuotas() }} className="text-[11px] font-bold text-primary inline-flex items-center gap-1">
@@ -208,7 +212,9 @@ export default function ResumenesTab() {
                     })}
                   </div>
                   <p className="mt-2 text-[11px] text-gray-500">
-                    Próximo mes: <b className="text-gray-900"><Money value={a.compromiso[0].totalBase} currency={base} /></b> en {a.compromiso[0].cantidad} cuota{a.compromiso[0].cantidad !== 1 ? 's' : ''}
+                    Próximo resumen: <b className="text-gray-900"><Money value={a.compromiso[0].totalBase} currency={base} /></b>
+                    {a.compromiso[0].cantidad !== null ? <> en {a.compromiso[0].cantidad} cuota{a.compromiso[0].cantidad !== 1 ? 's' : ''}</> : ' según el banco'}
+                    {a.compromisoResto && <> · desde {mesCorto(a.compromisoResto.mes)}: <b className="text-gray-900"><Money value={a.compromisoResto.totalBase} currency={base} animated={false} /></b> más</>}
                   </p>
                 </div>
               )}
@@ -227,12 +233,52 @@ export default function ResumenesTab() {
             </Card>
           )}
 
+          {a.financiaciones.length > 0 && (
+            <Card title="Refinanciaciones" delay={0.22}>
+              <p className="mb-1 text-xs text-gray-500">Saldo pasado a cuotas: cada cuota incluye intereses.</p>
+              {a.financiaciones.map((c, k) => (
+                <Fila key={k} titulo={c.comercio} meta={`${c.emisor} · ${c.actual}/${c.total}`}
+                  derecha={<>
+                    <p className="text-[13px] font-bold text-gray-900"><Money value={c.montoCuota} currency={c.moneda} /></p>
+                    <p className="text-[10.5px] text-gray-400">
+                      {c.restantes === 0 ? 'última cuota' : <>hasta {mesCorto(c.finMes)} · restan <Money value={c.restante} currency={c.moneda} animated={false} /></>}
+                    </p>
+                  </>} />
+              ))}
+            </Card>
+          )}
+
+          <Card title="Gasto por categoría" delay={0.22}>
+            {a.porCategoria.slice(0, 8).map((c) => {
+              const cat = c.clave ? getCatFromSettings(c.clave, s) : undefined
+              return (
+                <div key={c.clave ?? '-'} className="py-1.5">
+                  <div className="flex items-center justify-between gap-2 text-[13px]">
+                    <span className="truncate font-semibold text-gray-900">{cat?.nombre ?? 'Sin categoría'} <span className="text-[11px] font-normal text-gray-400">{c.pct.toFixed(0)}%</span></span>
+                    <span className="font-bold text-gray-900 shrink-0"><Money value={c.totalBase} currency={base} /></span>
+                  </div>
+                  <ProgressBar value={c.pct} className="mt-1" height={5} color={cat?.color ?? '#94a3b8'} />
+                </div>
+              )
+            })}
+            {a.porTitular.length > 0 && (
+              <div className="pt-2 grid grid-cols-2 gap-1.5">
+                {a.porTitular.map((t) => (
+                  <div key={t.clave ?? '-'} className="rounded-2xl bg-gray-500/[0.06] px-2.5 py-2">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400 truncate">{t.clave ?? 'Sin titular'}</p>
+                    <p className="mt-1 text-[12.5px] font-bold text-gray-900 truncate"><Money value={t.totalBase} currency={base} /></p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
           {a.cargos.items.length > 0 && (
             <Card title="Impuestos, intereses y comisiones" delay={0.24}>
               <p className="mb-2 text-xs text-gray-500 leading-relaxed">
                 <b className="text-gray-900"><Money value={a.cargos.totalBase} currency={base} /></b> además de los consumos ({a.cargos.pctDelTotal.toFixed(1)}% de lo cobrado)
               </p>
-              <div className="mb-2 grid grid-cols-3 gap-1.5">
+              <div className="mb-2 grid grid-cols-2 gap-1.5">
                 {a.cargos.porTipo.map((t) => (
                   <div key={t.tipo} className="rounded-2xl bg-gray-500/[0.06] px-2.5 py-2">
                     <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{ETIQUETA_CARGO[t.tipo].plural}</p>
@@ -243,8 +289,13 @@ export default function ResumenesTab() {
               </div>
               {a.cargos.items.map((c, k) => (
                 <Fila key={k} titulo={c.descripcion} meta={ETIQUETA_CARGO[c.tipo].singular}
-                  derecha={<p className="text-[13px] font-bold text-rose-500"><Money value={c.montoBase} currency={base} /></p>} />
+                  derecha={<p className={`text-[13px] font-bold ${c.montoBase < 0 ? 'text-emerald-600' : 'text-rose-500'}`}><Money value={c.montoBase} currency={base} /></p>} />
               ))}
+              {a.cargos.porTipo.some((t) => t.tipo === 'percepcion') && (
+                <p className="pt-2 text-[11px] text-gray-400 leading-relaxed">
+                  Las percepciones (RG 5617) son a cuenta de Ganancias o Bienes Personales: se pueden computar o pedir la devolución a ARCA.
+                </p>
+              )}
             </Card>
           )}
         </>
@@ -348,6 +399,7 @@ function Revision({ resumen, reemplaza, s }: { resumen: Resumen; reemplaza: bool
       {resumen.total !== null && (
         <p className="text-xs text-gray-500">Total a pagar: <b className="text-gray-900"><Money value={resumen.total} currency={resumen.moneda} animated={false} /></b></p>
       )}
+      {resumen.detalle && <Conciliacion r={resumen} />}
       {reemplaza && (
         <p className="rounded-2xl bg-amber-500/10 px-3 py-2 text-[11px] font-semibold text-amber-600">
           Ya hay un resumen de {resumen.emisor} para {mesLabel(resumen.periodo)}: se va a reemplazar.
@@ -374,5 +426,92 @@ function Revision({ resumen, reemplaza, s }: { resumen: Resumen; reemplaza: bool
         })}
       </div>
     </div>
+  )
+}
+
+function Conciliacion({ r }: { r: Resumen }) {
+  const c = conciliacion(r)
+  if (c.ars === null && c.usd === null) return null
+  const difs = ([['ARS', c.ars], ['USD', c.usd]] as const).filter(([, v]) => v !== null && v !== 0)
+  return difs.length === 0 ? (
+    <p className="flex items-center gap-2 rounded-2xl bg-emerald-500/10 px-3 py-2 text-[11px] font-semibold text-emerald-600">
+      <CheckCircle2 size={14} className="shrink-0" /> Los renglones cuadran con el saldo del resumen.
+    </p>
+  ) : (
+    <p className="flex items-start gap-2 rounded-2xl bg-amber-500/10 px-3 py-2 text-[11px] font-semibold text-amber-600">
+      <AlertCircle size={14} className="shrink-0 mt-px" />
+      <span>
+        No cuadra con el saldo ({difs.map(([m, v], i) => <span key={m}>{i > 0 && ' y '}<Money value={v!} currency={m} animated={false} /></span>)} de diferencia): puede faltar o estar repetido algún renglón.
+      </span>
+    </p>
+  )
+}
+
+function Dato({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl bg-gray-500/[0.06] px-3 py-2.5">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{label}</p>
+      <p className="mt-1 text-[13.5px] font-bold text-gray-900 truncate">{children}</p>
+    </div>
+  )
+}
+
+function EstadoCuenta({ r }: { r: Resumen }) {
+  const d = r.detalle!
+  const saldo = d.saldoActualArs ?? r.total
+  const usoLimite = saldo !== null && d.limiteCompra ? (saldo / d.limiteCompra) * 100 : null
+  const tasas = ([['TNA', d.tna], ['TEA', d.tea], ['CFTEA', d.cftea]] as const).filter(([, v]) => v !== null)
+  return (
+    <Card title={`Estado de cuenta · ${r.emisor}`} delay={0.02}>
+      {(d.fechaVencimiento || d.proximoCierre) && (
+        <p className="-mt-1 mb-2.5 text-[11.5px] text-gray-500">
+          {d.fechaVencimiento && <>Vence el <b className="text-gray-900">{fechaCorta(d.fechaVencimiento)}</b></>}
+          {d.proximoCierre && <> · próximo cierre {fechaCorta(d.proximoCierre)}</>}
+        </p>
+      )}
+      <div className="grid grid-cols-2 gap-2">
+        <Dato label="Saldo a pagar">{saldo !== null ? <Money value={saldo} currency={r.moneda} animated={false} /> : '—'}</Dato>
+        <Dato label="Pago mínimo">{d.pagoMinimo !== null ? <Money value={d.pagoMinimo} currency={r.moneda} animated={false} /> : '—'}</Dato>
+        {d.saldoActualUsd !== null && <Dato label="En dólares"><Money value={d.saldoActualUsd} currency="USD" animated={false} /></Dato>}
+        {d.saldoAnteriorArs !== null && <Dato label="Saldo anterior"><Money value={d.saldoAnteriorArs} currency={r.moneda} animated={false} /></Dato>}
+      </div>
+      {usoLimite !== null && (
+        <div className="mt-3">
+          <div className="flex items-center justify-between text-[11px] text-gray-500">
+            <span>Uso del límite de compra</span><b className="text-gray-900">{usoLimite.toFixed(0)}%</b>
+          </div>
+          <ProgressBar value={Math.min(usoLimite, 100)} className="mt-1" height={6} color={usoLimite > 80 ? 'var(--expense)' : usoLimite > 50 ? 'var(--unassigned)' : 'var(--primary)'} />
+        </div>
+      )}
+      {tasas.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5 text-[11px]">
+          {tasas.map(([k, v]) => <span key={k} className="rounded-full bg-gray-500/[0.08] px-2 py-0.5 text-gray-500">{k} <b className="text-gray-900">{pctFmt(v!)}</b></span>)}
+        </div>
+      )}
+      <div className="mt-3"><Conciliacion r={r} /></div>
+      {d.planesOfrecidos.length > 0 && (
+        <div className="mt-3">
+          <p className="eyebrow mb-1.5">Refinanciación que ofrece el banco</p>
+          <div className="grid grid-cols-2 gap-1.5">
+            {d.planesOfrecidos.map((p) => (
+              <div key={p.cuotas} className="rounded-2xl bg-gray-500/[0.06] px-2.5 py-2">
+                <p className="text-[12.5px] font-bold text-gray-900">{p.cuotas} × <Money value={p.montoCuota} currency={r.moneda} animated={false} /></p>
+                <p className="text-[10px] text-gray-400">total <Money value={p.cuotas * p.montoCuota} currency={r.moneda} animated={false} /></p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {d.avisos.length > 0 && (
+        <div className="mt-3 space-y-1.5">
+          {d.avisos.map((av, k) => (
+            <p key={k} className="flex items-start gap-2 rounded-2xl bg-amber-500/10 px-3 py-2 text-[11.5px] text-gray-700 leading-relaxed">
+              <Megaphone size={13} className="shrink-0 mt-0.5 text-amber-600" />
+              <span>{av.texto}{av.vigencia && <span className="text-gray-400"> · desde {fechaCorta(av.vigencia)}</span>}</span>
+            </p>
+          ))}
+        </div>
+      )}
+    </Card>
   )
 }

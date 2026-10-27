@@ -4,7 +4,7 @@ import { useRef } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   Upload, FileText, Repeat, Bug, Store, CreditCard, Landmark, AlertCircle, Trash2,
-  Plus, Sparkles, TrendingUp, Loader2, CheckCircle2,
+  Plus, Sparkles, TrendingUp, Loader2, CheckCircle2, CalendarClock, Megaphone, PieChart, RefreshCcw,
 } from 'lucide-react'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
@@ -15,7 +15,7 @@ import { getCatFromSettings, monthLabel } from '@finanzas/core/lib/constants'
 import { CategoryIcon } from '@finanzas/core/lib/categoryIcons'
 import { Currency, Resumen, ResumenItem, Settings } from '@finanzas/core/types'
 import { toBase } from '@finanzas/core/lib/currency'
-import { ETIQUETA_CARGO, mesCorto } from '@finanzas/core/lib/resumenAnalisis'
+import { ETIQUETA_CARGO, conciliacion, mesCorto } from '@finanzas/core/lib/resumenAnalisis'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
@@ -39,6 +39,8 @@ const mesLabel = (p: string) => { const l = monthLabel(p); return l.charAt(0).to
 
 const fechaCorta = (iso: string) =>
   new Date(iso + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })
+
+const pctFmt = (n: number) => `${n.toLocaleString('es-AR', { maximumFractionDigits: 2 })} %`
 
 export default function ResumenesPage() {
   const s = (useSettingsStore((st) => st.settings) ?? DEFAULT_SETTINGS) as Settings
@@ -138,6 +140,8 @@ export default function ResumenesPage() {
             </div>
           </Card>
 
+          {a.resumenes.filter((res) => res.detalle).map((res) => <EstadoCuenta key={res.id} r={res} />)}
+
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
             <Seccion icon={Repeat} titulo="Suscripciones y débitos" sub="Cobros que se repiten mes a mes" delay={0.04}>
               {a.suscripciones.length === 0 ? (
@@ -196,7 +200,7 @@ export default function ResumenesPage() {
               ))}
             </Seccion>
 
-            {a.cuotas.length > 0 && (
+            {(a.cuotas.length > 0 || a.compromiso.length > 0) && (
               <Seccion icon={CreditCard} titulo="Cuotas en curso"
                 sub={<>Falta pagar <MoneyText amount={a.cuotas.reduce((t, c) => t + toBase(c.restante, c.moneda, base, s), 0)} currency={base} />
                   {a.libreDesde && <> · la última cuota vence en <b className="text-foreground">{monthLabel(a.libreDesde)}</b></>}</>} delay={0.2}>
@@ -213,7 +217,7 @@ export default function ResumenesPage() {
                       {a.compromiso.slice(0, 12).map((m) => {
                         const max = Math.max(...a.compromiso.slice(0, 12).map((x) => x.totalBase))
                         return (
-                          <div key={m.mes} className="h-full flex-1 min-w-0 flex flex-col items-center justify-end gap-1" title={`${monthLabel(m.mes)}: ${m.cantidad} cuota${m.cantidad !== 1 ? 's' : ''}`}>
+                          <div key={m.mes} className="h-full flex-1 min-w-0 flex flex-col items-center justify-end gap-1" title={m.cantidad === null ? monthLabel(m.mes) : `${monthLabel(m.mes)}: ${m.cantidad} cuota${m.cantidad !== 1 ? 's' : ''}`}>
                             <div className="w-full rounded-t-md bg-primary/70" style={{ height: `${Math.max((m.totalBase / max) * 100, 6)}%` }} />
                             <span className="text-[10px] text-muted-2">{mesCorto(m.mes)}</span>
                           </div>
@@ -221,7 +225,9 @@ export default function ResumenesPage() {
                       })}
                     </div>
                     <div className="mt-2 text-[11px] text-muted">
-                      Próximo mes: <b className="text-foreground tnum"><MoneyText amount={a.compromiso[0].totalBase} currency={base} /></b> en {a.compromiso[0].cantidad} cuota{a.compromiso[0].cantidad !== 1 ? 's' : ''}
+                      Próximo resumen: <b className="text-foreground tnum"><MoneyText amount={a.compromiso[0].totalBase} currency={base} /></b>
+                      {a.compromiso[0].cantidad !== null ? <> en {a.compromiso[0].cantidad} cuota{a.compromiso[0].cantidad !== 1 ? 's' : ''}</> : ' según el banco'}
+                      {a.compromisoResto && <> · desde {monthLabel(a.compromisoResto.mes)}: <b className="text-foreground tnum"><MoneyText amount={a.compromisoResto.totalBase} currency={base} /></b> más</>}
                     </div>
                   </div>
                 )}
@@ -241,10 +247,51 @@ export default function ResumenesPage() {
               </Seccion>
             )}
 
+            {a.financiaciones.length > 0 && (
+              <Seccion icon={RefreshCcw} titulo="Refinanciaciones" sub="Saldo pasado a cuotas (Plan V, financiación de saldo): cada cuota incluye intereses" delay={0.22}>
+                {a.financiaciones.map((c, k) => (
+                  <Fila key={k} titulo={c.comercio}
+                    meta={<>{c.emisor} · cuota {c.actual} de {c.total}</>}
+                    derecha={<>
+                      <div className="font-semibold tnum"><MoneyText amount={c.montoCuota} currency={c.moneda} /></div>
+                      <div className="text-[11px] text-muted tnum">
+                        {c.restantes === 0 ? 'última cuota' : <>termina {monthLabel(c.finMes)} · restan <MoneyText amount={c.restante} currency={c.moneda} /></>}
+                      </div>
+                    </>} />
+                ))}
+              </Seccion>
+            )}
+
+            <Seccion icon={PieChart} titulo="Gasto por categoría" sub={a.porTitular.length > 0 ? 'Y por titular o adicional' : 'Consumos del período según la categoría sugerida'} delay={0.22}>
+              {a.porCategoria.slice(0, 10).map((c) => {
+                const cat = c.clave ? getCatFromSettings(c.clave, s) : undefined
+                return (
+                  <div key={c.clave ?? '-'} className="py-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="truncate font-medium">{cat?.nombre ?? 'Sin categoría'}<span className="ml-2 text-xs text-muted-2">{c.pct.toFixed(1)}%</span></span>
+                      <span className="tnum font-semibold"><MoneyText amount={c.totalBase} currency={base} /></span>
+                    </div>
+                    <ProgressBar value={c.pct} className="mt-1.5" height={5} color={cat?.color ?? 'var(--muted-2)'} />
+                  </div>
+                )
+              })}
+              {a.porTitular.length > 0 && (
+                <div className="pt-3 grid grid-cols-2 gap-2">
+                  {a.porTitular.map((t) => (
+                    <div key={t.clave ?? '-'} className="rounded-xl bg-surface-2 px-3 py-2">
+                      <div className="eyebrow !text-[10px] truncate">{t.clave ?? 'Sin titular'}</div>
+                      <div className="mt-1.5 text-sm font-semibold tnum"><MoneyText amount={t.totalBase} currency={base} /></div>
+                      <div className="text-[11px] text-muted">{t.pct.toFixed(1)}% del gasto</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Seccion>
+
             {a.cargos.items.length > 0 && (
               <Seccion icon={Landmark} titulo="Impuestos, intereses y comisiones"
                 sub={<>Lo que cobra el banco además de los consumos: <MoneyText amount={a.cargos.totalBase} currency={base} /> ({a.cargos.pctDelTotal.toFixed(1)}% de lo cobrado)</>} delay={0.24}>
-                <div className="mb-2 grid grid-cols-3 gap-2">
+                <div className="mb-2 grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))' }}>
                   {a.cargos.porTipo.map((t) => (
                     <div key={t.tipo} className="rounded-xl bg-surface-2 px-3 py-2">
                       <div className="eyebrow !text-[10px]">{ETIQUETA_CARGO[t.tipo].plural}</div>
@@ -255,8 +302,13 @@ export default function ResumenesPage() {
                 </div>
                 {a.cargos.items.map((c, k) => (
                   <Fila key={k} titulo={c.descripcion} meta={ETIQUETA_CARGO[c.tipo].singular}
-                    derecha={<div className="font-semibold tnum text-expense"><MoneyText amount={c.montoBase} currency={base} /></div>} />
+                    derecha={<div className={cn('font-semibold tnum', c.montoBase < 0 ? 'text-income' : 'text-expense')}><MoneyText amount={c.montoBase} currency={base} /></div>} />
                 ))}
+                {a.cargos.porTipo.some((t) => t.tipo === 'percepcion') && (
+                  <div className="pt-2.5 text-[11.5px] text-muted">
+                    Las percepciones (RG 5617) son a cuenta de Ganancias o Bienes Personales: se pueden computar o pedir la devolución a ARCA.
+                  </div>
+                )}
               </Seccion>
             )}
           </div>
@@ -407,6 +459,7 @@ function Revision({ resumen, reemplaza, s }: { resumen: Resumen; reemplaza: bool
         <Dato label="Período" value={mesLabel(resumen.periodo)} />
         <Dato label="Total a pagar" value={resumen.total !== null ? <MoneyText amount={resumen.total} currency={resumen.moneda} /> : '—'} />
       </div>
+      {resumen.detalle && <Conciliacion r={resumen} />}
       {reemplaza && (
         <div className="rounded-xl bg-unassigned-tint px-3 py-2 text-xs text-unassigned font-medium">
           Ya hay un resumen de {resumen.emisor} para {mesLabel(resumen.periodo)}: se va a reemplazar.
@@ -442,5 +495,115 @@ function Dato({ label, value }: { label: string; value: React.ReactNode }) {
       <div className="eyebrow !text-[10px]">{label}</div>
       <div className="mt-1.5 text-sm font-semibold truncate">{value}</div>
     </div>
+  )
+}
+
+function Conciliacion({ r }: { r: Resumen }) {
+  const c = conciliacion(r)
+  const difs = ([['ARS', c.ars], ['USD', c.usd]] as const).filter(([, v]) => v !== null && v !== 0)
+  if (c.ars === null && c.usd === null) return null
+  return difs.length === 0 ? (
+    <div className="flex items-center gap-2 rounded-xl bg-income-soft/60 px-3 py-2 text-xs font-medium text-income">
+      <CheckCircle2 className="h-4 w-4 shrink-0" /> Los renglones cuadran con el saldo del resumen: no falta ni sobra nada.
+    </div>
+  ) : (
+    <div className="flex items-center gap-2 rounded-xl bg-unassigned-tint px-3 py-2 text-xs font-medium text-unassigned">
+      <AlertCircle className="h-4 w-4 shrink-0" />
+      <span>
+        Los renglones no cuadran con el saldo ({difs.map(([m, v]) => <MoneyText key={m} amount={v!} currency={m} />).reduce<React.ReactNode[]>((acc, x, i) => (i ? [...acc, ' y ', x] : [x]), [])} de diferencia):
+        puede faltar o estar repetido algún renglón.
+      </span>
+    </div>
+  )
+}
+
+function EstadoCuenta({ r }: { r: Resumen }) {
+  const d = r.detalle!
+  const saldo = d.saldoActualArs ?? r.total
+  const usoLimite = saldo !== null && d.limiteCompra ? (saldo / d.limiteCompra) * 100 : null
+  const tasas = ([['TNA', d.tna], ['TEM', d.tem], ['TEA', d.tea], ['CFTEA c/IVA', d.cftea]] as const).filter(([, v]) => v !== null)
+  return (
+    <Card delay={0.02} className="px-6 py-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <span className="h-9 w-9 rounded-xl bg-primary/12 text-primary inline-flex items-center justify-center shrink-0"><CalendarClock className="h-4 w-4" /></span>
+          <div>
+            <div className="text-[15px] font-semibold">Estado de cuenta · {r.emisor}</div>
+            <div className="text-xs text-muted mt-0.5">
+              {d.producto && <>{d.producto} · </>}
+              {d.fechaCierre && <>cerró el {fechaCorta(d.fechaCierre)}</>}
+              {d.fechaVencimiento && <> · vence el <b className="text-foreground">{fechaCorta(d.fechaVencimiento)}</b></>}
+              {d.proximoCierre && <> · próximo cierre {fechaCorta(d.proximoCierre)}</>}
+              {d.proximoVencimiento && <> (vence {fechaCorta(d.proximoVencimiento)})</>}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Dato label="Saldo a pagar" value={saldo !== null ? <MoneyText amount={saldo} currency={r.moneda} /> : '—'} />
+        <Dato label="Saldo en dólares" value={d.saldoActualUsd !== null ? <MoneyText amount={d.saldoActualUsd} currency="USD" /> : '—'} />
+        <Dato label="Pago mínimo" value={d.pagoMinimo !== null ? <MoneyText amount={d.pagoMinimo} currency={r.moneda} /> : '—'} />
+        <Dato label="Saldo anterior" value={d.saldoAnteriorArs !== null ? <MoneyText amount={d.saldoAnteriorArs} currency={r.moneda} /> : '—'} />
+      </div>
+
+      {usoLimite !== null && (
+        <div className="mt-4">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted">Uso del límite de compra (<MoneyText amount={d.limiteCompra!} currency={r.moneda} />)</span>
+            <span className="font-semibold tnum">{usoLimite.toFixed(0)}%</span>
+          </div>
+          <ProgressBar value={Math.min(usoLimite, 100)} className="mt-1.5" height={6} color={usoLimite > 80 ? 'var(--expense)' : usoLimite > 50 ? 'var(--unassigned)' : 'var(--primary)'} />
+        </div>
+      )}
+
+      {(tasas.length > 0 || d.tipoCambio !== null) && (
+        <div className="mt-4 flex flex-wrap gap-2 text-xs">
+          {tasas.map(([k, v]) => (
+            <span key={k} className="rounded-full bg-surface-2 px-2.5 py-1"><span className="text-muted">{k}</span> <b className="tnum">{pctFmt(v!)}</b></span>
+          ))}
+          {d.tipoCambio !== null && <span className="rounded-full bg-surface-2 px-2.5 py-1"><span className="text-muted">Dólar del resumen</span> <b className="tnum">${d.tipoCambio.toLocaleString('es-AR')}</b></span>}
+        </div>
+      )}
+
+      <div className="mt-4"><Conciliacion r={r} /></div>
+
+      {d.planesOfrecidos.length > 0 && (
+        <div className="mt-4">
+          <div className="eyebrow !text-[10px] mb-2">
+            Refinanciación que ofrece el banco{d.saldoFinanciable !== null && <> · saldo financiable <MoneyText amount={d.saldoFinanciable} currency={r.moneda} /></>}
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            {d.planesOfrecidos.map((p) => (
+              <div key={p.cuotas} className="rounded-xl bg-surface-2 px-3 py-2">
+                <div className="text-sm font-semibold tnum">{p.cuotas} × <MoneyText amount={p.montoCuota} currency={r.moneda} /></div>
+                <div className="text-[11px] text-muted tnum">
+                  total <MoneyText amount={p.cuotas * p.montoCuota} currency={r.moneda} />{p.cftea !== null && <> · CFTEA {pctFmt(p.cftea)}</>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {d.avisos.length > 0 && (
+        <div className="mt-4 space-y-2">
+          {d.avisos.map((av, k) => (
+            <div key={k} className="flex items-start gap-2.5 rounded-xl bg-unassigned-tint px-3 py-2.5 text-[12.5px]">
+              <Megaphone className="h-4 w-4 text-unassigned shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <span className="font-medium">{av.texto}</span>
+                {(av.vigencia || av.monto !== null) && (
+                  <span className="text-muted">
+                    {av.vigencia && <> · desde {fechaCorta(av.vigencia)}</>}
+                    {av.monto !== null && <> · <MoneyText amount={av.monto} currency={r.moneda} /></>}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
   )
 }

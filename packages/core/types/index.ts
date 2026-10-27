@@ -157,8 +157,43 @@ export interface Budget {
 export type ResumenTipo = 'tarjeta' | 'cuenta'
 
 export type ResumenItemTipo =
-  | 'consumo' | 'debito_automatico' | 'pago' | 'impuesto' | 'interes'
-  | 'comision' | 'devolucion' | 'transferencia' | 'otro'
+  | 'consumo' | 'debito_automatico' | 'pago' | 'impuesto' | 'percepcion' | 'interes'
+  | 'comision' | 'financiacion' | 'devolucion' | 'transferencia' | 'ajuste' | 'otro'
+
+/** Cabecera y condiciones del resumen, tal como las informa el banco (todo opcional) */
+export interface ResumenDetalle {
+  producto: string | null
+  /** YYYY-MM-DD */
+  fechaCierre: string | null
+  fechaVencimiento: string | null
+  proximoCierre: string | null
+  proximoVencimiento: string | null
+  saldoAnteriorArs: number | null
+  saldoAnteriorUsd: number | null
+  saldoActualArs: number | null
+  saldoActualUsd: number | null
+  pagoMinimo: number | null
+  limiteCompra: number | null
+  limiteFinanciacion: number | null
+  limiteAdelanto: number | null
+  limiteCuotas: number | null
+  /** Tasas en porcentaje (72.97 = 72,97 %) */
+  tna: number | null
+  tem: number | null
+  tea: number | null
+  cftea: number | null
+  tipoCambio: number | null
+  /** Cuadro "Total de cuotas a vencer"; desde = acumulado "a partir de" ese mes */
+  cuotasAVencer: { mes: string; monto: number; desde: boolean }[]
+  saldoFinanciable: number | null
+  planesOfrecidos: { cuotas: number; montoCuota: number; tna: number | null; cftea: number | null }[]
+  avisos: {
+    tipo: 'comision' | 'tasa' | 'beneficio' | 'condicion' | 'otro'
+    texto: string
+    vigencia: string | null
+    monto: number | null
+  }[]
+}
 
 export interface ResumenItem {
   id?: string
@@ -176,6 +211,8 @@ export interface ResumenItem {
   tipo: ResumenItemTipo
   /** id de categoría sugerida (gasto) */
   categoria: string | null
+  /** Titular o adicional, si el resumen separa los consumos por persona */
+  titular: string | null
 }
 
 export interface Resumen {
@@ -189,5 +226,7 @@ export interface Resumen {
   archivo: string
   creadoPor: string
   createdAt?: string
+  /** null en resúmenes cargados antes de que se extrajera la cabecera */
+  detalle: ResumenDetalle | null
   items: ResumenItem[]
 }
