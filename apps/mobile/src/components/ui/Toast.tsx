@@ -2,12 +2,14 @@
 
 import { useEffect, useRef } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { CheckCircle2, XCircle, Undo2 } from 'lucide-react'
+import { CheckCircle2, XCircle, AlertTriangle, Undo2 } from 'lucide-react'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { haptic } from '@/lib/haptics'
 import { springPop } from './motion'
 
 const DURATION = 2500
+/** Las advertencias suelen ser más largas de leer */
+const DURATION_WARNING = 4500
 /** Con acción ("Deshacer") se deja más tiempo para reaccionar */
 const DURATION_ACTION = 5500
 
@@ -18,11 +20,11 @@ export default function Toast() {
   useEffect(() => {
     if (!toast) return
     if (timerRef.current) clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(hideToast, toast.action ? DURATION_ACTION : DURATION)
+    timerRef.current = setTimeout(hideToast, toast.action ? DURATION_ACTION : toast.type === 'warning' ? DURATION_WARNING : DURATION)
     return () => { if (timerRef.current) clearTimeout(timerRef.current) }
   }, [toast, hideToast])
 
-  const isSuccess = toast?.type === 'success'
+  const type = toast?.type ?? 'success'
 
   return (
     <div className="fixed bottom-[104px] inset-x-0 z-[100] flex justify-center pointer-events-none px-4">
@@ -42,12 +44,11 @@ export default function Toast() {
             className="pointer-events-auto flex items-center gap-2.5 pl-2.5 pr-2 py-2 rounded-full glass-strong max-w-[350px] text-sm font-semibold text-gray-900"
           >
             <span className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${
-              isSuccess ? 'bg-emerald-500' : 'bg-rose-500'
+              type === 'success' ? 'bg-emerald-500' : type === 'warning' ? 'bg-amber-500' : 'bg-rose-500'
             }`}>
-              {isSuccess
-                ? <CheckCircle2 size={16} className="text-white" />
-                : <XCircle size={16} className="text-white" />
-              }
+              {type === 'success' ? <CheckCircle2 size={16} className="text-white" />
+                : type === 'warning' ? <AlertTriangle size={16} className="text-white" />
+                : <XCircle size={16} className="text-white" />}
             </span>
             <span className="leading-tight pr-2">{toast.message}</span>
             {toast.action && (

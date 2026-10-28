@@ -2,10 +2,12 @@
 
 import { useEffect } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { CheckCircle2, XCircle, Undo2 } from 'lucide-react'
+import { CheckCircle2, XCircle, AlertTriangle, Undo2 } from 'lucide-react'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
 
 const DURATION = 3000
+/** Las advertencias suelen ser más largas de leer */
+const DURATION_WARNING = 5000
 /** Con acción ("Deshacer") se deja más tiempo para reaccionar */
 const DURATION_ACTION = 6000
 
@@ -14,11 +16,11 @@ export function ToastViewport() {
 
   useEffect(() => {
     if (!toast) return
-    const t = setTimeout(hideToast, toast.action ? DURATION_ACTION : DURATION)
+    const t = setTimeout(hideToast, toast.action ? DURATION_ACTION : toast.type === 'warning' ? DURATION_WARNING : DURATION)
     return () => clearTimeout(t)
   }, [toast, hideToast])
 
-  const success = toast?.type === 'success'
+  const type = toast?.type ?? 'success'
 
   return (
     <div className="fixed bottom-6 right-6 z-[60] pointer-events-none">
@@ -31,10 +33,14 @@ export function ToastViewport() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.97, transition: { duration: 0.15 } }}
             transition={{ type: 'spring', stiffness: 460, damping: 30 }}
-            className="pointer-events-auto flex items-center gap-3 rounded-2xl glass-strong pl-3 pr-2 py-2.5 min-w-[280px]"
+            className="pointer-events-auto flex items-center gap-3 rounded-2xl glass-strong pl-3 pr-2 py-2.5 min-w-[280px] max-w-[420px]"
           >
-            <span className={`h-7 w-7 rounded-full inline-flex items-center justify-center shrink-0 ${success ? 'bg-income' : 'bg-expense'}`}>
-              {success ? <CheckCircle2 className="h-4 w-4 text-white" /> : <XCircle className="h-4 w-4 text-white" />}
+            <span className={`h-7 w-7 rounded-full inline-flex items-center justify-center shrink-0 ${
+              type === 'success' ? 'bg-income' : type === 'warning' ? 'bg-amber-500' : 'bg-expense'
+            }`}>
+              {type === 'success' ? <CheckCircle2 className="h-4 w-4 text-white" />
+                : type === 'warning' ? <AlertTriangle className="h-4 w-4 text-white" />
+                : <XCircle className="h-4 w-4 text-white" />}
             </span>
             <span className="text-sm font-medium text-foreground flex-1 pr-2">{toast.message}</span>
             {toast.action && (

@@ -23,7 +23,7 @@ import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { signOut } from '@finanzas/core/lib/auth'
 import { pushSoportado, getSuscripcionActual, activarPush, desactivarPush } from '@finanzas/core/lib/push'
 import { updateSettings } from '@finanzas/core/lib/settings'
-import { cambiarFuenteCambio, syncCotizaciones, haceCuanto, FUENTES_CAMBIO } from '@finanzas/core/lib/cotizaciones'
+import { cambiarFuenteCambio, syncCotizaciones, mensajeSync, ResultadoSync, haceCuanto, FUENTES_CAMBIO } from '@finanzas/core/lib/cotizaciones'
 import {
   deleteMonthTransactions,
   restoreTransactions,
@@ -76,6 +76,7 @@ export default function AjustesPage() {
   const [savingRate, setSavingRate] = useState(false)
   const [rateSaved, setRateSaved] = useState(false)
   const [rateError, setRateError] = useState<string | null>(null)
+  const [rateWarning, setRateWarning] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
 
   // Apariencia (por dispositivo)
@@ -139,12 +140,21 @@ export default function AjustesPage() {
   }
 
   // ── Tipos de cambio ──────────────────────────────────────────────────────────
+  // Un éxito no muestra nada (los valores nuevos ya se ven); solo se avisa si
+  // una moneda o las dos no respondieron.
+  function mostrarResultado(r: ResultadoSync) {
+    const m = mensajeSync(r)
+    if (m?.tipo === 'warning') setRateWarning(m.texto)
+    else if (m?.tipo === 'error') setRateError(m.texto)
+  }
+
   async function handleFuente(f: FuenteCambio) {
     if (!settings) return
     setRateError(null)
+    setRateWarning(null)
     setSyncing(true)
     try {
-      await cambiarFuenteCambio(settings, f)
+      mostrarResultado(await cambiarFuenteCambio(settings, f))
     } catch (err) {
       setRateError('No se pudo actualizar: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
@@ -155,10 +165,10 @@ export default function AjustesPage() {
   async function handleSyncAhora() {
     if (!settings) return
     setRateError(null)
+    setRateWarning(null)
     setSyncing(true)
     try {
-      const ok = await syncCotizaciones(settings, { force: true })
-      if (!ok) setRateError('No se pudo obtener la cotización (sin conexión con el servicio).')
+      mostrarResultado(await syncCotizaciones(settings, { force: true }))
     } finally {
       setSyncing(false)
     }
@@ -166,6 +176,7 @@ export default function AjustesPage() {
 
   async function saveRates() {
     setRateError(null)
+    setRateWarning(null)
     const ARS_USD = parseFloat(arsRate.replace(',', '.'))
     const COP_USD = parseFloat(copRate.replace(',', '.'))
     if (!Number.isFinite(ARS_USD) || !Number.isFinite(COP_USD) || ARS_USD <= 0 || COP_USD <= 0) {
@@ -680,6 +691,11 @@ export default function AjustesPage() {
               {rateError && (
                 <div className="bg-rose-500/10 ring-1 ring-rose-500/25 rounded-2xl px-3 py-2 text-xs text-rose-500 font-medium">
                   {rateError}
+                </div>
+              )}
+              {rateWarning && (
+                <div className="bg-amber-500/10 ring-1 ring-amber-500/25 rounded-2xl px-3 py-2 text-xs text-amber-600 font-medium">
+                  {rateWarning}
                 </div>
               )}
               {(s?.historialTipoCambio ?? []).length > 0 && (
