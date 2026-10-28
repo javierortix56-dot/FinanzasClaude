@@ -19,7 +19,7 @@ import { CategoryIcon } from '@finanzas/core/lib/categoryIcons'
 import { currentThemePref, setThemePref, subscribeTheme, ThemePref } from '@/lib/theme'
 import { CategoryGroup, FuenteCambio, Settings } from '@finanzas/core/types'
 import { HORMIGA_DEFAULT } from '@finanzas/core/lib/resumenAnalisis'
-import { cambiarFuenteCambio, syncCotizaciones, haceCuanto, FUENTES_CAMBIO } from '@finanzas/core/lib/cotizaciones'
+import { cambiarFuenteCambio, syncCotizaciones, mensajeSync, haceCuanto, FUENTES_CAMBIO } from '@finanzas/core/lib/cotizaciones'
 import { PageScroll } from '@/components/shell/PageScroll'
 
 const parseRate = (v: string) => parseFloat(v.replace(',', '.'))
@@ -63,8 +63,9 @@ export default function AjustesPage() {
   async function handleFuente(f: FuenteCambio) {
     setSyncing(true)
     try {
-      await cambiarFuenteCambio(settings, f)
-      showToast(f === 'manual' ? 'Tipo de cambio manual' : `Cotización ${FUENTES_CAMBIO.find((x) => x.value === f)?.label} aplicada`)
+      const r = await cambiarFuenteCambio(settings, f)
+      const m = mensajeSync(r, `Cotización ${FUENTES_CAMBIO.find((x) => x.value === f)?.label} aplicada`)
+      showToast(m?.texto ?? 'Tipo de cambio manual', m?.tipo ?? 'success')
     } catch {
       showToast('No se pudo actualizar la cotización', 'error')
     } finally {
@@ -74,9 +75,9 @@ export default function AjustesPage() {
 
   async function handleSyncAhora() {
     setSyncing(true)
-    const ok = await syncCotizaciones(settings, { force: true })
+    const m = mensajeSync(await syncCotizaciones(settings, { force: true }))
     setSyncing(false)
-    showToast(ok ? 'Cotización actualizada' : 'No se pudo obtener la cotización', ok ? 'success' : 'error')
+    if (m) showToast(m.texto, m.tipo)
   }
 
   const prev = shiftMonth(currentMonth, -1)

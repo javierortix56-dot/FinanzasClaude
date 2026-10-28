@@ -6,9 +6,11 @@ interface ToastAction {
   onClick: () => void
 }
 
+export type ToastType = 'success' | 'warning' | 'error'
+
 interface Toast {
   message: string
-  type: 'success' | 'error'
+  type: ToastType
   /** Acción opcional (p. ej. "Deshacer"); el toast dura más cuando la tiene */
   action?: ToastAction
   /** Identifica cada toast para que dos iguales seguidos reinicien el timer */
@@ -22,7 +24,7 @@ interface UIState {
   openAddModal: () => void
   openEditModal: (tx: Transaction) => void
   closeTransactionModal: () => void
-  showToast: (message: string, type?: 'success' | 'error', action?: ToastAction) => void
+  showToast: (message: string, type?: ToastType, action?: ToastAction) => void
   hideToast: () => void
 }
 
