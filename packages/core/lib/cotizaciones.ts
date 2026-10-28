@@ -1,5 +1,7 @@
 // Cotizaciones automáticas (compartido por mobile y desktop).
-//   ARS/USD: dolarapi.com (valor del día) + argentinadatos.com (histórico diario)
+//   ARS/USD: valor del día con varias fuentes en cascada (dolarapi.com,
+//            criptoya.com, bluelytics.com.ar, argentinadatos.com) para no
+//            depender de un solo servicio + argentinadatos.com (histórico diario)
 //   COP/USD: TRM oficial de la Superfinanciera vía datos.gov.co (histórico)
 // Todas son APIs públicas, gratuitas y con CORS abierto.
 //
@@ -67,6 +69,74 @@ function promedio(nums: number[]): number | null {
 
 const redondear = (n: number) => Math.round(n * 100) / 100
 
+type Casa = Exclude<FuenteCambio, 'manual'>
+
+interface FuenteARS {
+  nombre: string
+  url: (casa: Casa) => string | null
+  /** Precio de venta para la casa pedida; null si la respuesta no lo trae */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  venta: (json: any, casa: Casa) => number | null
+}
+
+const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null)
+
+/** En orden de preferencia: se usa la primera que responda con un valor válido */
+const FUENTES_ARS: FuenteARS[] = [
+  {
+    nombre: 'dolarapi.com',
+    url: (casa) => `https://dolarapi.com/v1/dolares/${CASA[casa]}`,
+    venta: (j) => num(j?.venta),
+  },
+  {
+    nombre: 'criptoya.com',
+    url: () => 'https://criptoya.com/api/dolar',
+    venta: (j, casa) =>
+      casa === 'mep' ? num(j?.mep?.al30?.ci?.price) ?? num(j?.mep?.al30?.['24hs']?.price)
+      : num(j?.[casa]?.ask) ?? num(j?.[casa]?.price),
+  },
+  {
+    nombre: 'bluelytics.com.ar',
+    // No publica MEP
+    url: (casa) => (casa === 'mep' ? null : 'https://api.bluelytics.com.ar/v2/latest'),
+    venta: (j, casa) => num(j?.[casa]?.value_sell),
+  },
+  {
+    nombre: 'argentinadatos.com',
+    // Histórico completo (~500 KB): último recurso, se toma el dato más reciente
+    url: (casa) => `https://api.argentinadatos.com/v1/cotizaciones/dolares/${CASA[casa]}`,
+    venta: (j) => (Array.isArray(j) && j.length ? num(j[j.length - 1]?.venta) : null),
+  },
+]
+
+async function ventaDe(f: FuenteARS, casa: Casa): Promise<number> {
+  const url = f.url(casa)
+  if (!url) throw new Error(`${f.nombre} no publica el dólar ${casa}`)
+  const timeout = f.nombre === 'argentinadatos.com' ? TIMEOUT_HISTORICO_MS : TIMEOUT_HOY_MS
+  const v = f.venta(await getJSON(url, timeout), casa)
+  if (v === null) throw new Error(`${f.nombre}: respuesta sin valor para ${casa}`)
+  return v
+}
+
+/**
+ * Dólar del día sin depender de un solo servicio: consulta en paralelo las
+ * fuentes livianas y usa la de mayor preferencia que respondió; solo si
+ * fallan todas descarga el histórico de argentinadatos y toma el último dato.
+ */
+async function fetchARSHoy(casa: Casa): Promise<number> {
+  const livianas = FUENTES_ARS.slice(0, -1)
+  const res = await Promise.allSettled(livianas.map((f) => ventaDe(f, casa)))
+  const i = res.findIndex((r) => r.status === 'fulfilled')
+  if (i >= 0) {
+    if (i > 0) console.warn(`[cotizaciones] dólar ${casa} tomado de ${livianas[i].nombre} (fallaron las anteriores)`)
+    return (res[i] as PromiseFulfilledResult<number>).value
+  }
+  const ultimo = FUENTES_ARS[FUENTES_ARS.length - 1]
+  const v = await ventaDe(ultimo, casa)
+  console.warn(`[cotizaciones] dólar ${casa} tomado de ${ultimo.nombre} (fallaron las demás)`)
+  return v
+}
+
 export interface CotizacionesHoy { ARS_USD: number; COP_USD: number }
 
 export type MonedaCotizada = 'ARS' | 'COP'
@@ -78,14 +148,14 @@ export type MonedaCotizada = 'ARS' | 'COP'
  * indica cuáles no respondieron.
  */
 export async function fetchCotizacionesHoy(
-  fuente: Exclude<FuenteCambio, 'manual'>,
+  fuente: Casa,
   previo?: CotizacionesHoy,
 ): Promise<CotizacionesHoy & { fallidas: MonedaCotizada[] }> {
   const [ars, cop] = await Promise.allSettled([
-    getJSON<{ venta: number }>(`https://dolarapi.com/v1/dolares/${CASA[fuente]}`, TIMEOUT_HOY_MS),
+    fetchARSHoy(fuente),
     getJSON<{ valor: string }[]>('https://www.datos.gov.co/resource/32sa-8pi3.json?$limit=1&$order=vigenciadesde%20DESC', TIMEOUT_HOY_MS),
   ])
-  const arsNuevo = ars.status === 'fulfilled' && ars.value.venta > 0 ? ars.value.venta : null
+  const arsNuevo = ars.status === 'fulfilled' ? ars.value : null
   const copRaw = cop.status === 'fulfilled' ? parseFloat(cop.value[0]?.valor ?? '') : NaN
   const copNuevo = copRaw > 0 ? redondear(copRaw) : null
   const ARS_USD = arsNuevo ?? previo?.ARS_USD
@@ -99,7 +169,7 @@ export async function fetchCotizacionesHoy(
 
 /** Promedio mensual de los meses pedidos (los que falten en la fuente no se devuelven) */
 export async function fetchPromediosMensuales(
-  fuente: Exclude<FuenteCambio, 'manual'>,
+  fuente: Casa,
   meses: string[],
 ): Promise<ExchangeRateRecord[]> {
   if (meses.length === 0) return []
