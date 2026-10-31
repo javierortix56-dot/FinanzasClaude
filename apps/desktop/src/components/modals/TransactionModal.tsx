@@ -655,7 +655,7 @@ function PagoTarjetaForm({ pago, onClose }: { pago: Transaction; onClose: () => 
   )
 }
 
-const formatNum = (n: number) => n.toLocaleString('es-AR', { maximumFractionDigits: 2 })
+const formatNum = (n: number) => n.toLocaleString('es-AR', { maximumFractionDigits: 0 })
 
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
   return (

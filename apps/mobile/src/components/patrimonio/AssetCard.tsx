@@ -43,7 +43,7 @@ export default function AssetCard({ asset, settings, onClick, onUpdateSnapshot }
     const currentUSD = toUSD(asset.saldo, asset.moneda, settings)
     const goalUSD    = toUSD(asset.metaObjetivo, asset.metaMoneda as Currency, settings)
     metaPercent = goalUSD > 0 ? Math.min((currentUSD / goalUSD) * 100, 100) : 0
-    metaLabel = `${asset.metaMoneda} ${new Intl.NumberFormat('es-AR').format(asset.metaObjetivo)}`
+    metaLabel = `${asset.metaMoneda} ${new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(asset.metaObjetivo)}`
   }
 
   const icon = TIPO_ICONS[asset.tipo.toLowerCase()] ?? <Landmark size={18} />

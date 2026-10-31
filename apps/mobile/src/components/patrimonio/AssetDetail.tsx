@@ -136,7 +136,7 @@ function Contenido({ asset, settings, blur, onClose, onEdit, onSnapshot }: {
         {asset.metaObjetivo != null && (
           <div className="rounded-2xl bg-primary/[0.06] px-3 py-3">
             <div className="flex justify-between text-xs text-gray-500 mb-1.5">
-              <span>Meta: <span className="font-semibold">{asset.metaMoneda} {new Intl.NumberFormat('es-AR').format(asset.metaObjetivo)}</span></span>
+              <span>Meta: <span className="font-semibold">{asset.metaMoneda} {new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(asset.metaObjetivo)}</span></span>
               <span className="font-bold text-primary">{Math.round(metaPct)}%</span>
             </div>
             <ProgressBar value={metaPct} color="linear-gradient(90deg, var(--primary-2), var(--primary))" trackClassName="bg-primary/10" />

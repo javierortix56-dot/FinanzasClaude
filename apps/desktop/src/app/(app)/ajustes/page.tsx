@@ -176,7 +176,7 @@ export default function AjustesPage() {
               {historial.map((h) => (
                 <div key={h.mes} className="flex justify-between border-b border-hairline py-1.5 text-xs tnum">
                   <span className="capitalize text-muted">{monthLabel(h.mes)}{h.fuente ? '' : ' · manual'}</span>
-                  <span className="text-foreground">{h.ARS_USD.toLocaleString('es-AR')} · {h.COP_USD.toLocaleString('es-AR')}</span>
+                  <span className="text-foreground">{h.ARS_USD.toLocaleString('es-AR', { maximumFractionDigits: 0 })} · {h.COP_USD.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</span>
                 </div>
               ))}
             </div>
@@ -259,7 +259,7 @@ function RateValue({ label, value }: { label: string; value: number }) {
   return (
     <div>
       <div className="eyebrow mb-2">{label}</div>
-      <div className="text-[22px] font-semibold tnum">{value.toLocaleString('es-AR')}</div>
+      <div className="text-[22px] font-semibold tnum">{value.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</div>
     </div>
   )
 }
