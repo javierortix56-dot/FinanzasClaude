@@ -341,7 +341,8 @@ function Column({ tipo, count, total, base, onScrollY, children }: {
   const isIngreso = tipo === 'ingreso'
   return (
     <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
-      <div className="px-3 pt-0.5 pb-1.5 flex-shrink-0">
+      {/* Encabezado con total, separado de las filas por una línea fina */}
+      <div className="mx-1.5 px-1.5 pt-0.5 pb-2 mb-1 flex-shrink-0 border-b border-hairline">
         <div className="flex items-center gap-1.5">
           <span className={`w-1.5 h-1.5 rounded-full ${isIngreso ? 'bg-emerald-500' : 'bg-rose-500'}`} />
           <p className="eyebrow">
@@ -353,7 +354,8 @@ function Column({ tipo, count, total, base, onScrollY, children }: {
         </p>
       </div>
       <div
-        className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-1.5 pb-28 no-scrollbar"
+        // Las filas que se desplazan se desvanecen al llegar al encabezado en vez de cortarse
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-1.5 pt-1 pb-28 no-scrollbar [mask-image:linear-gradient(to_bottom,transparent_0,#000_10px)] [-webkit-mask-image:linear-gradient(to_bottom,transparent_0,#000_10px)]"
         onScroll={(e) => onScrollY?.(e.currentTarget.scrollTop)}
       >
         {children}
