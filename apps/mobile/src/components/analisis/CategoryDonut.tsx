@@ -16,6 +16,7 @@ import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import Segmented from '@/components/ui/Segmented'
 import ProgressBar from '@/components/ui/ProgressBar'
 import { Money } from '@/components/ui/AnimatedNumber'
+import { cuentaEnCategorias } from '@finanzas/core/lib/tarjetas'
 import { CategoryIcon } from '@/lib/categoryIcons'
 
 // High-contrast palette: colours spaced across the full hue wheel
@@ -58,7 +59,8 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
   const [budgetCat,      setBudgetCat]      = useState<string | null>(null)
   const [budgetOpen,     setBudgetOpen]     = useState(false)
 
-  const filtered = transactions.filter((t) => t.tipo === tipoTab)
+  // Los pagos de tarjeta no son una categoría de gasto: sus consumos ya cuentan
+  const filtered = transactions.filter((t) => t.tipo === tipoTab && cuentaEnCategorias(t))
 
   // Árbol de grupos activos según el tipo seleccionado
   const groups: CategoryGroup[] = useMemo(() => {

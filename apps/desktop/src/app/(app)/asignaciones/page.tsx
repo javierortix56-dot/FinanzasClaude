@@ -3,7 +3,7 @@
 import { txLabel } from '@/lib/txLabel'
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { Check, ChevronRight, Link2, Wand2, Unlink, X, Inbox } from 'lucide-react'
+import { Check, ChevronRight, Link2, Wand2, Unlink, X, Inbox, CreditCard } from 'lucide-react'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
@@ -15,7 +15,8 @@ import { MoneyText } from '@/components/MoneyText'
 import { LedgerStats, LedgerTabs } from '@/components/ledger/LedgerHeader'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { toBase, txToBase, txMonth } from '@finanzas/core/lib/currency'
-import { getCatFromSettings } from '@finanzas/core/lib/constants'
+import { getCatFromSettings, monthLabel, shiftMonth } from '@finanzas/core/lib/constants'
+import { cuentaEnCaja, necesitaRespaldo } from '@finanzas/core/lib/tarjetas'
 import { planAutoAssign } from '@finanzas/core/lib/autoAssign'
 import { updateAsignacionesWithUndo } from '@finanzas/core/lib/undo'
 import { CategoryIcon } from '@finanzas/core/lib/categoryIcons'
@@ -29,7 +30,7 @@ const fechaCorta = (t: Transaction) =>
 const plural = (n: number, s: string) => `${n} ${s}${n !== 1 ? 's' : ''}`
 
 export default function AsignacionesPage() {
-  const { transactions } = useTransactionStore()
+  const { transactions, currentMonth } = useTransactionStore()
   const settings = (useSettingsStore((s) => s.settings) ?? DEFAULT_SETTINGS) as Settings
   const { monedaBase } = useAuthStore()
   const showToast = useUIStore((s) => s.showToast)
@@ -51,9 +52,10 @@ export default function AsignacionesPage() {
   // Un egreso asignado a un ingreso que ya no existe (huérfano) cuenta como
   // sin asignar: antes quedaba invisible, fuera de todo grupo.
   const ingresoIds = useMemo(() => new Set(ingresos.map((i) => i.id)), [ingresos])
-  const sinAsignar = egresos.filter((e) => !e.asignaciones.some((a) => ingresoIds.has(a.ingresoId)))
+  const sinAsignar = egresos.filter((e) => necesitaRespaldo(e, ingresoIds))
 
-  const totalEgresos = egresos.reduce((s, t) => s + txToBase(t, base, settings), 0)
+  // Lo que sale de los ingresos este mes: los consumos con tarjeta se pagan el próximo
+  const totalEgresos = egresos.filter(cuentaEnCaja).reduce((s, t) => s + txToBase(t, base, settings), 0)
   const sinAsignarTotal = sinAsignar.reduce((s, t) => s + txToBase(t, base, settings), 0)
   const asignados = totalEgresos - sinAsignarTotal
   const pctAsignado = totalEgresos > 0 ? (asignados / totalEgresos) * 100 : 0
@@ -71,7 +73,14 @@ export default function AsignacionesPage() {
     })
   }, [ingresos, egresos, settings, base])
 
-  const pendientes = egresos.filter((e) => !e.ejecutado).length
+  // Consumos con tarjeta del mes, agrupados por tarjeta
+  const gruposTarjeta = useMemo(() => (settings.tarjetas ?? []).map((t) => {
+    const consumos = egresos.filter((e) => e.tarjetaId === t.id && !e.pagoTarjeta)
+    return { tarjeta: t, consumos, total: consumos.reduce((s, e) => s + txToBase(e, base, settings), 0) }
+  }), [egresos, settings, base])
+  const mesPago = monthLabel(shiftMonth(currentMonth, 1))
+
+  const pendientes = egresos.filter((e) => cuentaEnCaja(e) && e.monto > 0 && !e.ejecutado).length
 
   // La selección se limpia si sus egresos desaparecen (otro dispositivo, borrado)
   const egresoIds = new Set(egresos.map((e) => e.id))
@@ -110,7 +119,7 @@ export default function AsignacionesPage() {
     setBusy(true)
     try {
       await updateAsignacionesWithUndo(
-        plan.map(({ exp, ingresoId }) => ({ tx: exp, asignaciones: [{ ingresoId, monto: exp.monto }] })),
+        plan.map(({ exp, ingresoId }) => ({ tx: exp, asignaciones: [{ ingresoId, monto: exp.monto }], tarjetaId: null })),
         `${plural(plan.length, 'egreso')} asignado${plan.length !== 1 ? 's' : ''}`,
       )
     } finally {
@@ -118,18 +127,34 @@ export default function AsignacionesPage() {
     }
   }
 
-  async function reasignar(toIngresoId: string | null) {
+  /** Destino: id de ingreso, `tc:<id>` para una tarjeta o null para desasignar */
+  async function reasignar(destino: string | null) {
     const byId = new Map(egresos.map((e) => [e.id!, e]))
-    const changes = [...selected]
-      .map((id) => byId.get(id))
-      .filter((e): e is Transaction => !!e)
-      .map((tx) => ({ tx, asignaciones: toIngresoId ? [{ ingresoId: toIngresoId, monto: tx.monto }] : [] }))
+    const tarjetaId = destino?.startsWith('tc:') ? destino.slice(3) : null
+    const elegidos = [...selected].map((id) => byId.get(id)).filter((e): e is Transaction => !!e)
+    // Un pago de tarjeta no puede pagarse con otra tarjeta
+    const changes = elegidos
+      .filter((tx) => !(tarjetaId && tx.pagoTarjeta))
+      .map((tx) => ({
+        tx,
+        asignaciones: destino && !tarjetaId ? [{ ingresoId: destino, monto: tx.monto }] : [],
+        tarjetaId,
+      }))
     setSelected(new Set())
     setReassignOpen(false)
+    if (elegidos.length > changes.length) showToast('Los pagos de tarjeta se asignan solo a ingresos', 'warning')
     if (changes.length === 0) return
     await updateAsignacionesWithUndo(
       changes,
-      toIngresoId ? `${plural(changes.length, 'egreso')} reasignado${changes.length !== 1 ? 's' : ''}` : `${plural(changes.length, 'egreso')} desasignado${changes.length !== 1 ? 's' : ''}`,
+      destino ? `${plural(changes.length, 'egreso')} reasignado${changes.length !== 1 ? 's' : ''}` : `${plural(changes.length, 'egreso')} desasignado${changes.length !== 1 ? 's' : ''}`,
+    )
+  }
+
+  async function liberarTarjeta(nombre: string, items: Transaction[]) {
+    if (items.length === 0) return
+    await updateAsignacionesWithUndo(
+      items.map((tx) => ({ tx, asignaciones: [], tarjetaId: null })),
+      `Gastos de ${nombre} desasignados`,
     )
   }
 
@@ -281,6 +306,25 @@ export default function AsignacionesPage() {
           )
         })}
 
+        {gruposTarjeta.filter((g) => g.consumos.length > 0).map((g, i) => (
+          <GrupoCard
+            key={g.tarjeta.id}
+            index={grupos.length + i + 1}
+            titulo={<span className="inline-flex items-center gap-1.5"><CreditCard className="h-3.5 w-3.5" style={{ color: g.tarjeta.color }} />{g.tarjeta.nombre}</span>}
+            meta={`${plural(g.consumos.length, 'egreso')} · se pagan en ${mesPago}`}
+            total={g.total}
+            sub="con tarjeta"
+            base={base}
+            expanded={expanded[g.tarjeta.id] ?? false}
+            onToggle={() => toggle(g.tarjeta.id, false)}
+            onUnassignAll={() => liberarTarjeta(g.tarjeta.nombre, g.consumos)}
+            settings={settings}
+            egresos={g.consumos}
+            selected={selected}
+            onSelect={toggleSelect}
+          />
+        ))}
+
         {grupos.length === 0 && sinAsignar.length === 0 && (
           <div className="glass flex flex-col items-center gap-2 rounded-[18px] py-12 text-center text-[13px] text-muted">
             <Inbox className="h-6 w-6 text-muted-2" />
@@ -292,7 +336,7 @@ export default function AsignacionesPage() {
       <Modal
         open={reassignOpen}
         onClose={() => setReassignOpen(false)}
-        title="Reasignar a un ingreso"
+        title="Reasignar"
         description={`${plural(selCount, 'egreso')} · se asigna el monto completo`}
       >
         <div className="space-y-2">
@@ -328,6 +372,24 @@ export default function AsignacionesPage() {
             )
           })}
           {ingresos.length === 0 && <p className="py-6 text-center text-sm text-muted">No hay ingresos.</p>}
+          {gruposTarjeta.length > 0 && <div className="eyebrow pt-2">Tarjetas · se pagan en {mesPago}</div>}
+          {gruposTarjeta.map(({ tarjeta: t, total }) => (
+            <motion.button
+              key={t.id}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => reasignar(`tc:${t.id}`)}
+              className="group flex w-full items-center gap-3 rounded-xl bg-surface-2 p-3 text-left transition-colors hover:bg-primary/10"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white" style={{ background: t.color }}>
+                <CreditCard className="h-4 w-4" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-foreground">{t.nombre}</span>
+                <span className="mt-0.5 block text-xs text-muted">Acumulado del mes <MoneyText amount={total} currency={base} /></span>
+              </span>
+              <ChevronRight className="h-4 w-4 text-muted-2 transition-transform group-hover:translate-x-0.5" />
+            </motion.button>
+          ))}
         </div>
       </Modal>
     </main>
@@ -339,7 +401,7 @@ function GrupoCard({
   settings, egresos, selected, onSelect, tone,
 }: {
   index: number
-  titulo: string
+  titulo: React.ReactNode
   meta: React.ReactNode
   total: number
   sub: string

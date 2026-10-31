@@ -9,6 +9,7 @@ import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { toBase, txToBase } from '@finanzas/core/lib/currency'
 import { monthLabel } from '@finanzas/core/lib/constants'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
+import { cuentaEnCaja, esConsumoTarjeta, necesitaRespaldo } from '@finanzas/core/lib/tarjetas'
 import { MoneyText } from '@/components/MoneyText'
 import { cn } from '@finanzas/core/lib/utils'
 import { Currency, Settings } from '@finanzas/core/types'
@@ -29,7 +30,9 @@ export function LedgerStats() {
 
   const base = monedaBase as Currency
   const ingresos = transactions.filter((t) => t.tipo === 'ingreso')
-  const egresos = transactions.filter((t) => t.tipo === 'egreso')
+  // Lo que sale este mes: los consumos con tarjeta se pagan el mes siguiente
+  const egresos = transactions.filter((t) => t.tipo === 'egreso' && cuentaEnCaja(t))
+  const conTarjeta = transactions.filter(esConsumoTarjeta).length
 
   const totalIn = ingresos.reduce((s, t) => s + txToBase(t, base, settings), 0)
   const totalOut = egresos.reduce((s, t) => s + txToBase(t, base, settings), 0)
@@ -39,7 +42,7 @@ export function LedgerStats() {
   // Huérfanos (asignados a un ingreso que ya no existe) cuentan como sin asignar,
   // igual que el badge de la barra lateral.
   const ingresoIds = new Set(ingresos.map((t) => t.id))
-  const sinAsignarList = egresos.filter((t) => !t.asignaciones.some((a) => ingresoIds.has(a.ingresoId)))
+  const sinAsignarList = egresos.filter((t) => necesitaRespaldo(t, ingresoIds))
   const sinAsignar = sinAsignarList.reduce((s, t) => s + txToBase(t, base, settings), 0)
 
   const share = totalIn > 0 ? Math.round((totalOut / totalIn) * 100) : 0
@@ -74,7 +77,8 @@ export function LedgerStats() {
         label="Egresos"
         tone="expense"
         value={<MoneyText amount={totalOut} currency={base} animated />}
-        sub={totalIn > 0 ? `${share}% del ingreso` : `${egresos.length} movimientos`}
+        sub={(totalIn > 0 ? `${share}% del ingreso` : `${egresos.length} movimientos`)
+          + (conTarjeta > 0 ? ` · ${conTarjeta} con tarjeta aparte` : '')}
         progress={totalIn > 0 ? share : undefined}
       />
       <StatCard

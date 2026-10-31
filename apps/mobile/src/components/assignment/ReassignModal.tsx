@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'motion/react'
-import { CheckCircle2 } from 'lucide-react'
+import { CheckCircle2, CreditCard } from 'lucide-react'
 import { Transaction, Settings, Currency } from '@finanzas/core/types'
 import { getCatFromSettings, formatAmount } from '@finanzas/core/lib/constants'
 import { toBase, txToBase, txMonth } from '@finanzas/core/lib/currency'
@@ -15,7 +15,8 @@ interface Props {
   egresos: Transaction[]
   userNames: Record<string, string>
   selectedCount: number
-  onReassign: (incomeId: string) => void
+  /** Id de ingreso, o `tc:<id>` para una tarjeta */
+  onReassign: (destino: string) => void
   settings: Settings
   monedaBase: Currency
 }
@@ -36,7 +37,7 @@ export default function ReassignModal({
       open={open}
       onClose={onClose}
       title={`Reasignar ${selectedCount} egreso${selectedCount !== 1 ? 's' : ''}`}
-      subtitle="Elegí el ingreso al que querés asignarlos"
+      subtitle="Elegí un ingreso o una tarjeta"
       bodyClassName="px-4 pb-6"
     >
       {ingresos.length === 0 ? (
@@ -92,6 +93,24 @@ export default function ReassignModal({
               </motion.button>
             )
           })}
+        </div>
+      )}
+      {(settings.tarjetas ?? []).length > 0 && (
+        <div className="mt-4 space-y-2">
+          <p className="eyebrow px-1">Tarjetas · se pagan el mes siguiente</p>
+          {(settings.tarjetas ?? []).map((t) => (
+            <motion.button
+              key={t.id}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => onReassign(`tc:${t.id}`)}
+              className="w-full p-3 rounded-2xl bg-gray-500/[0.06] hover:bg-primary/[0.07] transition-colors text-left flex items-center gap-3"
+            >
+              <span className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-white" style={{ background: t.color }}>
+                <CreditCard size={16} />
+              </span>
+              <span className="text-sm font-semibold text-gray-900 truncate">{t.nombre}</span>
+            </motion.button>
+          ))}
         </div>
       )}
     </Sheet>

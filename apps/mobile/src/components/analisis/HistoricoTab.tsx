@@ -28,6 +28,7 @@ const INSIGHT_ICONS: Record<InsightIcon, React.ReactNode> = {
   clock: <Clock size={15} />,
 }
 import { CategoryIcon } from '@/lib/categoryIcons'
+import { cuentaEnCaja, cuentaEnCategorias } from '@finanzas/core/lib/tarjetas'
 import { Money } from '@/components/ui/AnimatedNumber'
 
 const MONTH_ABBR = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
@@ -89,7 +90,8 @@ export default function HistoricoTab() {
     const inc = txs.filter((t) => t.tipo === 'ingreso').reduce(
       (s, t) => s + txToBase(t, base, settings ?? DEFAULT_SETTINGS), 0
     )
-    const exp = txs.filter((t) => t.tipo === 'egreso').reduce(
+    // Caja: los consumos con tarjeta se cuentan en el pago del mes siguiente
+    const exp = txs.filter((t) => t.tipo === 'egreso' && cuentaEnCaja(t)).reduce(
       (s, t) => s + txToBase(t, base, settings ?? DEFAULT_SETTINGS), 0
     )
     ingresosVals.push(inc)
@@ -115,15 +117,18 @@ export default function HistoricoTab() {
 
   // Gasto por grupo de categoría (mes visible) para "top categoría"
   const gruposMes = new Map<string, number>()
+  // Por categoría: los consumos con tarjeta sí, los pagos de tarjeta no
+  let gastoCatMes = 0
   for (const t of transactions) {
-    if (t.tipo !== 'egreso') continue
+    if (t.tipo !== 'egreso' || !cuentaEnCategorias(t)) continue
     const grp = getParentGroup(t.categoria, s.categoriasGasto)
     const id = grp?.id ?? t.categoria
+    gastoCatMes += txToBase(t, base, s)
     gruposMes.set(id, (gruposMes.get(id) ?? 0) + txToBase(t, base, s))
   }
   const topGrupo = [...gruposMes.entries()].sort((a, b) => b[1] - a[1])[0]
   const topGrupoNombre = topGrupo ? (getCatFromSettings(topGrupo[0], s)?.nombre ?? topGrupo[0]) : null
-  const topGrupoPct = topGrupo && expMes > 0 ? Math.round((topGrupo[1] / expMes) * 100) : 0
+  const topGrupoPct = topGrupo && gastoCatMes > 0 ? Math.round((topGrupo[1] / gastoCatMes) * 100) : 0
 
   // ── Evolución de gasto por grupo de categoría (6 meses) ───────────────────
   const gruposSeries: LineSeries[] = (() => {
@@ -133,7 +138,7 @@ export default function HistoricoTab() {
       const txs = i === 0 ? transactions : (monthlyData[m] ?? [])
       const idx = 5 - i
       for (const t of txs) {
-        if (t.tipo !== 'egreso') continue
+        if (t.tipo !== 'egreso' || !cuentaEnCategorias(t)) continue
         const grp = getParentGroup(t.categoria, s.categoriasGasto)
         const id = grp?.id ?? t.categoria
         if (!porGrupo.has(id)) porGrupo.set(id, Array(6).fill(0))
@@ -153,7 +158,7 @@ export default function HistoricoTab() {
 
   // ── Top 5 gastos del mes ──────────────────────────────────────────────────
   const topGastos = [...transactions]
-    .filter((t) => t.tipo === 'egreso')
+    .filter((t) => t.tipo === 'egreso' && cuentaEnCategorias(t))
     .map((t) => ({ t, montoBase: txToBase(t, base, s) }))
     .sort((a, b) => b.montoBase - a.montoBase)
     .slice(0, 5)

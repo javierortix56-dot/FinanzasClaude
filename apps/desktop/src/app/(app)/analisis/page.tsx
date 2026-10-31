@@ -15,6 +15,7 @@ import { LineChart } from '@/components/charts/LineChart'
 import { InsightsList } from '@/components/InsightsList'
 import { fetchLastNMonths } from '@finanzas/core/lib/analytics'
 import { txToBase } from '@finanzas/core/lib/currency'
+import { cuentaEnCaja, cuentaEnCategorias } from '@finanzas/core/lib/tarjetas'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { getCatFromSettings, monthLabel, shiftMonth } from '@finanzas/core/lib/constants'
 import { computeInsights } from '@finanzas/core/lib/insights'
@@ -52,8 +53,9 @@ export default function AnalisisPage() {
   const ready = loadedFor === currentMonth
   const prevTxs = ready ? historico[shiftMonth(currentMonth, -1)] ?? [] : []
 
+  // Balance = caja: los consumos con tarjeta se cuentan en el pago del mes siguiente
   const sumByType = (txs: Transaction[], tipo: 'ingreso' | 'egreso') =>
-    txs.filter((t) => t.tipo === tipo)
+    txs.filter((t) => t.tipo === tipo && cuentaEnCaja(t))
        .reduce((s, t) => s + txToBase(t, base, settings), 0)
 
   const ingresosCur = sumByType(transactions, 'ingreso')
@@ -63,7 +65,8 @@ export default function AnalisisPage() {
   const egresosPrev  = sumByType(prevTxs, 'egreso')
   const balancePrev  = ingresosPrev - egresosPrev
 
-  const target = transactions.filter((t) => t.tipo === (tabCat === 'gastos' ? 'egreso' : 'ingreso'))
+  // Por categoría: el consumo cuenta en su categoría real; el pago de tarjeta no
+  const target = transactions.filter((t) => t.tipo === (tabCat === 'gastos' ? 'egreso' : 'ingreso') && cuentaEnCategorias(t))
   const totalCat = target.reduce((s, t) => s + txToBase(t, base, settings), 0)
   const byCat = new Map<string, number>()
   for (const t of target) {

@@ -18,6 +18,7 @@ import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { haceCuanto } from '@finanzas/core/lib/cotizaciones'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
+import { necesitaRespaldo } from '@finanzas/core/lib/tarjetas'
 
 export const NAV_ITEMS = [
   { href: '/dashboard',     label: 'Dashboard',    icon: LayoutDashboard },
@@ -33,9 +34,7 @@ export const NAV_ITEMS = [
 export function useSinAsignar(): number {
   const transactions = useTransactionStore((s) => s.transactions)
   const ingresoIds = new Set(transactions.filter((t) => t.tipo === 'ingreso').map((t) => t.id))
-  return transactions.filter(
-    (t) => t.tipo === 'egreso' && !t.asignaciones.some((a) => ingresoIds.has(a.ingresoId)),
-  ).length
+  return transactions.filter((t) => necesitaRespaldo(t, ingresoIds)).length
 }
 
 export function Sidebar({ onShowShortcuts }: { onShowShortcuts: () => void }) {

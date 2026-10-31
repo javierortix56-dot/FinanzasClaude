@@ -51,10 +51,12 @@ export function rowToTx(row: Record<string, any>): Transaction {
     creadoPor: extra.creadoPor ?? 'shared',
     recurrente: extra.recurrente ?? false,
     ahorroAssetId: extra.ahorroAssetId ?? null,
+    tarjetaId: typeof extra.tarjetaId === 'string' && extra.tarjetaId ? extra.tarjetaId : null,
+    pagoTarjeta: extra.pagoTarjeta && typeof extra.pagoTarjeta.tarjetaId === 'string' ? extra.pagoTarjeta : null,
   }
 }
 
-function txToRow(tx: Omit<Transaction, 'id'>) {
+export function txToRow(tx: Omit<Transaction, 'id'>) {
   return {
     user_id: SHARED_UUID,
     type: tx.tipo,
@@ -74,6 +76,8 @@ function txToRow(tx: Omit<Transaction, 'id'>) {
       creadoPor: tx.creadoPor,
       recurrente: tx.recurrente ?? false,
       ahorroAssetId: tx.ahorroAssetId ?? null,
+      tarjetaId: tx.tarjetaId ?? null,
+      pagoTarjeta: tx.pagoTarjeta ?? null,
     },
   }
 }
@@ -155,6 +159,8 @@ export async function updateTransaction(id: string, data: Partial<Omit<Transacti
   if (data.creadoPor !== undefined) childrenFields.creadoPor = data.creadoPor
   if (data.recurrente !== undefined) childrenFields.recurrente = data.recurrente
   if (data.ahorroAssetId !== undefined) childrenFields.ahorroAssetId = data.ahorroAssetId
+  if (data.tarjetaId !== undefined) childrenFields.tarjetaId = data.tarjetaId
+  if (data.pagoTarjeta !== undefined) childrenFields.pagoTarjeta = data.pagoTarjeta
 
   if (Object.keys(childrenFields).length > 0) {
     const { data: current } = await supabase
@@ -265,9 +271,11 @@ export async function cloneMonthTransactions(fromMonth: string, toMonth: string)
     .lte('date', endF)
 
   if (error) throw error
-  if (!data || data.length === 0) return 0
+  // Los pagos de tarjeta no se clonan: se generan solos en cada mes
+  const rows = (data ?? []).filter((r) => !r.children?.pagoTarjeta)
+  if (rows.length === 0) return 0
 
-  const inserts = data.map((row) => {
+  const inserts = rows.map((row) => {
     const origDate = new Date(row.date + 'T12:00:00')
     const day = Math.min(origDate.getDate(), new Date(ty, tm, 0).getDate())
     const newDate = `${ty}-${String(tm).padStart(2, '0')}-${String(day).padStart(2, '0')}`
@@ -296,7 +304,7 @@ export async function createRecurringTransactions(toMonth: string): Promise<numb
     .lte('date', endF)
 
   if (error) throw error
-  const recurring = (data ?? []).filter((r) => r.children?.recurrente === true)
+  const recurring = (data ?? []).filter((r) => r.children?.recurrente === true && !r.children?.pagoTarjeta)
   if (recurring.length === 0) return 0
 
   const inserts = recurring.map((row) => {
@@ -314,6 +322,7 @@ export async function createRecurringTransactions(toMonth: string): Promise<numb
 export async function cloneTransactionToMonth(txId: string, toMonth: string): Promise<string> {
   const { data: row, error } = await supabase.from('movimientos').select('*').eq('id', txId).single()
   if (error) throw error
+  if (row.children?.pagoTarjeta) throw new Error('El pago de una tarjeta es automático y no se puede copiar')
   const [ty, tm] = toMonth.split('-').map(Number)
   const origDate = new Date((row.date as string) + 'T12:00:00')
   const day = Math.min(origDate.getDate(), new Date(ty, tm, 0).getDate())
@@ -329,8 +338,9 @@ export async function cloneTransactionToMonth(txId: string, toMonth: string): Pr
 }
 
 export async function moveTransactionToMonth(txId: string, toMonth: string): Promise<void> {
-  const { data: row, error } = await supabase.from('movimientos').select('date').eq('id', txId).single()
+  const { data: row, error } = await supabase.from('movimientos').select('date, children').eq('id', txId).single()
   if (error) throw error
+  if (row.children?.pagoTarjeta) throw new Error('El pago de una tarjeta es automático y no se puede mover')
   const [ty, tm] = toMonth.split('-').map(Number)
   const origDate = new Date((row.date as string) + 'T12:00:00')
   const day = Math.min(origDate.getDate(), new Date(ty, tm, 0).getDate())

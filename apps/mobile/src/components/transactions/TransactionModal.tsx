@@ -2,14 +2,16 @@
 
 import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { X, Trash2, Repeat, Copy, ArrowRight, Check, Camera, ScanLine } from 'lucide-react'
+import { X, Trash2, Repeat, Copy, ArrowRight, Check, Camera, ScanLine, CreditCard } from 'lucide-react'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useAssetStore } from '@finanzas/core/store/useAssetStore'
 import { addTransaction, updateTransaction, cloneTransactionToMonth, moveTransactionToMonth } from '@finanzas/core/lib/transactions'
-import { SHARED_USER_ID, SHARED_USERS, formatAmount, getParentGroup, getCatFromSettings, toLocalDateString, DEFAULT_GASTO_CATEGORY_GROUPS, DEFAULT_INGRESO_CATEGORY_GROUPS } from '@finanzas/core/lib/constants'
+import { SHARED_USER_ID, SHARED_USERS, formatAmount, getParentGroup, getCatFromSettings, toLocalDateString, monthLabel, shiftMonth, DEFAULT_GASTO_CATEGORY_GROUPS, DEFAULT_INGRESO_CATEGORY_GROUPS } from '@finanzas/core/lib/constants'
+import { tarjetaDe } from '@finanzas/core/lib/tarjetas'
+import PagoTarjetaSheet from '@/components/transactions/PagoTarjetaSheet'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { adjustAssetSaldo } from '@finanzas/core/lib/assets'
 import { toBase, txToBase, txMonth } from '@finanzas/core/lib/currency'
@@ -61,6 +63,8 @@ export default function TransactionModal() {
   const [creadoPor, setCreadoPor] = useState(SHARED_USERS[0].id)
   const [ejecutado, setEjecutado] = useState(false)
   const [asigs, setAsigs] = useState<AsigDraft[]>([])
+  // Tarjeta con la que se paga (excluye asignar a ingresos)
+  const [tarjetaId, setTarjetaId] = useState('')
   const [recurrente, setRecurrente] = useState(false)
   const [ahorroAssetId, setAhorroAssetId] = useState('')
   const [saving, setSaving] = useState(false)
@@ -116,6 +120,7 @@ export default function TransactionModal() {
       setCreadoPor(editingTransaction.creadoPor || SHARED_USERS[0].id)
       setEjecutado(editingTransaction.ejecutado)
       setAsigs(editingTransaction.asignaciones.map((a) => ({ ingresoId: a.ingresoId, monto: toInputStr(a.monto) })))
+      setTarjetaId(tarjetaDe(editingTransaction.tarjetaId, settings) ? editingTransaction.tarjetaId! : '')
       setRecurrente(editingTransaction.recurrente ?? false)
       setAhorroAssetId(editingTransaction.ahorroAssetId ?? '')
       const catId = editingTransaction.categoria
@@ -129,7 +134,7 @@ export default function TransactionModal() {
       setTipo('egreso'); setMonto(''); setMoneda('ARS')
       setSelectedGroup(''); setSelectedSub(''); setDescripcion('')
       setFecha(toLocalDateString())
-      setCreadoPor(SHARED_USERS[0].id); setEjecutado(false); setAsigs([]); setRecurrente(false); setAhorroAssetId('')
+      setCreadoPor(SHARED_USERS[0].id); setEjecutado(false); setAsigs([]); setTarjetaId(''); setRecurrente(false); setAhorroAssetId('')
     }
   }, [isTransactionModalOpen, editingTransaction, settings])
 
@@ -211,6 +216,7 @@ export default function TransactionModal() {
     (asigs.every((a) => num(a.monto) > 0) && Math.abs(asigSum - parsedMonto) < 0.01)
 
   function toggleIngreso(id: string) {
+    setTarjetaId('')
     setAsigs((prev) => {
       const exists = prev.some((a) => a.ingresoId === id)
       if (exists) {
@@ -278,7 +284,8 @@ export default function TransactionModal() {
     setSaving(true)
     setSaveError(null)
     try {
-      const asignaciones: Asignacion[] = tipo === 'egreso'
+      const conTarjeta = tipo === 'egreso' && tarjetaId ? tarjetaId : null
+      const asignaciones: Asignacion[] = tipo === 'egreso' && !conTarjeta
         ? asigs.map((a) => ({ ingresoId: a.ingresoId, monto: num(a.monto) }))
         : []
       const data: Omit<Transaction, 'id'> = {
@@ -290,6 +297,7 @@ export default function TransactionModal() {
         asignaciones,
         creadoPor: creadoPor || SHARED_USER_ID,
         recurrente,
+        tarjetaId: conTarjeta,
       }
 
       // Use the explicitly selected cuenta de ahorro
@@ -443,6 +451,11 @@ export default function TransactionModal() {
       </div>
     </>
   )
+
+  // El pago automático de una tarjeta tiene su propia hoja (abono, ingreso, pagado)
+  if (editingTransaction?.pagoTarjeta) {
+    return <PagoTarjetaSheet open={isTransactionModalOpen} pago={editingTransaction} onClose={closeTransactionModal} />
+  }
 
   return (
     <Sheet
@@ -804,6 +817,35 @@ export default function TransactionModal() {
                   </motion.div>
                 )}
               </AnimatePresence>
+            </div>
+          )}
+          {(s.tarjetas ?? []).length > 0 && (
+            <div className="mt-3">
+              <FieldLabel hint="— se paga el mes siguiente">O pagar con tarjeta</FieldLabel>
+              <div className="flex flex-wrap gap-1.5">
+                {(s.tarjetas ?? []).map((t) => {
+                  const sel = tarjetaId === t.id
+                  return (
+                    <motion.button
+                      key={t.id}
+                      type="button"
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => { haptic('light'); setTarjetaId(sel ? '' : t.id); if (!sel) setAsigs([]) }}
+                      className={`flex items-center gap-1.5 h-9 px-3 rounded-full text-xs font-semibold transition-colors ${
+                        sel ? 'text-white' : 'bg-gray-500/[0.08] text-gray-600'
+                      }`}
+                      style={sel ? { background: t.color } : undefined}
+                    >
+                      <CreditCard size={13} /> {t.nombre}
+                    </motion.button>
+                  )
+                })}
+              </div>
+              {tarjetaId && (
+                <p className="mt-1.5 px-1 text-[11px] text-gray-500">
+                  Se suma al pago de {monthLabel(shiftMonth(fecha.slice(0, 7), 1))}; no descuenta de los ingresos de este mes.
+                </p>
+              )}
             </div>
           )}
         </div>

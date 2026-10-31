@@ -143,6 +143,8 @@ export async function importBackup(
           creadoPor: r.creadoPor,
           recurrente: r.recurrente,
           ahorroAssetId: r.ahorroAssetId ?? null,
+          tarjetaId: r.tarjetaId ?? null,
+          pagoTarjeta: r.pagoTarjeta ?? null,
         },
       }
     })

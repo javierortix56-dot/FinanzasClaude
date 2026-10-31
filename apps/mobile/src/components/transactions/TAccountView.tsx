@@ -14,6 +14,7 @@ import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { markEjecutado } from '@finanzas/core/lib/transactions'
 import { Money } from '@/components/ui/AnimatedNumber'
 import { springPop, stagger, pulse } from '@/components/ui/motion'
+import { cuentaEnCaja, esConsumoTarjeta, tarjetaDe } from '@finanzas/core/lib/tarjetas'
 import { deleteTransactionsWithUndo } from '@/lib/undo'
 import { haptic } from '@/lib/haptics'
 import { CategoryIcon } from '@/lib/categoryIcons'
@@ -145,7 +146,7 @@ const TxRow = memo(function TxRow({ tx, hideAmounts, settings, monedaBase, linke
       </div>
 
       <p className={`text-[13px] font-bold tabular-nums truncate mt-1 leading-none ${
-        isIngreso ? 'text-emerald-600' : 'text-rose-500'
+        isIngreso ? 'text-emerald-600' : esConsumoTarjeta(tx) ? 'text-gray-400' : 'text-rose-500'
       } ${blur} ${tx.ejecutado ? 'line-through' : ''}`}>
         {formatAmount(montoBase, monedaBase)}
       </p>
@@ -253,8 +254,9 @@ export default function TAccountView({ search = '', onScrollY }: Props) {
     () => ingresos.reduce((sum, t) => sum + txToBase(t, base, s), 0),
     [ingresos, base, s],
   )
+  // Los consumos con tarjeta se listan pero no suman: se pagan el mes siguiente
   const totalEgresos = useMemo(
-    () => egresos.reduce((sum, t) => sum + txToBase(t, base, s), 0),
+    () => egresos.filter(cuentaEnCaja).reduce((sum, t) => sum + txToBase(t, base, s), 0),
     [egresos, base, s],
   )
 
@@ -264,6 +266,8 @@ export default function TAccountView({ search = '', onScrollY }: Props) {
     const byId = new Map(transactions.map((t) => [t.id, t]))
     const labels = new Map<string, string>()
     for (const t of transactions) {
+      const tarjeta = esConsumoTarjeta(t) ? tarjetaDe(t.tarjetaId, settings) : undefined
+      if (tarjeta) { labels.set(t.id!, `${tarjeta.nombre} · mes próximo`); continue }
       if (t.tipo !== 'egreso' || t.asignaciones.length === 0) continue
       const linked = t.asignaciones
         .map((a) => byId.get(a.ingresoId))

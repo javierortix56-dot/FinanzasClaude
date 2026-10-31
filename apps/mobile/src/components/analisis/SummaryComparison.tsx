@@ -3,6 +3,7 @@
 import { ArrowUp, ArrowDown } from 'lucide-react'
 import { Transaction, Settings, Currency } from '@finanzas/core/types'
 import { txToBase } from '@finanzas/core/lib/currency'
+import { cuentaEnCaja } from '@finanzas/core/lib/tarjetas'
 import { Money } from '@/components/ui/AnimatedNumber'
 
 interface Props {
@@ -12,8 +13,9 @@ interface Props {
   monedaBase: Currency
 }
 
+/** Caja: los consumos con tarjeta se cuentan en el pago del mes siguiente */
 function sum(txs: Transaction[], tipo: 'ingreso' | 'egreso', s: Settings, base: Currency) {
-  return txs.filter((t) => t.tipo === tipo).reduce(
+  return txs.filter((t) => t.tipo === tipo && cuentaEnCaja(t)).reduce(
     (acc, t) => acc + txToBase(t, base, s),
     0
   )

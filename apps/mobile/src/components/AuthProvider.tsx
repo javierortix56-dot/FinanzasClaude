@@ -7,6 +7,7 @@ import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { initAuth } from '@finanzas/core/lib/auth'
 import { getOrInitSettings, subscribeToSettings } from '@finanzas/core/lib/settings'
 import { syncCotizaciones } from '@finanzas/core/lib/cotizaciones'
+import { programarSyncPagos } from '@finanzas/core/lib/tarjetas'
 import { Settings } from '@finanzas/core/types'
 import LoginScreen from '@/components/auth/LoginScreen'
 
@@ -26,6 +27,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     const apply = (s: Settings) => {
       setSettings(s)
       setMonedaBase(s.monedaBase ?? 'ARS')
+      programarSyncPagos()
     }
 
     async function init() {

@@ -32,6 +32,17 @@ function txMonth(tx: Transaction) {
 
 /** Borra movimientos (revirtiendo su impacto en cuentas de ahorro) con opción de deshacer */
 export async function deleteTransactionsWithUndo(txs: Transaction[], message?: string) {
+  const pagos = txs.filter((t) => t.pagoTarjeta)
+  if (pagos.length) {
+    txs = txs.filter((t) => !t.pagoTarjeta)
+    useUIStore.getState().showToast(
+      pagos.length === 1
+        ? 'El pago de tarjeta es automático: no se puede borrar'
+        : `${pagos.length} pagos de tarjeta no se borraron (son automáticos)`,
+      'warning',
+    )
+    if (txs.length === 0) return
+  }
   for (const tx of txs) {
     if (tx.ahorroAssetId) {
       try { await adjustAssetSaldo(tx.ahorroAssetId, -tx.monto, txMonth(tx)) } catch { /* no bloqueante */ }
@@ -48,15 +59,19 @@ export async function deleteTransactionsWithUndo(txs: Transaction[], message?: s
   })
 }
 
-/** Aplica cambios de asignaciones guardando el estado previo para deshacer */
+/**
+ * Aplica cambios de asignaciones (a ingresos o, con `tarjetaId`, a una
+ * tarjeta) guardando el estado previo para deshacer.
+ */
 export async function updateAsignacionesWithUndo(
-  changes: { tx: Transaction; asignaciones: Asignacion[] }[],
+  changes: { tx: Transaction; asignaciones: Asignacion[]; tarjetaId?: string | null }[],
   message: string,
 ) {
-  const prev = changes.map(({ tx }) => ({ id: tx.id!, asignaciones: tx.asignaciones }))
-  await Promise.allSettled(changes.map(({ tx, asignaciones }) => updateTransaction(tx.id!, { asignaciones })))
+  const prev = changes.map(({ tx }) => ({ id: tx.id!, asignaciones: tx.asignaciones, tarjetaId: tx.tarjetaId ?? null }))
+  await Promise.allSettled(changes.map(({ tx, asignaciones, tarjetaId }) =>
+    updateTransaction(tx.id!, { asignaciones, ...(tarjetaId !== undefined ? { tarjetaId } : {}) })))
   toast(message, async () => {
-    await Promise.allSettled(prev.map(({ id, asignaciones }) => updateTransaction(id, { asignaciones })))
+    await Promise.allSettled(prev.map(({ id, asignaciones, tarjetaId }) => updateTransaction(id, { asignaciones, tarjetaId })))
   })
 }
 

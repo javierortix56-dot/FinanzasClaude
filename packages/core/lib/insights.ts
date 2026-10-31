@@ -1,5 +1,6 @@
 import { Budget, Currency, Settings, Transaction } from '../types'
 import { toBase, txToBase } from './currency'
+import { cuentaEnCaja, cuentaEnCategorias } from './tarjetas'
 import { getCatFromSettings, getParentGroup, monthLabel, shiftMonth } from './constants'
 
 // Insights en lenguaje natural (compartidos por mobile y desktop): frases
@@ -31,14 +32,15 @@ interface Params {
   today?: Date
 }
 
+/** Flujo de caja: los consumos con tarjeta se pagan el mes siguiente */
 function sum(txs: Transaction[], tipo: 'ingreso' | 'egreso', base: Currency, s: Settings) {
-  return txs.filter((t) => t.tipo === tipo).reduce((acc, t) => acc + txToBase(t, base, s), 0)
+  return txs.filter((t) => t.tipo === tipo && cuentaEnCaja(t)).reduce((acc, t) => acc + txToBase(t, base, s), 0)
 }
 
 function porGrupo(txs: Transaction[], base: Currency, s: Settings) {
   const map = new Map<string, number>()
   for (const t of txs) {
-    if (t.tipo !== 'egreso') continue
+    if (t.tipo !== 'egreso' || !cuentaEnCategorias(t)) continue
     const id = getParentGroup(t.categoria, s.categoriasGasto)?.id ?? t.categoria
     map.set(id, (map.get(id) ?? 0) + txToBase(t, base, s))
   }
@@ -99,7 +101,7 @@ export function computeInsights({ transactions, prevTransactions, budgets, setti
   const superados = budgets.filter((b) => {
     if (b.mes !== month || b.limite <= 0) return false
     const gastado = transactions
-      .filter((t) => t.tipo === 'egreso' && (t.categoria === b.categoria || getParentGroup(t.categoria, s.categoriasGasto)?.id === b.categoria))
+      .filter((t) => t.tipo === 'egreso' && cuentaEnCategorias(t) && (t.categoria === b.categoria || getParentGroup(t.categoria, s.categoriasGasto)?.id === b.categoria))
       .reduce((acc, t) => acc + txToBase(t, base, s), 0)
     return toBase(gastado, base, b.moneda as Currency, s, b.mes) > b.limite
   })
@@ -113,7 +115,7 @@ export function computeInsights({ transactions, prevTransactions, budgets, setti
   }
 
   // 5. Pagos pendientes
-  const pendientes = transactions.filter((t) => t.tipo === 'egreso' && !t.ejecutado)
+  const pendientes = transactions.filter((t) => t.tipo === 'egreso' && cuentaEnCaja(t) && t.monto > 0 && !t.ejecutado)
   if (pendientes.length > 0) {
     const n = pendientes.length
     out.push({

@@ -13,6 +13,7 @@ import { TransactionModal } from '@/components/modals/TransactionModal'
 import { LedgerStats, LedgerTabs } from '@/components/ledger/LedgerHeader'
 import { Segmented } from '@/components/ui/segmented'
 import { CategoryIcon } from '@finanzas/core/lib/categoryIcons'
+import { cuentaEnCaja, esConsumoTarjeta, saldoQuePasa, tarjetaDe } from '@finanzas/core/lib/tarjetas'
 import { deleteTransactionsWithUndo } from '@finanzas/core/lib/undo'
 import { stagger } from '@/components/ui/motion'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
@@ -77,7 +78,8 @@ export default function MovimientosPage() {
   const egresos = transactions.filter((t) => t.tipo === 'egreso' && matches(t)).sort(byDate)
 
   const totalIn = ingresos.reduce((s, t) => s + txToBase(t, base, settings), 0)
-  const totalOut = egresos.reduce((s, t) => s + txToBase(t, base, settings), 0)
+  // Los consumos con tarjeta se listan pero no suman: se pagan el mes siguiente
+  const totalOut = egresos.filter(cuentaEnCaja).reduce((s, t) => s + txToBase(t, base, settings), 0)
 
   const allCategories: { id: string; nombre: string; group: string }[] = []
   for (const g of [...settings.categoriasGasto, ...settings.categoriasIngreso]) {
@@ -357,7 +359,14 @@ function LedgerRow({
   const done = t.ejecutado
   const income = kind === 'in'
 
-  const meta = [cat?.nombre ?? '—', fecha, persona, ...(done ? [] : ['pendiente'])].join(' · ')
+  const tarjeta = esConsumoTarjeta(t) ? tarjetaDe(t.tarjetaId, settings) : undefined
+  const pasa = saldoQuePasa(t)
+  const meta = [
+    cat?.nombre ?? '—', fecha, persona,
+    ...(tarjeta ? [`con ${tarjeta.nombre}`] : []),
+    ...(pasa > 0 ? ['abono parcial'] : []),
+    ...(done ? [] : ['pendiente']),
+  ].join(' · ')
 
   return (
     <motion.div
@@ -405,8 +414,9 @@ function LedgerRow({
         <span
           className={cn(
             'text-[12.5px] font-bold tnum',
-            done ? 'text-muted-2 line-through' : income ? 'text-income' : 'text-expense',
+            done ? 'text-muted-2 line-through' : income ? 'text-income' : tarjeta ? 'text-muted' : 'text-expense',
           )}
+          title={tarjeta ? `Se paga con ${tarjeta.nombre} el mes siguiente` : undefined}
         >
           {income ? '' : '−'}
           <MoneyText amount={t.monto} currency={t.moneda} />

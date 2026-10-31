@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'motion/react'
 import {
   TrendingUp, TrendingDown, Wallet, ArrowRight, ArrowUpRight, ArrowDownRight, PiggyBank,
-  Link2, Lightbulb,
+  Link2, Lightbulb, CreditCard,
 } from 'lucide-react'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
@@ -25,6 +25,7 @@ import { getCatFromSettings, getParentGroup, monthLabel, shiftMonth } from '@fin
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { fetchLastNMonths } from '@finanzas/core/lib/analytics'
 import { computeInsights } from '@finanzas/core/lib/insights'
+import { cuentaEnCaja, cuentaEnCategorias, esConsumoTarjeta, necesitaRespaldo, saldoQuePasa } from '@finanzas/core/lib/tarjetas'
 import { CategoryIcon } from '@finanzas/core/lib/categoryIcons'
 import { Currency, Transaction, Settings } from '@finanzas/core/types'
 import { PageScroll } from '@/components/shell/PageScroll'
@@ -133,13 +134,17 @@ export default function DashboardPage() {
     return months.map((m) => {
       const txs = m === currentMonth ? transactions : (grouped[m] ?? [])
       const ing = txs.filter((t) => t.tipo === 'ingreso').reduce((sum, t) => sum + txToBase(t, base, s), 0)
-      const egr = txs.filter((t) => t.tipo === 'egreso').reduce((sum, t) => sum + txToBase(t, base, s), 0)
+      const egr = txs.filter((t) => t.tipo === 'egreso' && cuentaEnCaja(t)).reduce((sum, t) => sum + txToBase(t, base, s), 0)
       return { month: m, ingresos: ing, egresos: egr, balance: ing - egr }
     })
   }, [grouped, transactions, currentMonth, base, s])
 
   const ingresos = transactions.filter((t) => t.tipo === 'ingreso')
-  const egresos = transactions.filter((t) => t.tipo === 'egreso')
+  // Caja: los consumos con tarjeta salen el mes siguiente (en el pago)
+  const egresos = transactions.filter((t) => t.tipo === 'egreso' && cuentaEnCaja(t))
+  // Categorías y presupuestos: los consumos sí, los pagos de tarjeta no
+  const gastos = transactions.filter((t) => t.tipo === 'egreso' && cuentaEnCategorias(t))
+  const totalGastos = gastos.reduce((sum, t) => sum + txToBase(t, base, s), 0)
   const totalIngresos = ingresos.reduce((sum, t) => sum + txToBase(t, base, s), 0)
   const totalEgresos = egresos.reduce((sum, t) => sum + txToBase(t, base, s), 0)
   const balance = totalIngresos - totalEgresos
@@ -157,12 +162,10 @@ export default function DashboardPage() {
   const dEgr = prev ? pctDelta(totalEgresos, prev.egresos) : undefined
   const dBal = prev ? pctDelta(balance, prev.balance) : undefined
 
-  const sinAsignarTotal = useMemo(() => {
-    const ids = new Set(ingresos.map((i) => i.id))
-    return egresos
-      .filter((e) => !e.asignaciones.some((a) => ids.has(a.ingresoId)))
-      .reduce((sum, t) => sum + txToBase(t, base, s), 0)
-  }, [ingresos, egresos, base, s])
+  const ingresoIds = new Set(ingresos.map((i) => i.id))
+  const sinAsignarTotal = egresos
+    .filter((e) => necesitaRespaldo(e, ingresoIds))
+    .reduce((sum, t) => sum + txToBase(t, base, s), 0)
 
   const recientes = [...transactions]
     .sort((a, b) => b.fecha.toDate().getTime() - a.fecha.toDate().getTime())
@@ -170,14 +173,14 @@ export default function DashboardPage() {
 
   // Top categorías por grupo de gasto
   const porGrupo = new Map<string, number>()
-  for (const t of egresos) {
+  for (const t of gastos) {
     const id = getParentGroup(t.categoria, s.categoriasGasto)?.id ?? t.categoria
     porGrupo.set(id, (porGrupo.get(id) ?? 0) + txToBase(t, base, s))
   }
   const categorias = [...porGrupo.entries()]
     .map(([id, total]) => {
       const cat = getCatFromSettings(id, s)
-      return { id, cat, nombre: cat?.nombre ?? id, color: cat?.color ?? '#94a3b8', total, pct: totalEgresos > 0 ? (total / totalEgresos) * 100 : 0 }
+      return { id, cat, nombre: cat?.nombre ?? id, color: cat?.color ?? '#94a3b8', total, pct: totalGastos > 0 ? (total / totalGastos) * 100 : 0 }
     })
     .sort((a, b) => b.total - a.total)
     .slice(0, 6)
@@ -193,7 +196,7 @@ export default function DashboardPage() {
   const presupuestos = budgets
     .filter((b) => b.mes === currentMonth && b.limite > 0)
     .map((b) => {
-      const gastado = egresos
+      const gastado = gastos
         .filter((t) => t.categoria === b.categoria || getParentGroup(t.categoria, s.categoriasGasto)?.id === b.categoria)
         .reduce((sum, t) => sum + txToBase(t, base, s), 0)
       const enMoneda = toBase(gastado, base, b.moneda as Currency, s, b.mes)
@@ -288,6 +291,8 @@ export default function DashboardPage() {
           value={<MoneyText amount={patrimonioUSD} currency="USD" animated />}
           sub={<>Activos <MoneyText amount={activos} currency="USD" /> · Pasivos <MoneyText amount={pasivos} currency="USD" /></>} />
       </div>
+
+      <TarjetasResumen transactions={transactions} settings={s} month={currentMonth} />
 
       {/* ── Insights + presupuestos ── */}
       {(insights.length > 0 || presupuestos.length > 0) && (
@@ -389,6 +394,56 @@ export default function DashboardPage() {
         </Card>
       </div>
     </PageScroll>
+  )
+}
+
+/**
+ * Por tarjeta: el pago de este mes (con lo que pasa al siguiente si hubo
+ * abono parcial) y lo acumulado en consumos, que se paga el mes que viene.
+ */
+function TarjetasResumen({ transactions, settings, month }: { transactions: Transaction[]; settings: Settings; month: string }) {
+  const openEditModal = useUIStore((st) => st.openEditModal)
+  const filas = (settings.tarjetas ?? []).map((t) => {
+    const pagos = transactions.filter((x) => x.pagoTarjeta?.tarjetaId === t.id)
+    const consumos = transactions.filter((x) => esConsumoTarjeta(x) && x.tarjetaId === t.id)
+    const porMoneda = new Map<string, number>()
+    for (const c of consumos) porMoneda.set(c.moneda, (porMoneda.get(c.moneda) ?? 0) + c.monto)
+    return { t, pagos, porMoneda }
+  }).filter((f) => f.pagos.length > 0 || f.porMoneda.size > 0)
+  if (filas.length === 0) return null
+  const siguiente = monthLabel(shiftMonth(month, 1)).split(' de ')[0]
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+      {filas.map(({ t, pagos, porMoneda }, i) => (
+        <Card key={t.id} delay={0.18 + i * 0.03} className="p-5 space-y-3">
+          <div className="flex items-center gap-2.5">
+            <span className="h-8 w-8 rounded-xl inline-flex items-center justify-center text-white" style={{ background: t.color }}>
+              <CreditCard className="h-4 w-4" />
+            </span>
+            <span className="text-sm font-semibold truncate">{t.nombre}</span>
+          </div>
+          {pagos.map((p) => {
+            const pasa = saldoQuePasa(p)
+            return (
+              <button key={p.id} onClick={() => openEditModal(p)} className="block w-full text-left rounded-xl bg-surface-2 px-3 py-2 hover:bg-primary/10 transition-colors">
+                <div className="eyebrow !text-[10px]">Pago de este mes{p.ejecutado ? ' · pagado' : ''}</div>
+                <div className="mt-1 text-[15px] font-bold"><MoneyText amount={p.monto} currency={p.moneda} /></div>
+                {pasa > 0 && (
+                  <div className="text-[11px] text-unassigned font-medium">Pasan <MoneyText amount={pasa} currency={p.moneda} /> a {siguiente}</div>
+                )}
+              </button>
+            )
+          })}
+          {[...porMoneda.entries()].map(([moneda, total]) => (
+            <div key={moneda} className="flex justify-between text-xs text-muted">
+              <span>Consumos del mes · se pagan en {siguiente}</span>
+              <MoneyText amount={total} currency={moneda} />
+            </div>
+          ))}
+        </Card>
+      ))}
+    </div>
   )
 }
 

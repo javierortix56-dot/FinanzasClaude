@@ -16,6 +16,7 @@ import Segmented from '@/components/ui/Segmented'
 import { MonthSwitcher, PrivacyToggle } from '@/components/ui/PageHeader'
 import { easeOut } from '@/components/ui/motion'
 import Collapse from '@/components/ui/Collapse'
+import { cuentaEnCaja } from '@finanzas/core/lib/tarjetas'
 import BudgetRings from '@/components/dashboard/BudgetRings'
 
 type MainTab = 'movimientos' | 'asignacion'
@@ -40,8 +41,9 @@ export default function DashboardPage() {
     .filter((t) => t.tipo === 'ingreso')
     .reduce((sum, t) => sum + txToBase(t, base, s), 0)
 
+  // Caja: los consumos con tarjeta salen el mes siguiente (en el pago)
   const totalEgresos = transactions
-    .filter((t) => t.tipo === 'egreso')
+    .filter((t) => t.tipo === 'egreso' && cuentaEnCaja(t))
     .reduce((sum, t) => sum + txToBase(t, base, s), 0)
 
   const balance    = totalIngresos - totalEgresos
