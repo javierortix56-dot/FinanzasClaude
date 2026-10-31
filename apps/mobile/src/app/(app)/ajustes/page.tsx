@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import {
   ChevronRight, ChevronLeft, Plus, Pencil,
   Copy, RotateCcw, Lock, Trash2, Check, Download, Upload, LogOut,
@@ -1108,7 +1109,9 @@ function Section({ label, icon, tint, hint, open, onToggle, children }: {
         <ChevronRight size={17} className="text-gray-300" />
       </button>
 
-      {/* Sub-página: entra desde la derecha sobre la lista */}
+      {/* Sub-página: entra desde la derecha sobre la lista. Va por portal a <body>: dentro de la
+          tarjeta de vidrio (backdrop-filter) Safari la encierra y deja de ocupar la pantalla. */}
+      {typeof document !== 'undefined' && createPortal(
       <AnimatePresence>
         {open && (
           <motion.div
@@ -1147,7 +1150,9 @@ function Section({ label, icon, tint, hint, open, onToggle, children }: {
             </div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body,
+      )}
     </div>
   )
 }
