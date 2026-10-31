@@ -5,7 +5,7 @@ export type ThemePref = 'system' | 'light' | 'dark'
 
 const KEY = 'finanzas-theme'
 
-const THEME_COLOR = { light: '#f3f2fa', dark: '#0c0d14' }
+const THEME_COLOR = { light: '#f3f1ec', dark: '#121517' }
 
 export function getThemePref(): ThemePref {
   if (typeof window === 'undefined') return 'system'

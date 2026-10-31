@@ -50,7 +50,7 @@ export default function BudgetRings({ transactions, month, base }: {
   return (
     <div className="flex gap-2 overflow-x-auto no-scrollbar px-4 pb-3 -mt-1">
       {items.map(({ b, cat, pct }, i) => {
-        const color = pct >= 100 ? '#f43f5e' : pct >= 80 ? '#f59e0b' : '#10b981'
+        const color = pct >= 100 ? '#b4533f' : pct >= 80 ? '#b8873b' : '#4e7d5b'
         return (
           <motion.div
             key={b.id ?? b.categoria}

@@ -215,7 +215,7 @@ export default function DashboardPage() {
           className="relative xl:col-span-2 rounded-[26px] bg-brand text-white shadow-card-lg overflow-hidden"
         >
           <div className="absolute -top-24 -right-16 w-72 h-72 rounded-full bg-white/15 blur-3xl pointer-events-none" />
-          <div className="absolute -bottom-28 left-1/3 w-80 h-80 rounded-full bg-[#22d3ee]/20 blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-28 left-1/3 w-80 h-80 rounded-full bg-[#9cbbc9]/20 blur-3xl pointer-events-none" />
           <div className="relative p-6 flex flex-col lg:flex-row lg:items-end justify-between gap-6">
             <div className="min-w-0">
               <div className="text-xs font-semibold uppercase tracking-[0.08em] text-white/70">
@@ -232,7 +232,7 @@ export default function DashboardPage() {
                 <div className="flex-1 h-2 rounded-full bg-white/15 overflow-hidden">
                   <motion.div
                     className="h-full rounded-full"
-                    style={{ background: pctGastado >= 90 ? '#fda4af' : pctGastado >= 70 ? '#fcd34d' : '#6ee7b7' }}
+                    style={{ background: pctGastado >= 90 ? '#e3a493' : pctGastado >= 70 ? '#d9b97a' : '#a8c6a0' }}
                     initial={{ width: 0 }}
                     animate={{ width: `${pctGastado}%` }}
                     transition={{ type: 'spring', stiffness: 110, damping: 22 }}

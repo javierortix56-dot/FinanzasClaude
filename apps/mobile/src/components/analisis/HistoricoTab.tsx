@@ -100,9 +100,9 @@ export default function HistoricoTab() {
   }
 
   const lineSeries: LineSeries[] = [
-    { label: 'Ingresos', color: '#10b981', values: ingresosVals },
-    { label: 'Egresos',  color: '#f43f5e', values: egresosVals  },
-    { label: 'Balance',  color: '#8b7bff', values: balanceVals, dashed: true },
+    { label: 'Ingresos', color: '#4e7d5b', values: ingresosVals },
+    { label: 'Egresos',  color: '#b4533f', values: egresosVals  },
+    { label: 'Balance',  color: '#4a7487', values: balanceVals, dashed: true },
   ]
 
   // ── Insights del mes ──────────────────────────────────────────────────────

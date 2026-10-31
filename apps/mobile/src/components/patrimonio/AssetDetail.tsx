@@ -71,7 +71,7 @@ function Contenido({ asset, settings, blur, onClose, onEdit, onSnapshot }: {
   onSnapshot: (a: Asset) => void
 }) {
   const isActivo = asset.clase === 'activo'
-  const color = isActivo ? '#10b981' : '#f43f5e'
+  const color = isActivo ? '#4e7d5b' : '#b4533f'
   const snaps = [...(asset.snapshots ?? [])].sort((a, b) => a.month.localeCompare(b.month))
   const usd = toUSD(asset.saldo, asset.moneda, settings)
   const icon = TIPO_ICONS[asset.tipo.toLowerCase()] ?? <Landmark size={18} />

@@ -33,8 +33,8 @@ function fmt(n: number): string {
 }
 
 const COLOR_APORTES = 'var(--primary)' // violeta
-const COLOR_REVAL_POS = '#10b981' // verde
-const COLOR_REVAL_NEG = '#f43f5e' // rojo
+const COLOR_REVAL_POS = '#4e7d5b' // verde
+const COLOR_REVAL_NEG = '#b4533f' // rojo
 
 export default function PatrimonioChart({ data, currency }: Props) {
   const hideAmounts = useSettingsStore((st) => st.hideAmounts)

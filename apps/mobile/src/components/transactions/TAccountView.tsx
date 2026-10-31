@@ -38,7 +38,7 @@ const TxRow = memo(function TxRow({ tx, hideAmounts, settings, monedaBase, linke
   const cat = getCatFromSettings(tx.categoria, settings)
   const isIngreso = tx.tipo === 'ingreso'
   const dateStr = tx.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
-  const dotColor = cat?.color ?? (isIngreso ? '#10b981' : '#f43f5e')
+  const dotColor = cat?.color ?? (isIngreso ? '#4e7d5b' : '#b4533f')
   const montoBase = txToBase(tx, monedaBase, settings ?? DEFAULT_SETTINGS)
   const blur = hideAmounts ? 'blur-[5px] select-none' : ''
 
@@ -78,7 +78,7 @@ const TxRow = memo(function TxRow({ tx, hideAmounts, settings, monedaBase, linke
       animate={{ opacity: tx.ejecutado ? 0.5 : 1, y: 0 }}
       exit={{ opacity: 0, height: 0, marginBottom: 0, transition: { duration: 0.2 } }}
       transition={{ duration: 0.28, delay: stagger(index), ease: [0.22, 1, 0.36, 1] }}
-      className="relative w-full min-w-0 mb-1.5 rounded-2xl"
+      className="relative w-full min-w-0 mb-1 rounded-[14px]"
     >
       {/* Acciones que aparecen detrás de la fila al deslizar */}
       <motion.div
@@ -111,10 +111,10 @@ const TxRow = memo(function TxRow({ tx, hideAmounts, settings, monedaBase, linke
       onDragEnd={handleDragEnd}
       style={{ x }}
       whileTap={{ scale: 0.98 }}
-      className="relative w-full min-w-0 text-left px-2.5 py-2 rounded-2xl bg-surface hover:bg-surface transition-colors overflow-hidden cursor-pointer shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+      className="relative w-full min-w-0 text-left px-2.5 py-1.5 rounded-[14px] bg-surface hover:bg-surface transition-colors overflow-hidden cursor-pointer shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
     >
       {/* Acento de color de la categoría */}
-      <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full" style={{ backgroundColor: dotColor }} />
+      <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full" style={{ backgroundColor: dotColor }} />
 
       <div className="flex items-center justify-between gap-1 min-w-0">
         <p className={`text-xs font-semibold text-gray-900 truncate leading-tight flex-1 min-w-0 ${tx.ejecutado ? 'line-through' : ''}`}>
@@ -145,13 +145,13 @@ const TxRow = memo(function TxRow({ tx, hideAmounts, settings, monedaBase, linke
         </button>
       </div>
 
-      <p className={`text-[13px] font-bold tabular-nums truncate mt-1 leading-none ${
+      <p className={`text-[13px] font-bold tabular-nums truncate mt-0.5 leading-tight ${
         isIngreso ? 'text-emerald-600' : esConsumoTarjeta(tx) ? 'text-gray-400' : 'text-rose-500'
       } ${blur} ${tx.ejecutado ? 'line-through' : ''}`}>
         {formatAmount(montoBase, monedaBase)}
       </p>
 
-      <div className="flex items-center justify-between mt-1 gap-1 min-w-0">
+      <div className="flex items-center justify-between mt-0.5 gap-1 min-w-0">
         <span className="text-[10px] text-gray-400 truncate flex-shrink-0 inline-flex items-center gap-1">
           <span style={{ color: dotColor }} className="inline-flex"><CategoryIcon cat={cat} size={10} /></span>
           {dateStr}
@@ -341,14 +341,14 @@ function Column({ tipo, count, total, base, onScrollY, children }: {
   const isIngreso = tipo === 'ingreso'
   return (
     <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
-      <div className="px-3 pt-1 pb-2 flex-shrink-0">
+      <div className="px-3 pt-0.5 pb-1.5 flex-shrink-0">
         <div className="flex items-center gap-1.5">
           <span className={`w-1.5 h-1.5 rounded-full ${isIngreso ? 'bg-emerald-500' : 'bg-rose-500'}`} />
           <p className="eyebrow">
             {isIngreso ? 'Ingresos' : 'Egresos'} <span className="opacity-60">· {count}</span>
           </p>
         </div>
-        <p className={`text-[15px] font-bold mt-1 truncate ${isIngreso ? 'text-emerald-600' : 'text-rose-500'}`}>
+        <p className={`text-[14px] font-bold mt-0.5 truncate ${isIngreso ? 'text-emerald-600' : 'text-rose-500'}`}>
           <Money value={total} currency={base} />
         </p>
       </div>

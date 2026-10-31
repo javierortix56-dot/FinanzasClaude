@@ -49,7 +49,7 @@ export default function DashboardPage() {
   const balance    = totalIngresos - totalEgresos
   const balanceUSD = toBase(balance, base, 'USD', s, currentMonth)
   const pctGastado = totalIngresos > 0 ? Math.min((totalEgresos / totalIngresos) * 100, 100) : 0
-  const pctColor   = pctGastado >= 90 ? '#fda4af' : pctGastado >= 70 ? '#fcd34d' : '#6ee7b7'
+  const pctColor   = pctGastado >= 90 ? '#e3a493' : pctGastado >= 70 ? '#d9b97a' : '#a8c6a0'
 
   return (
     <div className="flex flex-col h-full">
@@ -71,12 +71,11 @@ export default function DashboardPage() {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={easeOut}
         layout
-        className="relative mx-4 mb-3 rounded-[26px] bg-brand text-white px-4 pt-3 pb-3 shadow-lift overflow-hidden flex-shrink-0"
+        className="relative mx-4 mb-2.5 rounded-[22px] bg-brand text-white px-4 pt-2.5 pb-3 shadow-lift overflow-hidden flex-shrink-0"
         onClick={() => { if (compact) setCompact(false) }}
       >
-        {/* Brillos decorativos */}
-        <div className="absolute -top-16 -right-10 w-40 h-40 rounded-full bg-white/15 blur-2xl pointer-events-none" />
-        <div className="absolute -bottom-20 -left-10 w-44 h-44 rounded-full bg-[#22d3ee]/20 blur-3xl pointer-events-none" />
+        {/* Brillo decorativo sutil */}
+        <div className="absolute -top-16 -right-10 w-40 h-40 rounded-full bg-white/[0.07] blur-2xl pointer-events-none" />
 
         <div className="relative flex items-center justify-between">
           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/70">Balance del mes</p>
@@ -88,7 +87,7 @@ export default function DashboardPage() {
         <div className="relative flex items-baseline gap-2 mt-0.5 min-w-0">
           <motion.p
             layout="position"
-            animate={{ fontSize: compact ? '22px' : '30px' }}
+            animate={{ fontSize: compact ? '22px' : '27px' }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             className="leading-tight font-bold tracking-tight truncate"
           >
@@ -100,30 +99,25 @@ export default function DashboardPage() {
         </div>
 
         <Collapse open={!compact}>
-        <div className="relative grid grid-cols-2 gap-2 mt-2">
-          <div className="rounded-2xl bg-white/12 backdrop-blur-md border border-white/15 px-2.5 py-2 flex items-center gap-2">
-            <span className="w-7 h-7 rounded-full bg-emerald-400/25 flex items-center justify-center flex-shrink-0">
-              <ArrowUpRight size={15} className="text-emerald-200" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-[10px] text-white/65 leading-none">Ingresos</p>
-              <p className="text-[13px] font-semibold truncate mt-0.5"><Money value={totalIngresos} currency={base} /></p>
-            </div>
+        {/* Ingresos y egresos: dos columnas livianas, sin cápsulas */}
+        <div className="relative grid grid-cols-2 gap-3 mt-1.5 min-w-0">
+          <div className="min-w-0">
+            <p className="text-[10px] text-white/60 leading-none flex items-center gap-1">
+              <ArrowUpRight size={11} className="text-emerald-300" /> Ingresos
+            </p>
+            <p className="text-[13px] font-semibold tabular-nums truncate mt-0.5"><Money value={totalIngresos} currency={base} /></p>
           </div>
-          <div className="rounded-2xl bg-white/12 backdrop-blur-md border border-white/15 px-2.5 py-2 flex items-center gap-2">
-            <span className="w-7 h-7 rounded-full bg-rose-400/25 flex items-center justify-center flex-shrink-0">
-              <ArrowDownRight size={15} className="text-rose-200" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-[10px] text-white/65 leading-none">Egresos</p>
-              <p className="text-[13px] font-semibold truncate mt-0.5"><Money value={totalEgresos} currency={base} /></p>
-            </div>
+          <div className="min-w-0">
+            <p className="text-[10px] text-white/60 leading-none flex items-center gap-1">
+              <ArrowDownRight size={11} className="text-rose-300" /> Egresos
+            </p>
+            <p className="text-[13px] font-semibold tabular-nums truncate mt-0.5"><Money value={totalEgresos} currency={base} /></p>
           </div>
         </div>
 
         {/* % del ingreso gastado + tipos de cambio */}
-        <div className="relative mt-2.5 flex items-center gap-2.5">
-          <div className="flex-1 h-1.5 rounded-full bg-white/15 overflow-hidden">
+        <div className="relative mt-2 flex items-center gap-2.5">
+          <div className="flex-1 h-1 rounded-full bg-white/15 overflow-hidden">
             <motion.div
               className="h-full rounded-full"
               style={{ background: pctColor }}
@@ -146,9 +140,10 @@ export default function DashboardPage() {
 
       {/* ── Contenedor glass: tabs + contenido ── */}
       <section className="flex-1 min-h-0 glass rounded-t-[28px] border-b-0 overflow-hidden flex flex-col">
-        <div className="px-3 pt-3 pb-2 flex-shrink-0 space-y-2">
+        <div className="px-3 pt-2.5 pb-1.5 flex-shrink-0 space-y-1.5">
           <Segmented
             id="dashboard-tab"
+            size="sm"
             value={mainTab}
             onChange={(t) => { setMainTab(t); setCompact(false) }}
             options={[
@@ -167,7 +162,7 @@ export default function DashboardPage() {
                 transition={{ duration: 0.22 }}
                 className="overflow-hidden"
               >
-                <label className="flex items-center gap-2 h-9 rounded-xl bg-gray-500/[0.07] px-3 focus-within:ring-2 focus-within:ring-primary/25 focus-within:bg-surface transition-all">
+                <label className="flex items-center gap-2 h-8 rounded-xl bg-gray-500/[0.07] px-3 focus-within:ring-2 focus-within:ring-primary/25 focus-within:bg-surface transition-all">
                   <Search size={14} className="text-gray-400 flex-shrink-0" />
                   <input
                     placeholder="Buscar movimientos"

@@ -20,8 +20,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   // La barra de estado se funde con el fondo ambiental en vez de un bloque violeta
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f3f2fa' },
-    { media: '(prefers-color-scheme: dark)',  color: '#0c0d14' },
+    { media: '(prefers-color-scheme: light)', color: '#f3f1ec' },
+    { media: '(prefers-color-scheme: dark)',  color: '#121517' },
   ],
   viewportFit: 'cover',
 }

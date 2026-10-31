@@ -9,9 +9,9 @@ import { CATEGORY_ICONS, categoryIconName } from '@/lib/categoryIcons'
 import { Category } from '@finanzas/core/types'
 
 const PRESET_COLORS = [
-  '#8B5CF6','#10B981','#3B82F6','#EF4444','#F59E0B',
+  '#8B5CF6','#4e7d5b','#3B82F6','#EF4444','#b8873b',
   '#EC4899','#6366F1','#14B8A6','#534AB7','#6B7280',
-  '#F97316','#84CC16','#06B6D4','#A855F7','#E11D48',
+  '#F97316','#84CC16','#06B6D4','#A855F7','#9c4434',
 ]
 
 interface Props {

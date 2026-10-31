@@ -188,10 +188,10 @@ export default function AssignmentTab({ onScrollY }: { onScrollY?: (y: number) =
   ]
 
   const barGradient = allAssigned
-    ? 'linear-gradient(90deg, #6ee7b7, #34d399)'
+    ? 'linear-gradient(90deg, #a8c6a0, #6e9e7b)'
     : progressPercent >= 50
-      ? 'linear-gradient(90deg, #a5b4fc, #e0e7ff)'
-      : 'linear-gradient(90deg, #fcd34d, #fda4af)'
+      ? 'linear-gradient(90deg, #bfd3dc, #e6eef1)'
+      : 'linear-gradient(90deg, #d9b97a, #e3a493)'
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
