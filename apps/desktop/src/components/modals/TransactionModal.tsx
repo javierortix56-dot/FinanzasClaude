@@ -471,7 +471,7 @@ function Form({
         <div className="flex gap-2">
           <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>Cancelar</Button>
           <Button type="submit" disabled={!canSave}>
-            {saving ? 'Guardando…' : editing ? 'Guardar' : 'Crear'}
+            {saving ? 'Guardando…' : <>{editing ? 'Guardar' : 'Crear'}{montoNum > 0 && <> · <MoneyText amount={montoNum} currency={moneda} /></>}</>}
           </Button>
         </div>
       </div>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { X, Trash2, Repeat, Copy, ArrowRight, Check, Camera, ScanLine, CreditCard } from 'lucide-react'
+import { X, Trash2, Copy, ArrowRight, Check, Camera, ScanLine, Calculator, ChevronDown } from 'lucide-react'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
@@ -10,7 +10,7 @@ import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useAssetStore } from '@finanzas/core/store/useAssetStore'
 import { addTransaction, updateTransaction, cloneTransactionToMonth, moveTransactionToMonth } from '@finanzas/core/lib/transactions'
 import { SHARED_USER_ID, SHARED_USERS, formatAmount, getParentGroup, getCatFromSettings, toLocalDateString, monthLabel, shiftMonth, DEFAULT_GASTO_CATEGORY_GROUPS, DEFAULT_INGRESO_CATEGORY_GROUPS } from '@finanzas/core/lib/constants'
-import { tarjetaDe } from '@finanzas/core/lib/tarjetas'
+import { tarjetaDe, esConsumoTarjeta } from '@finanzas/core/lib/tarjetas'
 import PagoTarjetaSheet from '@/components/transactions/PagoTarjetaSheet'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { adjustAssetSaldo } from '@finanzas/core/lib/assets'
@@ -24,10 +24,51 @@ import { haptic } from '@/lib/haptics'
 import Sheet, { FieldLabel, fieldClass } from '@/components/ui/Sheet'
 import Segmented from '@/components/ui/Segmented'
 import Collapse from '@/components/ui/Collapse'
-import { springPop, pulse } from '@/components/ui/motion'
+import { springPop } from '@/components/ui/motion'
 import { Transaction, Currency, TransactionType, CategoryGroup, Asignacion } from '@finanzas/core/types'
 
 const CURRENCIES: Currency[] = ['ARS', 'COP', 'USD']
+
+type PayTab = 'ingreso' | 'tarjeta' | 'despues'
+const PAY_TABS: { value: PayTab; label: string }[] = [
+  { value: 'ingreso', label: 'Ingreso' },
+  { value: 'tarjeta', label: 'Tarjeta' },
+  { value: 'despues', label: 'Después' },
+]
+
+/** Fila de lista con interruptor (estilo ajustes de iOS) */
+function SwitchRow({ label, hint, checked, onChange, color = '#10b981' }: {
+  label: string
+  hint?: string
+  checked: boolean
+  onChange: (v: boolean) => void
+  color?: string
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => { haptic('light'); onChange(!checked) }}
+      className="w-full min-h-12 flex items-center justify-between gap-3 px-3.5 py-2 text-left"
+    >
+      <span className="min-w-0">
+        <span className="block text-[13.5px] text-gray-800">{label}</span>
+        {hint && <span className="block text-[11px] text-gray-400">{hint}</span>}
+      </span>
+      <span
+        className="relative h-6 w-10 flex-shrink-0 rounded-full transition-colors"
+        style={{ background: checked ? color : 'rgba(120,120,140,0.28)' }}
+      >
+        <motion.span
+          layout
+          transition={springPop}
+          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow ${checked ? 'right-0.5' : 'left-0.5'}`}
+        />
+      </span>
+    </button>
+  )
+}
 
 /** Borrador de asignación mientras se edita (monto como string del input) */
 interface AsigDraft {
@@ -65,6 +106,9 @@ export default function TransactionModal() {
   const [asigs, setAsigs] = useState<AsigDraft[]>([])
   // Tarjeta con la que se paga (excluye asignar a ingresos)
   const [tarjetaId, setTarjetaId] = useState('')
+  const [payTab, setPayTab] = useState<PayTab>('ingreso')
+  const [calcOpen, setCalcOpen] = useState(false)
+  const [masOpen, setMasOpen] = useState(false)
   const [recurrente, setRecurrente] = useState(false)
   const [ahorroAssetId, setAhorroAssetId] = useState('')
   const [saving, setSaving] = useState(false)
@@ -120,7 +164,11 @@ export default function TransactionModal() {
       setCreadoPor(editingTransaction.creadoPor || SHARED_USERS[0].id)
       setEjecutado(editingTransaction.ejecutado)
       setAsigs(editingTransaction.asignaciones.map((a) => ({ ingresoId: a.ingresoId, monto: toInputStr(a.monto) })))
-      setTarjetaId(tarjetaDe(editingTransaction.tarjetaId, settings) ? editingTransaction.tarjetaId! : '')
+      const conTarjeta = !!tarjetaDe(editingTransaction.tarjetaId, settings)
+      setTarjetaId(conTarjeta ? editingTransaction.tarjetaId! : '')
+      setPayTab(conTarjeta ? 'tarjeta' : 'ingreso')
+      setCalcOpen(false)
+      setMasOpen(!!editingTransaction.recurrente || !!editingTransaction.ahorroAssetId)
       setRecurrente(editingTransaction.recurrente ?? false)
       setAhorroAssetId(editingTransaction.ahorroAssetId ?? '')
       const catId = editingTransaction.categoria
@@ -135,6 +183,7 @@ export default function TransactionModal() {
       setSelectedGroup(''); setSelectedSub(''); setDescripcion('')
       setFecha(toLocalDateString())
       setCreadoPor(SHARED_USERS[0].id); setEjecutado(false); setAsigs([]); setTarjetaId(''); setRecurrente(false); setAhorroAssetId('')
+      setPayTab('ingreso'); setCalcOpen(false); setMasOpen(false)
     }
   }, [isTransactionModalOpen, editingTransaction, settings])
 
@@ -209,6 +258,26 @@ export default function TransactionModal() {
       })
   }, [transactions, base, s, editingTransaction])
 
+  // Consumos del mes ya cargados por tarjeta (sin contar este movimiento)
+  const acumuladoTarjeta = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const t of transactions) {
+      if (!esConsumoTarjeta(t) || t.id === editingTransaction?.id) continue
+      m.set(t.tarjetaId!, (m.get(t.tarjetaId!) ?? 0) + txToBase(t, base, s))
+    }
+    return m
+  }, [transactions, editingTransaction, base, s])
+
+  // Cambiar de pestaña descarta la elección de las otras: lo que se ve es lo que se guarda
+  function cambiarPago(t: PayTab) {
+    haptic('light')
+    setPayTab(t)
+    if (t !== 'tarjeta') setTarjetaId('')
+    if (t !== 'ingreso') setAsigs([])
+  }
+
+  const resumenMas = [recurrente && 'recurrente', ahorroAssetId && 'con ahorro'].filter(Boolean).join(', ')
+
   // ── Lógica de asignación dividida ────────────────────────────────────────────
   const isSplit  = asigs.length >= 2
   const asigSum  = asigs.reduce((sum, a) => sum + num(a.monto), 0)
@@ -245,7 +314,7 @@ export default function TransactionModal() {
     })
   }
 
-  const canSave = montoValido && (tipo === 'ingreso' || asigOk)
+  const canSave = montoValido && (tipo === 'ingreso' || payTab !== 'ingreso' || asigOk)
 
   // ── Escanear ticket con la cámara (OCR en el dispositivo) ───────────────────
   async function handleScanTicket(e: React.ChangeEvent<HTMLInputElement>) {
@@ -284,8 +353,8 @@ export default function TransactionModal() {
     setSaving(true)
     setSaveError(null)
     try {
-      const conTarjeta = tipo === 'egreso' && tarjetaId ? tarjetaId : null
-      const asignaciones: Asignacion[] = tipo === 'egreso' && !conTarjeta
+      const conTarjeta = tipo === 'egreso' && payTab === 'tarjeta' && tarjetaId ? tarjetaId : null
+      const asignaciones: Asignacion[] = tipo === 'egreso' && payTab === 'ingreso'
         ? asigs.map((a) => ({ ingresoId: a.ingresoId, monto: num(a.monto) }))
         : []
       const data: Omit<Transaction, 'id'> = {
@@ -395,7 +464,7 @@ export default function TransactionModal() {
   const footer = (
     <>
       <AnimatePresence initial={false}>
-        {(montoInvalid || (tipo === 'egreso' && !asigOk && montoValido) || saveError) && (
+        {(montoInvalid || (tipo === 'egreso' && payTab === 'ingreso' && !asigOk && montoValido) || saveError) && (
           <motion.div
             initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
@@ -404,7 +473,7 @@ export default function TransactionModal() {
               {montoInvalid && (
                 <p className="text-[11px] text-rose-500">{montoEsCuenta ? 'Completá la cuenta (el resultado debe ser mayor a 0)' : 'Ingresá un monto mayor a 0'}</p>
               )}
-              {tipo === 'egreso' && !asigOk && montoValido && (
+              {tipo === 'egreso' && payTab === 'ingreso' && !asigOk && montoValido && (
                 <p className="text-[11px] text-rose-500">
                   Las partes asignadas deben sumar el total del egreso
                 </p>
@@ -446,7 +515,9 @@ export default function TransactionModal() {
           className="flex-1 h-12 rounded-2xl text-sm font-bold text-white transition-opacity disabled:opacity-40 shadow-[0_8px_20px_-8px_rgba(0,0,0,0.35)]"
           style={{ background: accentGrad }}
         >
-          {saving ? 'Guardando…' : editingTransaction ? 'Guardar cambios' : 'Agregar'}
+          {saving
+            ? 'Guardando…'
+            : `${editingTransaction ? 'Guardar' : 'Agregar'}${montoValido && !hideAmounts ? ` · ${formatAmount(parsedMonto, moneda)}` : ''}`}
         </motion.button>
       </div>
     </>
@@ -478,112 +549,161 @@ export default function TransactionModal() {
       footer={footer}
       bodyClassName="px-5 pb-5 space-y-5"
     >
-      {/* Monto + moneda */}
-      <motion.div
-        className="rounded-[22px] px-4 pt-3 pb-3"
-        animate={{ backgroundColor: accentColor + '14' }}
-        transition={{ duration: 0.3 }}
-      >
-        <input
-          type="text"
-          inputMode="decimal"
-          placeholder="0"
-          autoFocus={!editingTransaction}
-          value={monto}
-          ref={montoRef}
-          onChange={(e) => setMonto(e.target.value)}
-          onBlur={resolverCuenta}
-          aria-label="Monto (admite cuentas, por ejemplo 1500+320)"
-          className={`amount-input-xl w-full leading-tight font-bold tracking-tight bg-transparent border-0 outline-none placeholder:text-gray-300 tabular-nums ${
-            montoInvalid ? 'text-rose-500' : 'text-gray-900'
-          }`}
-          style={{ caretColor: accentColor }}
-        />
-        <Segmented
-          id="tx-moneda"
-          size="sm"
-          value={moneda}
-          onChange={setMoneda}
-          options={CURRENCIES.map((c) => ({ value: c, label: c, activeColor: accentColor }))}
-          className="mt-1"
-        />
-
-        {/* Calculadora: operadores + resultado en vivo */}
-        <div className="flex items-center gap-1.5 mt-2">
-          {['+', '−', '×', '÷'].map((op) => (
-            <motion.button
-              key={op}
-              type="button"
-              whileTap={{ scale: 0.85 }}
-              onPointerDown={(e) => e.preventDefault()}
-              onClick={() => insertarOperador(op)}
-              className="w-10 h-9 rounded-xl bg-surface/70 text-base font-semibold text-gray-600 shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-              aria-label={`Insertar ${op}`}
-            >
-              {op}
-            </motion.button>
-          ))}
-          <AnimatePresence>
-            {montoEsCuenta && (
-              <motion.span
-                initial={{ opacity: 0, x: 8 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 8 }}
-                className={`ml-auto text-sm font-bold tabular-nums ${evalExpr(monto) === null ? 'text-gray-400' : ''}`}
-                style={evalExpr(monto) === null ? undefined : { color: accentColor }}
-              >
-                {evalExpr(monto) === null ? '…' : `= ${formatAmount(parsedMonto, moneda)}`}
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </div>
-      </motion.div>
-
-      {/* Escanear ticket — solo egresos nuevos */}
-      {tipo === 'egreso' && !editingTransaction && (
-        <>
+      {/* ── Monto: protagonista, con la moneda al lado ── */}
+      <div className="text-center pt-1">
+        <div className="flex items-center justify-center gap-2">
           <motion.button
             type="button"
-            whileTap={{ scale: 0.98 }}
-            onClick={() => scanInputRef.current?.click()}
-            disabled={scanning}
-            className="relative w-full h-11 flex items-center justify-center gap-2 rounded-2xl border border-dashed border-gray-300 text-gray-500 text-xs font-semibold hover:border-primary/50 hover:text-primary transition-colors disabled:opacity-80 overflow-hidden"
+            whileTap={{ scale: 0.92 }}
+            onClick={() => { haptic('light'); setMoneda(CURRENCIES[(CURRENCIES.indexOf(moneda) + 1) % CURRENCIES.length]) }}
+            className="flex-shrink-0 h-8 pl-2.5 pr-2 rounded-full bg-gray-500/[0.08] text-xs font-bold text-gray-600 inline-flex items-center gap-0.5"
+            aria-label={`Moneda ${moneda}: tocá para cambiar`}
           >
-            {scanning && (
-              <motion.span
-                className="absolute inset-y-0 left-0 bg-primary/10"
-                initial={{ width: 0 }}
-                animate={{ width: `${scanPct}%` }}
-              />
-            )}
-            <span className="relative inline-flex items-center gap-2">
-              {scanning ? <ScanLine size={15} className="animate-pulse" /> : <Camera size={15} />}
-              {scanning
-                ? scanPct > 0 ? `Leyendo ticket… ${scanPct}%` : 'Preparando lector…'
-                : 'Escanear ticket con la cámara'}
-            </span>
+            {moneda}<ChevronDown size={12} />
           </motion.button>
           <input
-            ref={scanInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={handleScanTicket}
+            type="text"
+            inputMode="decimal"
+            placeholder="0"
+            autoFocus={!editingTransaction}
+            value={monto}
+            ref={montoRef}
+            onChange={(e) => setMonto(e.target.value)}
+            onBlur={resolverCuenta}
+            aria-label="Monto (admite cuentas, por ejemplo 1500+320)"
+            className={`amount-input-xl min-w-0 leading-tight font-bold tracking-tight bg-transparent border-0 outline-none placeholder:text-gray-300 tabular-nums ${
+              montoInvalid ? 'text-rose-500' : 'text-gray-900'
+            }`}
+            style={{ caretColor: accentColor, width: `${Math.max(monto.length, 1) + 0.6}ch`, maxWidth: 'calc(100% - 72px)' }}
           />
-        </>
-      )}
+        </div>
 
-      {/* Descripción */}
+        {/* Acciones secundarias: la calculadora no ocupa lugar hasta que se pide */}
+        <div className="mt-1.5 flex items-center justify-center gap-1">
+          <button
+            type="button"
+            onPointerDown={(e) => e.preventDefault()}
+            onClick={() => { haptic('light'); setCalcOpen((v) => !v); montoRef.current?.focus() }}
+            className={`h-8 px-3 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 transition-colors ${
+              calcOpen || montoEsCuenta ? 'bg-primary/10 text-primary' : 'text-gray-400'
+            }`}
+          >
+            <Calculator size={13} /> Calculadora
+          </button>
+          {tipo === 'egreso' && !editingTransaction && (
+            <button
+              type="button"
+              onClick={() => scanInputRef.current?.click()}
+              disabled={scanning}
+              className={`h-8 px-3 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 ${scanning ? 'bg-primary/10 text-primary' : 'text-gray-400'}`}
+            >
+              {scanning ? <ScanLine size={13} className="animate-pulse" /> : <Camera size={13} />}
+              {scanning ? (scanPct > 0 ? `Leyendo… ${scanPct}%` : 'Preparando…') : 'Escanear ticket'}
+            </button>
+          )}
+        </div>
+        <input
+          ref={scanInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={handleScanTicket}
+        />
+        <Collapse open={calcOpen || montoEsCuenta}>
+          <div className="pt-2 flex items-center justify-center gap-1.5">
+            {['+', '−', '×', '÷'].map((op) => (
+              <motion.button
+                key={op}
+                type="button"
+                whileTap={{ scale: 0.85 }}
+                onPointerDown={(e) => e.preventDefault()}
+                onClick={() => insertarOperador(op)}
+                className="w-11 h-9 rounded-xl bg-gray-500/[0.08] text-base font-semibold text-gray-600"
+                aria-label={`Insertar ${op}`}
+              >
+                {op}
+              </motion.button>
+            ))}
+          </div>
+          <p
+            className={`h-5 mt-1.5 text-sm font-bold tabular-nums ${montoEsCuenta && evalExpr(monto) === null ? 'text-gray-400' : ''}`}
+            style={montoEsCuenta && evalExpr(monto) !== null ? { color: accentColor } : undefined}
+          >
+            {montoEsCuenta ? (evalExpr(monto) === null ? '…' : `= ${formatAmount(parsedMonto, moneda)}`) : ''}
+          </p>
+        </Collapse>
+      </div>
+
+      {/* ── Categoría: grupos en tiles, subcategorías en grilla ── */}
+      <div>
+        <div className="flex items-baseline justify-between mb-2 gap-2">
+          <span className="eyebrow">Categoría</span>
+          {currentGroup && (
+            <span className="text-[11px] font-semibold text-primary truncate">
+              {currentGroup.nombre}{selectedSub ? ` › ${activeSubs.find((x) => x.id === selectedSub)?.nombre ?? ''}` : ''}
+            </span>
+          )}
+        </div>
+        <div className="-mx-5 px-5 flex gap-2 overflow-x-auto no-scrollbar pb-1">
+          {activeGroups.map((g) => {
+            const sel = selectedGroup === g.id
+            return (
+              <motion.button
+                key={g.id}
+                type="button"
+                whileTap={{ scale: 0.94 }}
+                onClick={() => { haptic('light'); setSelectedGroup(g.id); setSelectedSub('') }}
+                className={`flex-shrink-0 w-[78px] h-[74px] rounded-2xl flex flex-col items-center justify-center gap-1.5 text-[11px] font-semibold transition-colors ${
+                  sel ? 'text-white' : 'bg-gray-500/[0.07] text-gray-600'
+                }`}
+                style={sel ? { background: g.color, boxShadow: `0 8px 18px -10px ${g.color}` } : undefined}
+              >
+                <span
+                  className={`w-8 h-8 rounded-[10px] flex items-center justify-center ${sel ? 'bg-white/20' : 'bg-surface shadow-[0_1px_2px_rgba(0,0,0,0.05)]'}`}
+                  style={sel ? undefined : { color: g.color }}
+                >
+                  <CategoryIcon cat={g} size={16} />
+                </span>
+                <span className="max-w-full px-1.5 truncate">{g.nombre}</span>
+              </motion.button>
+            )
+          })}
+        </div>
+        <Collapse open={!!selectedGroup && activeSubs.length > 0}>
+          <div className="grid grid-cols-3 gap-1.5 pt-2.5">
+            {activeSubs.map((sub) => {
+              const sel = selectedSub === sub.id
+              return (
+                <motion.button
+                  key={sub.id}
+                  type="button"
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => { haptic('light'); setSelectedSub(sel ? '' : sub.id) }}
+                  className={`h-10 px-2 rounded-xl flex items-center gap-1.5 text-xs text-left border transition-colors ${
+                    sel ? 'font-semibold' : 'border-hairline text-gray-700'
+                  }`}
+                  style={sel ? { borderColor: sub.color, backgroundColor: sub.color + '14', color: sub.color } : undefined}
+                >
+                  <span className="flex-shrink-0 inline-flex" style={sel ? undefined : { color: sub.color }}>
+                    <CategoryIcon cat={sub} size={13} />
+                  </span>
+                  <span className="truncate">{sub.nombre}</span>
+                </motion.button>
+              )
+            })}
+          </div>
+        </Collapse>
+      </div>
+
+      {/* ── Descripción ── */}
       <div>
         <input
           type="text"
-          placeholder={montoValido && !descripcion.trim() ? '¿En qué fue? (recomendado)' : '¿En qué fue?'}
+          placeholder="¿En qué fue?"
           value={descripcion}
           onChange={(e) => setDescripcion(e.target.value)}
-          className={`${fieldClass} ${
-            montoValido && !descripcion.trim() ? 'border-amber-300/70 placeholder:text-amber-500/70' : ''
-          }`}
+          className={fieldClass}
         />
         <AnimatePresence initial={false}>
           {sugerencias.length > 0 && (
@@ -592,16 +712,13 @@ export default function TransactionModal() {
               className="overflow-hidden"
             >
               <div className="flex gap-1.5 pt-2 overflow-x-auto no-scrollbar">
-                {sugerencias.map((sg, i) => (
+                {sugerencias.map((sg) => (
                   <motion.button
                     key={sg}
                     type="button"
-                    initial={{ opacity: 0, x: 8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.04 }}
                     whileTap={{ scale: 0.94 }}
                     onClick={() => setDescripcion(sg)}
-                    className="flex-shrink-0 px-3 py-1.5 bg-gray-500/[0.08] rounded-full text-xs text-gray-600 hover:bg-primary/10 hover:text-primary transition-colors"
+                    className="flex-shrink-0 px-3 py-1.5 bg-gray-500/[0.08] rounded-full text-xs text-gray-600"
                   >
                     {sg}
                   </motion.button>
@@ -612,121 +729,32 @@ export default function TransactionModal() {
         </AnimatePresence>
       </div>
 
-      {/* Categoría */}
-      <div>
-        <FieldLabel hint={montoValido && !categoria ? <span className="text-amber-500">· recomendado</span> : undefined}>
-          Categoría
-        </FieldLabel>
-        <div className="flex flex-wrap gap-1.5">
-          {activeGroups.map((g) => {
-            const isSelected = selectedGroup === g.id
-            return (
-              <motion.button
-                key={g.id}
-                type="button"
-                whileTap={{ scale: 0.92 }}
-                onClick={() => { setSelectedGroup(g.id); setSelectedSub('') }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
-                animate={isSelected
-                  ? { backgroundColor: g.color, color: '#ffffff', boxShadow: `0 6px 14px -6px ${g.color}` }
-                  : { backgroundColor: g.color + '18', color: g.color, boxShadow: '0 0 0 0 rgba(0,0,0,0)' }
-                }
-                transition={{ duration: 0.18 }}
-              >
-                <CategoryIcon cat={g} size={13} />
-                {g.nombre}
-              </motion.button>
-            )
-          })}
-        </div>
-        <Collapse open={!!selectedGroup && activeSubs.length > 0}>
-          <div className="flex flex-wrap gap-1.5 mt-2.5 pl-3 border-l-2" style={{ borderColor: (currentGroup?.color ?? '#e5e7eb') + '55' }}>
-            {activeSubs.map((sub) => {
-              const isSelected = selectedSub === sub.id
-              return (
-                <motion.button
-                  key={sub.id}
-                  type="button"
-                  whileTap={{ scale: 0.92 }}
-                  onClick={() => setSelectedSub(isSelected ? '' : sub.id)}
-                  className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium"
-                  animate={isSelected
-                    ? { backgroundColor: sub.color, color: '#ffffff' }
-                    : { backgroundColor: sub.color + '18', color: sub.color }
-                  }
-                  transition={{ duration: 0.18 }}
-                >
-                  <CategoryIcon cat={sub} size={12} />
-                  {sub.nombre}
-                </motion.button>
-              )
-            })}
-          </div>
-        </Collapse>
-      </div>
-
-      {/* Fecha + persona */}
-      <div className="flex gap-2 items-center">
-        <input
-          type="date"
-          value={fecha}
-          onChange={(e) => setFecha(e.target.value)}
-          aria-label="Fecha"
-          className={`${fieldClass} flex-1 min-w-0`}
-        />
-        <Segmented
-          id="tx-user"
-          size="md"
-          value={creadoPor}
-          onChange={setCreadoPor}
-          options={SHARED_USERS.map((u) => ({ value: u.id, label: u.nombre }))}
-          variant="solid"
-          className="flex-shrink-0 w-[150px]"
-        />
-      </div>
-
-      {/* Estado + recurrente */}
-      <div className="grid grid-cols-2 gap-2">
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.96 }}
-          onClick={() => setEjecutado((v) => !v)}
-          className={`h-11 flex items-center justify-center gap-2 rounded-2xl text-xs font-semibold transition-colors ${
-            ejecutado
-              ? 'bg-emerald-500/12 text-emerald-600 ring-1 ring-emerald-500/30'
-              : 'bg-gray-500/[0.07] text-gray-500'
-          }`}
-        >
-          <motion.span
-            className={`w-4 h-4 rounded-full flex items-center justify-center border ${ejecutado ? 'bg-emerald-500 border-emerald-500' : 'border-gray-300'}`}
-            animate={{ scale: ejecutado ? [1, 1.25, 1] : 1 }}
-            transition={pulse}
-          >
-            {ejecutado && <Check size={10} strokeWidth={3.5} className="text-white" />}
-          </motion.span>
-          {ejecutado ? 'Ejecutado' : 'Pendiente'}
-        </motion.button>
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.96 }}
-          onClick={() => setRecurrente((v) => !v)}
-          className={`h-11 flex items-center justify-center gap-2 rounded-2xl text-xs font-semibold transition-colors ${
-            recurrente
-              ? 'bg-primary/12 text-primary ring-1 ring-primary/30'
-              : 'bg-gray-500/[0.07] text-gray-500'
-          }`}
-        >
-          <motion.span animate={{ rotate: recurrente ? 180 : 0 }} transition={{ duration: 0.4 }} className="inline-flex">
-            <Repeat size={14} />
-          </motion.span>
-          Recurrente
-        </motion.button>
-      </div>
-
-      {/* ── Asignar a ingreso(s) — solo egresos ── */}
+      {/* ── Se paga con: ingreso, tarjeta o después ── */}
       {tipo === 'egreso' && (
         <div>
-          <FieldLabel hint="— tocá otro para dividir">Asignar a ingreso</FieldLabel>
+          <span className="eyebrow block mb-2">Se paga con</span>
+          <div className="rounded-[18px] ring-1 ring-hairline overflow-hidden">
+            <div role="tablist" className="grid grid-cols-3 border-b border-hairline">
+              {PAY_TABS.map((t) => {
+                const on = payTab === t.value
+                return (
+                  <button
+                    key={t.value}
+                    type="button"
+                    role="tab"
+                    aria-selected={on}
+                    onClick={() => cambiarPago(t.value)}
+                    className={`relative h-10 text-[12.5px] font-semibold transition-colors ${on ? 'text-gray-900' : 'text-gray-400'}`}
+                  >
+                    {t.label}
+                    {on && <motion.span layoutId="tx-pay-tab" transition={springPop} className="absolute inset-x-4 bottom-0 h-0.5 rounded-full bg-primary" />}
+                  </button>
+                )
+              })}
+            </div>
+            <div className="p-2">
+              {payTab === 'ingreso' && (
+                <>
           {ingresoOptions.length === 0 ? (
             <p className="text-xs text-gray-400 italic px-1">No hay ingresos este mes</p>
           ) : (
@@ -819,57 +847,132 @@ export default function TransactionModal() {
               </AnimatePresence>
             </div>
           )}
-          {(s.tarjetas ?? []).length > 0 && (
-            <div className="mt-3">
-              <FieldLabel hint="— se paga el mes siguiente">O pagar con tarjeta</FieldLabel>
-              <div className="flex flex-wrap gap-1.5">
-                {(s.tarjetas ?? []).map((t) => {
-                  const sel = tarjetaId === t.id
-                  return (
-                    <motion.button
-                      key={t.id}
-                      type="button"
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => { haptic('light'); setTarjetaId(sel ? '' : t.id); if (!sel) setAsigs([]) }}
-                      className={`flex items-center gap-1.5 h-9 px-3 rounded-full text-xs font-semibold transition-colors ${
-                        sel ? 'text-white' : 'bg-gray-500/[0.08] text-gray-600'
-                      }`}
-                      style={sel ? { background: t.color } : undefined}
-                    >
-                      <CreditCard size={13} /> {t.nombre}
-                    </motion.button>
-                  )
-                })}
-              </div>
-              {tarjetaId && (
-                <p className="mt-1.5 px-1 text-[11px] text-gray-500">
-                  Se suma al pago de {monthLabel(shiftMonth(fecha.slice(0, 7), 1))}; no descuenta de los ingresos de este mes.
+                </>
+              )}
+              {payTab === 'tarjeta' && (
+                (s.tarjetas ?? []).length === 0 ? (
+                  <p className="px-2 py-3 text-xs text-gray-400">
+                    Todavía no hay tarjetas. Agregalas en Ajustes → Tarjetas de crédito.
+                  </p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {(s.tarjetas ?? []).map((t) => {
+                      const sel = tarjetaId === t.id
+                      return (
+                        <motion.button
+                          key={t.id}
+                          type="button"
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => { haptic('light'); setTarjetaId(sel ? '' : t.id) }}
+                          className={`w-full flex items-center gap-2.5 rounded-2xl px-3 py-2.5 text-left transition-colors ${
+                            sel ? 'bg-primary/[0.07] ring-1 ring-primary/35' : 'bg-gray-500/[0.06]'
+                          }`}
+                        >
+                          <span className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${sel ? 'bg-primary border-primary' : 'border-gray-300'}`}>
+                            {sel && <Check size={11} color="white" strokeWidth={3.5} />}
+                          </span>
+                          <span
+                            className="relative w-8 h-[22px] rounded-[5px] flex-shrink-0 shadow-[0_2px_6px_-2px_rgba(0,0,0,0.3)]"
+                            style={{ background: `linear-gradient(135deg, ${t.color}bb, ${t.color})` }}
+                          >
+                            <span className="absolute left-1.5 top-[7px] w-[7px] h-[6px] rounded-[1.5px] bg-amber-200/90" />
+                          </span>
+                          <span className="flex-1 min-w-0">
+                            <span className="block text-xs font-semibold text-gray-800 truncate">{t.nombre}</span>
+                            <span className={`block text-[11px] text-gray-400 ${hideAmounts ? 'blur-sm' : ''}`}>
+                              Acumulado del mes · {formatAmount(acumuladoTarjeta.get(t.id) ?? 0, base)}
+                            </span>
+                          </span>
+                        </motion.button>
+                      )
+                    })}
+                  </div>
+                )
+              )}
+              {payTab === 'despues' && (
+                <p className="px-2 py-3 text-xs text-gray-500">
+                  Queda sin asignar. Podés asignarlo más tarde desde Asignaciones.
                 </p>
               )}
             </div>
-          )}
+            {payTab === 'tarjeta' && tarjetaId && (
+              <p className="px-3.5 py-2.5 text-[11.5px] text-gray-500 bg-gray-500/[0.05] border-t border-hairline">
+                Se suma al pago de <b className="text-gray-700">{monthLabel(shiftMonth(fecha.slice(0, 7), 1))}</b>; no descuenta de los ingresos de este mes.
+              </p>
+            )}
+          </div>
         </div>
       )}
 
-      {/* ── Destino de ahorro — solo egresos ── */}
-      {tipo === 'egreso' && (
-        <div>
-          <FieldLabel hint="— opcional">Destino de ahorro</FieldLabel>
-          <select
-            value={ahorroAssetId}
-            onChange={(e) => setAhorroAssetId(e.target.value)}
-            className={fieldClass}
-          >
-            <option value="">Sin destino de ahorro</option>
-            {assets.filter((a) => a.clase === 'activo').map((a) => (
-              <option key={a.id} value={a.id}>{a.nombre} ({a.moneda})</option>
-            ))}
-          </select>
-          {ahorroAssetId && (
-            <p className="text-[11px] text-primary mt-1.5">El saldo de esta cuenta se actualizará al guardar</p>
-          )}
+      {/* ── Detalles ── */}
+      <div className="rounded-[18px] bg-gray-500/[0.06] divide-y divide-hairline">
+        <label className="flex items-center justify-between h-12 px-3.5 gap-3">
+          <span className="text-[13.5px] text-gray-800">Fecha</span>
+          <input
+            type="date"
+            value={fecha}
+            onChange={(e) => setFecha(e.target.value)}
+            className="bg-transparent text-right text-[13.5px] text-gray-500 outline-none min-w-0"
+          />
+        </label>
+        <div className="flex items-center justify-between h-12 px-3.5 gap-3">
+          <span className="text-[13.5px] text-gray-800">Cargado por</span>
+          <Segmented
+            id="tx-user"
+            size="sm"
+            value={creadoPor}
+            onChange={setCreadoPor}
+            options={SHARED_USERS.map((u) => ({ value: u.id, label: u.nombre }))}
+            variant="solid"
+            className="w-[140px] flex-shrink-0"
+          />
         </div>
-      )}
+        <SwitchRow label={tipo === 'ingreso' ? 'Recibido' : 'Pagado'} checked={ejecutado} onChange={setEjecutado} />
+      </div>
+
+      {/* ── Más opciones ── */}
+      <div>
+        <button
+          type="button"
+          onClick={() => setMasOpen((v) => !v)}
+          className="w-full flex items-center justify-center gap-1 py-1 text-xs font-semibold text-primary"
+          aria-expanded={masOpen}
+        >
+          Más opciones{!masOpen && resumenMas ? ` · ${resumenMas}` : ''}
+          <ChevronDown size={14} className={`transition-transform ${masOpen ? 'rotate-180' : ''}`} />
+        </button>
+        <Collapse open={masOpen}>
+          <div className="pt-2 space-y-3">
+            <div className="rounded-[18px] bg-gray-500/[0.06]">
+              <SwitchRow
+                label="Recurrente"
+                hint="Se copia al mes siguiente con “Crear recurrentes”"
+                checked={recurrente}
+                onChange={setRecurrente}
+                color="var(--color-primary)"
+              />
+            </div>
+            {tipo === 'egreso' && (
+              <div>
+                <FieldLabel hint="— opcional">Destino de ahorro</FieldLabel>
+                <select
+                  value={ahorroAssetId}
+                  onChange={(e) => setAhorroAssetId(e.target.value)}
+                  className={fieldClass}
+                >
+                  <option value="">Sin destino de ahorro</option>
+                  {assets.filter((a) => a.clase === 'activo').map((a) => (
+                    <option key={a.id} value={a.id}>{a.nombre} ({a.moneda})</option>
+                  ))}
+                </select>
+                {ahorroAssetId && (
+                  <p className="text-[11px] text-primary mt-1.5">El saldo de esta cuenta se actualizará al guardar</p>
+                )}
+              </div>
+            )}
+          </div>
+        </Collapse>
+      </div>
 
       {/* ── Clonar / Mover — solo al editar ── */}
       {editingTransaction && (
