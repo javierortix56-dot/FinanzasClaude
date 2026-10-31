@@ -268,7 +268,8 @@ export default function AssignmentTab({ onScrollY }: { onScrollY?: (y: number) =
 
       {/* ── Groups ── */}
       <div
-        className="flex-1 overflow-y-auto overscroll-contain pt-1 pb-28 no-scrollbar"
+        // Con selección activa aparece la barra de acciones sobre el dock: se reserva su altura
+        className={`flex-1 overflow-y-auto overscroll-contain pt-1 no-scrollbar transition-[padding] duration-200 ${selectedIds.size > 0 ? 'pb-44' : 'pb-28'}`}
         onScroll={(e) => onScrollY?.(e.currentTarget.scrollTop)}
       >
         {egresos.length === 0 ? (
