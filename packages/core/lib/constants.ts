@@ -76,6 +76,8 @@ function flattenGroups(groups: CategoryGroup[]): Category[] {
 const ALL_DEFAULT_CATEGORIES: Category[] = [
   ...flattenGroups(DEFAULT_GASTO_CATEGORY_GROUPS),
   ...flattenGroups(DEFAULT_INGRESO_CATEGORY_GROUPS),
+  // Categoría de los pagos automáticos de tarjeta (fuera de los grupos: no se elige a mano)
+  { id: 'pago_tarjeta', nombre: 'Pago de tarjeta', color: '#64748B', activa: true, icono: 'card' },
 ]
 
 /** Busca en los defaults. Para categorías custom usá getCatFromSettings. */

@@ -1,8 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { Trash2, Calculator, Check } from 'lucide-react'
+import { Trash2, Calculator, Check, CreditCard, ChevronDown } from 'lucide-react'
 import { Modal } from '@/components/ui/modal'
 import { Input, Select, Textarea, Label } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -22,7 +22,8 @@ import { toBase, txToBase, txMonth } from '@finanzas/core/lib/currency'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { CategoryIcon } from '@finanzas/core/lib/categoryIcons'
 import { Asignacion, Currency, Transaction, TransactionType } from '@finanzas/core/types'
-import { SHARED_USERS, getParentGroup, toLocalDateString } from '@finanzas/core/lib/constants'
+import { SHARED_USERS, getParentGroup, toLocalDateString, monthLabel, shiftMonth } from '@finanzas/core/lib/constants'
+import { registrarAbono, detallePago, tarjetaDe, type DetallePago } from '@finanzas/core/lib/tarjetas'
 import { cn } from '@finanzas/core/lib/utils'
 
 interface Props {
@@ -39,15 +40,19 @@ export function TransactionModal({ open, onClose, initialType = 'egreso', editin
     <Modal
       open={open}
       onClose={onClose}
-      title={editing ? 'Editar movimiento' : 'Nuevo movimiento'}
+      title={editing?.pagoTarjeta ? 'Pago de tarjeta' : editing ? 'Editar movimiento' : 'Nuevo movimiento'}
       size="lg"
     >
-      <Form
-        key={editing?.id ?? `new-${initialType}`}
-        editing={editing ?? null}
-        initialType={initialType}
-        onClose={onClose}
-      />
+      {editing?.pagoTarjeta ? (
+        <PagoTarjetaForm key={editing.id} pago={editing} onClose={onClose} />
+      ) : (
+        <Form
+          key={editing?.id ?? `new-${initialType}`}
+          editing={editing ?? null}
+          initialType={initialType}
+          onClose={onClose}
+        />
+      )}
     </Modal>
   )
 }
@@ -83,7 +88,9 @@ function Form({
   const [ejecutado, setEjecutado]   = useState(editing?.ejecutado ?? false)
   const [recurrente, setRecurrente] = useState(editing?.recurrente ?? false)
   // '' = sin asignar · '__keep' = conservar una asignación dividida existente
+  // · 'tc:<id>' = pagado con esa tarjeta de crédito
   const [ingresoId, setIngresoId]   = useState(() => {
+    if (editing?.tarjetaId && tarjetaDe(editing.tarjetaId, s)) return `tc:${editing.tarjetaId}`
     const a = editing?.asignaciones ?? []
     if (a.length > 1) return '__keep'
     // Un vínculo a un ingreso que ya no existe (huérfano) se muestra como sin asignar
@@ -164,7 +171,8 @@ function Form({
     if (!categoria) return showToast('Elegí una categoría', 'error')
 
     let asignaciones: Asignacion[] = []
-    if (tipo === 'egreso') {
+    const tarjetaId = tipo === 'egreso' && ingresoId.startsWith('tc:') ? ingresoId.slice(3) : null
+    if (tipo === 'egreso' && !tarjetaId) {
       if (ingresoId === '__keep') {
         // Dividido: se conserva la proporción de cada parte sobre el nuevo monto
         const prevTotal = editing!.asignaciones.reduce((x, a) => x + a.monto, 0) || 1
@@ -189,6 +197,7 @@ function Form({
       creadoPor,
       recurrente,
       ahorroAssetId: tipo === 'egreso' ? (ahorroAssetId || null) : null,
+      tarjetaId,
     }
 
     setSaving(true)
@@ -398,12 +407,28 @@ function Form({
               {editing && editing.asignaciones.length > 1 && (
                 <option value="__keep">Dividido entre {editing.asignaciones.length} ingresos (conservar)</option>
               )}
-              {ingresoOptions.map(({ ing, libre }) => (
-                <option key={ing.id} value={ing.id}>
-                  {ing.descripcion || '(sin descripción)'} · libre {Math.round(libre).toLocaleString('es-AR')} {base}
-                </option>
-              ))}
+              {ingresoOptions.length > 0 && (
+                <optgroup label="Ingresos">
+                  {ingresoOptions.map(({ ing, libre }) => (
+                    <option key={ing.id} value={ing.id}>
+                      {ing.descripcion || '(sin descripción)'} · libre {Math.round(libre).toLocaleString('es-AR')} {base}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {(s.tarjetas ?? []).length > 0 && (
+                <optgroup label="Tarjetas (se paga el mes siguiente)">
+                  {(s.tarjetas ?? []).map((t) => (
+                    <option key={t.id} value={`tc:${t.id}`}>{t.nombre}</option>
+                  ))}
+                </optgroup>
+              )}
             </Select>
+            {ingresoId.startsWith('tc:') && (
+              <p className="mt-1.5 text-[11px] text-muted">
+                Se suma al pago de {monthLabel(shiftMonth(fecha.slice(0, 7), 1))}.
+              </p>
+            )}
           </div>
           <div>
             <Label htmlFor="tx-ahorro">Destino de ahorro</Label>
@@ -453,6 +478,184 @@ function Form({
     </form>
   )
 }
+
+/**
+ * Pago automático de una tarjeta: el total no se edita (sale de los consumos,
+ * las cuotas y el saldo anterior); sí cuánto se abona, con qué ingreso y si
+ * ya se pagó. Lo que no se abona pasa al pago del mes siguiente.
+ */
+function PagoTarjetaForm({ pago, onClose }: { pago: Transaction; onClose: () => void }) {
+  const s = useSettingsStore((st) => st.settings) ?? DEFAULT_SETTINGS
+  const showToast = useUIStore((st) => st.showToast)
+  const transactions = useTransactionStore((st) => st.transactions)
+  const base = useAuthStore((st) => st.monedaBase) as Currency
+  const p = pago.pagoTarjeta!
+  const tarjeta = tarjetaDe(p.tarjetaId, s)
+  const previo = shiftMonth(p.mes, -1)
+  const siguiente = shiftMonth(p.mes, 1)
+
+  const [abono, setAbono] = useState(String(pago.monto))
+  const [ingresoId, setIngresoId] = useState(() => {
+    if (pago.asignaciones.length > 1) return '__keep'
+    const id = pago.asignaciones[0]?.ingresoId ?? ''
+    return transactions.some((t) => t.id === id && t.tipo === 'ingreso') ? id : ''
+  })
+  const [ejecutado, setEjecutado] = useState(pago.ejecutado)
+  const [saving, setSaving] = useState(false)
+  const [verDetalle, setVerDetalle] = useState(false)
+  const [detalle, setDetalle] = useState<DetallePago | null>(null)
+
+  useEffect(() => {
+    if (!verDetalle || detalle) return
+    let vivo = true
+    detallePago(p, s).then((d) => { if (vivo) setDetalle(d) }).catch(() => { if (vivo) setDetalle({ consumos: [], cuotas: [] }) })
+    return () => { vivo = false }
+  }, [verDetalle, detalle, p, s])
+
+  const abonoNum = evalExpr(abono) ?? NaN
+  const abonoValido = abonoNum >= 0 && abonoNum <= p.total + 0.005
+  const pasa = abonoValido ? Math.max(p.total - abonoNum, 0) : 0
+
+  const ingresoOptions = useMemo(() => transactions
+    .filter((t) => t.tipo === 'ingreso')
+    .sort((a, b) => a.fecha.toDate().getTime() - b.fecha.toDate().getTime())
+    .map((ing) => {
+      const used = transactions
+        .filter((t) => t.tipo === 'egreso' && t.id !== pago.id)
+        .reduce((sum, t) => sum + t.asignaciones
+          .filter((a) => a.ingresoId === ing.id)
+          .reduce((x, a) => x + toBase(a.monto, t.moneda, base, s, txMonth(t)), 0), 0)
+      return { ing, libre: txToBase(ing, base, s) - used }
+    }), [transactions, pago.id, base, s])
+
+  async function handleSave() {
+    if (!abonoValido) return showToast(`El abono debe estar entre 0 y ${formatNum(p.total)}`, 'error')
+    const monto = Math.round(abonoNum * 100) / 100
+    setSaving(true)
+    try {
+      if (monto !== pago.monto) await registrarAbono(pago, monto)
+      let asignaciones: Asignacion[]
+      if (ingresoId === '__keep') {
+        const prevTotal = pago.asignaciones.reduce((x, a) => x + a.monto, 0) || 1
+        asignaciones = monto > 0 ? pago.asignaciones.map((a) => ({ ...a, monto: Math.round((a.monto / prevTotal) * monto * 100) / 100 })) : []
+      } else {
+        asignaciones = ingresoId && monto > 0 ? [{ ingresoId, monto }] : []
+      }
+      await updateTransaction(pago.id!, { asignaciones, ejecutado })
+      showToast(pasa > 0 ? `Abono guardado · pasan ${formatNum(pasa)} ${p.moneda} a ${monthLabel(siguiente)}` : 'Pago actualizado')
+      onClose()
+    } catch (err) {
+      console.error(err)
+      showToast('Error al guardar', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const lineas = [
+    { label: `Consumos de ${monthLabel(previo)}`, monto: p.consumos },
+    { label: `Cuotas de ${monthLabel(p.mes)}`, monto: p.cuotas },
+    { label: `Saldo impago de ${monthLabel(previo)}`, monto: p.saldoAnterior },
+  ]
+
+  return (
+    <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); handleSave() }}>
+      <div className="flex items-center gap-3">
+        <span className="h-10 w-10 shrink-0 rounded-xl inline-flex items-center justify-center text-white" style={{ background: tarjeta?.color ?? 'var(--muted)' }}>
+          <CreditCard className="h-5 w-5" />
+        </span>
+        <div>
+          <div className="text-[15px] font-semibold">{tarjeta?.nombre ?? 'Tarjeta eliminada'}{p.moneda !== 'ARS' ? ` · ${p.moneda}` : ''}</div>
+          <div className="text-xs text-muted capitalize">Pago de {monthLabel(p.mes)} · se genera solo y no se puede borrar</div>
+        </div>
+      </div>
+
+      <div className="rounded-xl bg-surface-2 p-4 space-y-2 text-sm">
+        {lineas.map((l) => (
+          <div key={l.label} className={cn('flex justify-between', l.monto === 0 && 'text-muted-2')}>
+            <span>{l.label}</span>
+            <MoneyText amount={l.monto} currency={p.moneda} />
+          </div>
+        ))}
+        <div className="flex justify-between border-t border-hairline pt-2 font-semibold">
+          <span>Total a pagar</span>
+          <MoneyText amount={p.total} currency={p.moneda} />
+        </div>
+      </div>
+
+      <div>
+        <button type="button" onClick={() => setVerDetalle((v) => !v)} className="inline-flex items-center gap-1 text-xs font-semibold text-primary">
+          <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', verDetalle && 'rotate-180')} />
+          {verDetalle ? 'Ocultar' : 'Ver'} qué lo compone
+        </button>
+        <Collapse open={verDetalle}>
+          <div className="mt-2 space-y-1 text-xs">
+            {!detalle ? <p className="text-muted">Cargando…</p> : (
+              <>
+                {detalle.consumos.map((c) => (
+                  <div key={c.id} className="flex justify-between gap-3">
+                    <span className="truncate text-muted">{c.fecha.toDate().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })} · {c.descripcion || '(sin descripción)'}</span>
+                    <MoneyText amount={c.monto} currency={c.moneda} />
+                  </div>
+                ))}
+                {detalle.cuotas.map((c, i) => (
+                  <div key={i} className="flex justify-between gap-3">
+                    <span className="truncate text-muted">{c.descripcion} · cuota {c.numero}/{c.totalCuotas}</span>
+                    <MoneyText amount={c.monto} currency={p.moneda} />
+                  </div>
+                ))}
+                {detalle.consumos.length === 0 && detalle.cuotas.length === 0 && <p className="text-muted">Sin consumos ni cuotas: es saldo anterior.</p>}
+              </>
+            )}
+          </div>
+        </Collapse>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label htmlFor="pago-abono">Abono ({p.moneda})</Label>
+          <Input
+            id="pago-abono"
+            inputMode="decimal"
+            value={abono}
+            onChange={(e) => setAbono(e.target.value)}
+            aria-invalid={!abonoValido}
+            className={cn('tnum', !abonoValido && 'border-expense/50 ring-4 ring-expense/10')}
+          />
+          <div className="mt-1.5 flex items-center justify-between text-[11px]">
+            {pasa > 0
+              ? <span className="text-unassigned font-medium">Pasan <MoneyText amount={pasa} currency={p.moneda} /> a {monthLabel(siguiente)}</span>
+              : <span className="text-muted">Se paga el total</span>}
+            {abonoNum !== p.total && (
+              <button type="button" className="font-semibold text-primary" onClick={() => setAbono(String(p.total))}>Pagar total</button>
+            )}
+          </div>
+        </div>
+        <div>
+          <Label htmlFor="pago-asig">Se paga con</Label>
+          <Select id="pago-asig" value={ingresoId} onChange={(e) => setIngresoId(e.target.value)}>
+            <option value="">Sin asignar</option>
+            {pago.asignaciones.length > 1 && <option value="__keep">Dividido entre {pago.asignaciones.length} ingresos (conservar)</option>}
+            {ingresoOptions.map(({ ing, libre }) => (
+              <option key={ing.id} value={ing.id}>
+                {ing.descripcion || '(sin descripción)'} · libre {Math.round(libre).toLocaleString('es-AR')} {base}
+              </option>
+            ))}
+          </Select>
+        </div>
+      </div>
+
+      <Toggle checked={ejecutado} onChange={setEjecutado} label="Pagado" />
+
+      <div className="flex justify-end gap-2 pt-4 border-t border-hairline">
+        <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>Cancelar</Button>
+        <Button type="submit" disabled={saving || !abonoValido}>{saving ? 'Guardando…' : 'Guardar'}</Button>
+      </div>
+    </form>
+  )
+}
+
+const formatNum = (n: number) => n.toLocaleString('es-AR', { maximumFractionDigits: 2 })
 
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
   return (

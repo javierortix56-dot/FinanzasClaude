@@ -2,11 +2,13 @@
 
 import { useState } from 'react'
 import { motion } from 'motion/react'
-import { Trash2 } from 'lucide-react'
+import { Trash2, CreditCard } from 'lucide-react'
 import { addCompraCuotas, updateCompraCuotas, deleteCompraCuotas, restoreCompraCuotas } from '@finanzas/core/lib/cuotas'
 import { offerUndo } from '@/lib/undo'
 import { getCurrentMonth, SHARED_USERS } from '@finanzas/core/lib/constants'
 import { CompraCuotas, Currency } from '@finanzas/core/types'
+import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
+import { esDeTarjeta } from '@finanzas/core/lib/tarjetas'
 import Sheet, { FieldLabel, fieldClass } from '@/components/ui/Sheet'
 import Segmented from '@/components/ui/Segmented'
 
@@ -35,6 +37,9 @@ export default function CuotaModal({ open, editing, onClose }: Props) {
 function Form({ editing, onClose }: { editing: CompraCuotas | null; onClose: () => void }) {
   const [descripcion, setDescripcion] = useState(editing?.descripcion ?? '')
   const [tarjeta, setTarjeta]         = useState(editing?.tarjeta ?? '')
+  const tarjetas = useSettingsStore((st) => st.settings?.tarjetas) ?? []
+  // Las cuotas se suman al pago de la tarjeta con el mismo nombre
+  const vinculada = tarjetas.find((t) => esDeTarjeta({ tarjeta } as CompraCuotas, t))
   const [moneda, setMoneda]           = useState<Currency>(editing?.moneda ?? 'ARS')
   const [montoCuota, setMontoCuota]   = useState(editing ? String(editing.montoCuota) : '')
   const [totalCuotas, setTotalCuotas] = useState(editing ? String(editing.totalCuotas) : '')
@@ -112,6 +117,27 @@ function Form({ editing, onClose }: { editing: CompraCuotas | null; onClose: () 
           className="flex-shrink-0 w-[96px]"
         />
       </div>
+      {tarjetas.length > 0 && (
+        <div className="-mt-1 space-y-1.5">
+          <div className="flex flex-wrap gap-1.5">
+            {tarjetas.map((t) => {
+              const sel = vinculada?.id === t.id
+              return (
+                <button key={t.id} type="button" onClick={() => setTarjeta(t.nombre)}
+                  className={`flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-semibold ${sel ? 'text-white' : 'bg-gray-500/[0.08] text-gray-600'}`}
+                  style={sel ? { background: t.color } : undefined}>
+                  <CreditCard size={12} /> {t.nombre}
+                </button>
+              )
+            })}
+          </div>
+          <p className="px-1 text-[11px] text-gray-500">
+            {vinculada
+              ? `Cada cuota se suma al pago de ${vinculada.nombre}.`
+              : 'Elegí una tarjeta para que las cuotas se sumen a su pago mensual.'}
+          </p>
+        </div>
+      )}
 
       <div className="flex gap-2">
         <div className="flex-1 min-w-0">

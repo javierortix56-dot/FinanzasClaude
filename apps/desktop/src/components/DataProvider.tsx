@@ -10,6 +10,7 @@ import { initAuth } from '@finanzas/core/lib/auth'
 import { subscribeToTransactions } from '@finanzas/core/lib/transactions'
 import { subscribeToSettings, getOrInitSettings } from '@finanzas/core/lib/settings'
 import { syncCotizaciones } from '@finanzas/core/lib/cotizaciones'
+import { programarSyncPagos } from '@finanzas/core/lib/tarjetas'
 import { subscribeToAssets } from '@finanzas/core/lib/assets'
 import { subscribeToBudgets } from '@finanzas/core/lib/budgets'
 import { Settings } from '@finanzas/core/types'
@@ -40,6 +41,7 @@ export default function DataProvider({ children }: { children: React.ReactNode }
     const apply = (s: Settings) => {
       setSettings(s)
       setMonedaBase(s.monedaBase ?? 'ARS')
+      programarSyncPagos()
     }
 
     async function init() {
@@ -67,7 +69,11 @@ export default function DataProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (!user) return
     txUnsub.current?.()
-    txUnsub.current = subscribeToTransactions(currentMonth, (txs) => setMonthTransactions(currentMonth, txs))
+    txUnsub.current = subscribeToTransactions(currentMonth, (txs) => {
+      setMonthTransactions(currentMonth, txs)
+      // Cualquier cambio puede mover el pago de una tarjeta (consumos, abonos)
+      programarSyncPagos()
+    })
     budgetsUnsub.current?.()
     budgetsUnsub.current = subscribeToBudgets(currentMonth, setBudgets)
     return () => {

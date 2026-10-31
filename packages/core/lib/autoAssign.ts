@@ -1,5 +1,6 @@
 import { Currency, Settings, Transaction } from '../types'
 import { toBase, txToBase, txMonth } from './currency'
+import { necesitaRespaldo } from './tarjetas'
 
 /**
  * Plan de auto-asignación de egresos sin ingreso de respaldo (compartido por
@@ -15,7 +16,7 @@ export function planAutoAssign(
   s: Settings,
 ): { exp: Transaction; ingresoId: string }[] {
   const ingresoIds = new Set(ingresos.map((i) => i.id!))
-  const unassigned = egresos.filter((e) => !e.asignaciones.some((a) => ingresoIds.has(a.ingresoId)))
+  const unassigned = egresos.filter((e) => necesitaRespaldo(e, ingresoIds))
   if (ingresos.length === 0 || unassigned.length === 0) return []
 
   const capacity = new Map<string, number>()

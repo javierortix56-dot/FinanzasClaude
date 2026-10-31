@@ -8,6 +8,7 @@ import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useAssetStore } from '@finanzas/core/store/useAssetStore'
 import { subscribeToTransactions } from '@finanzas/core/lib/transactions'
+import { programarSyncPagos } from '@finanzas/core/lib/tarjetas'
 import { subscribeToAssets } from '@finanzas/core/lib/assets'
 import TransactionModal from '@/components/transactions/TransactionModal'
 import Toast from '@/components/ui/Toast'
@@ -58,7 +59,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   // Global subscriptions — available on all pages
   useEffect(() => {
-    const unsub = subscribeToTransactions(currentMonth, (txs) => setMonthTransactions(currentMonth, txs))
+    const unsub = subscribeToTransactions(currentMonth, (txs) => {
+      setMonthTransactions(currentMonth, txs)
+      // Cualquier cambio puede mover el pago de una tarjeta (consumos, abonos)
+      programarSyncPagos()
+    })
     return () => unsub()
   }, [currentMonth, setMonthTransactions])
 

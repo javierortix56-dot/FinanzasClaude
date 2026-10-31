@@ -33,6 +33,17 @@ function compraToRow(c: Omit<CompraCuotas, 'id'>) {
 
 // ── CRUD + realtime ───────────────────────────────────────────────────────────
 
+export async function fetchCuotas(): Promise<CompraCuotas[]> {
+  const { data, error } = await supabase.from('compras_cuotas').select('*')
+  if (error) throw error
+  return (data ?? []).map(rowToCompra)
+}
+
+/** Las cuotas forman parte del pago de su tarjeta: recalcularlo tras cada cambio */
+function recalcularPagos() {
+  import('./tarjetas').then((m) => m.programarSyncPagos()).catch(() => { /* no bloqueante */ })
+}
+
 export function subscribeToCuotas(callback: (compras: CompraCuotas[]) => void): () => void {
   let active = true
 
@@ -67,6 +78,7 @@ export async function addCompraCuotas(data: Omit<CompraCuotas, 'id'>): Promise<s
     .select('id')
     .single()
   if (error) throw error
+  recalcularPagos()
   return row.id as string
 }
 
@@ -76,6 +88,7 @@ export async function updateCompraCuotas(id: string, data: Omit<CompraCuotas, 'i
     .update(compraToRow(data))
     .eq('id', id)
   if (error) throw error
+  recalcularPagos()
 }
 
 /** Re-crea una compra borrada con su mismo id (botón "Deshacer"). */
@@ -83,11 +96,13 @@ export async function restoreCompraCuotas(c: CompraCuotas) {
   const { id, ...rest } = c
   const { error } = await supabase.from('compras_cuotas').insert({ id, ...compraToRow(rest) })
   if (error) throw error
+  recalcularPagos()
 }
 
 export async function deleteCompraCuotas(id: string) {
   const { error } = await supabase.from('compras_cuotas').delete().eq('id', id)
   if (error) throw error
+  recalcularPagos()
 }
 
 // ── Helpers de proyección ─────────────────────────────────────────────────────

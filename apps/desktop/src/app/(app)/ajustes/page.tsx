@@ -2,7 +2,7 @@
 
 import { useState, useSyncExternalStore } from 'react'
 import { motion } from 'motion/react'
-import { Save, Copy, Repeat, Monitor, Sun, Moon, ChevronRight, RefreshCw } from 'lucide-react'
+import { Save, Copy, Repeat, Monitor, Sun, Moon, ChevronRight, RefreshCw, CreditCard, Pencil, Trash2, Plus } from 'lucide-react'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
@@ -17,10 +17,11 @@ import { cloneMonthTransactions, createRecurringTransactions, countMonthTransact
 import { shiftMonth, monthLabel } from '@finanzas/core/lib/constants'
 import { CategoryIcon } from '@finanzas/core/lib/categoryIcons'
 import { currentThemePref, setThemePref, subscribeTheme, ThemePref } from '@/lib/theme'
-import { CategoryGroup, FuenteCambio, Settings } from '@finanzas/core/types'
+import { CategoryGroup, FuenteCambio, Settings, Tarjeta } from '@finanzas/core/types'
 import { HORMIGA_DEFAULT } from '@finanzas/core/lib/resumenAnalisis'
 import { cambiarFuenteCambio, syncCotizaciones, mensajeSync, haceCuanto, FUENTES_CAMBIO } from '@finanzas/core/lib/cotizaciones'
 import { PageScroll } from '@/components/shell/PageScroll'
+import { agregarTarjeta, renombrarTarjeta, eliminarTarjeta } from '@finanzas/core/lib/tarjetas'
 
 const parseRate = (v: string) => parseFloat(v.replace(',', '.'))
 
@@ -183,6 +184,14 @@ export default function AjustesPage() {
         )}
       </Section>
 
+      <Section
+        title="Tarjetas de crédito"
+        sub="Un egreso asignado a una tarjeta se paga el mes siguiente: su pago se genera solo e incluye las cuotas con el mismo nombre de tarjeta."
+        delay={0.05}
+      >
+        <TarjetasAjustes settings={settings} />
+      </Section>
+
       <Section title="Gastos hormiga" sub="Criterio que usa el análisis de Resúmenes." delay={0.06}>
         <HormigaAjustes settings={settings} onGuardado={() => showToast('Criterio de gastos hormiga guardado')} onError={() => showToast('Error al guardar', 'error')} />
       </Section>
@@ -251,6 +260,98 @@ function RateValue({ label, value }: { label: string; value: number }) {
     <div>
       <div className="eyebrow mb-2">{label}</div>
       <div className="text-[22px] font-semibold tnum">{value.toLocaleString('es-AR')}</div>
+    </div>
+  )
+}
+
+/** Alta, renombre y baja de tarjetas de crédito */
+function TarjetasAjustes({ settings }: { settings: Settings }) {
+  const showToast = useUIStore((s) => s.showToast)
+  const tarjetas = settings.tarjetas ?? []
+  const [nombre, setNombre] = useState('')
+  const [editando, setEditando] = useState<{ id: string; nombre: string } | null>(null)
+  const [borrar, setBorrar] = useState<Tarjeta | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  async function run(fn: () => Promise<unknown>, ok: string) {
+    setBusy(true)
+    try {
+      await fn()
+      showToast(ok)
+      return true
+    } catch (err) {
+      showToast(err instanceof Error && err.message ? err.message : 'Error al guardar', 'error')
+      return false
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      {tarjetas.length === 0 && (
+        <p className="text-sm text-muted">Todavía no agregaste tarjetas.</p>
+      )}
+      {tarjetas.map((t) => (
+        <div key={t.id} className="flex items-center gap-3 rounded-xl bg-surface-2 p-3">
+          <span className="h-9 w-9 shrink-0 rounded-xl inline-flex items-center justify-center text-white" style={{ background: t.color }}>
+            <CreditCard className="h-4 w-4" />
+          </span>
+          {editando?.id === t.id ? (
+            <form
+              className="flex flex-1 items-center gap-2"
+              onSubmit={async (e) => {
+                e.preventDefault()
+                if (await run(() => renombrarTarjeta(settings, t.id, editando.nombre), 'Tarjeta renombrada')) setEditando(null)
+              }}
+            >
+              <Input autoFocus value={editando.nombre} onChange={(e) => setEditando({ id: t.id, nombre: e.target.value })} className="h-9" />
+              <Button type="submit" size="sm" disabled={busy || !editando.nombre.trim()}>Guardar</Button>
+              <Button type="button" size="sm" variant="ghost" onClick={() => setEditando(null)}>Cancelar</Button>
+            </form>
+          ) : (
+            <>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-semibold truncate">{t.nombre}</div>
+                <div className="text-xs text-muted">Cuotas incluidas desde {monthLabel(t.desde)}</div>
+              </div>
+              <Button size="icon" variant="ghost" title="Renombrar" onClick={() => setEditando({ id: t.id, nombre: t.nombre })}>
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Button size="icon" variant="ghost" title="Eliminar" onClick={() => setBorrar(t)}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+        </div>
+      ))}
+
+      <form
+        className="flex items-center gap-2 pt-1"
+        onSubmit={async (e) => {
+          e.preventDefault()
+          if (await run(() => agregarTarjeta(settings, nombre), 'Tarjeta agregada')) setNombre('')
+        }}
+      >
+        <Input placeholder="Nombre (p. ej. Visa Galicia)" value={nombre} onChange={(e) => setNombre(e.target.value)} className="h-10" />
+        <Button type="submit" disabled={busy || !nombre.trim()}>
+          <Plus className="h-4 w-4" /> Agregar
+        </Button>
+      </form>
+
+      <ConfirmDialog
+        open={borrar !== null}
+        title={`¿Eliminar ${borrar?.nombre ?? ''}?`}
+        message="Sus gastos vuelven a quedar sin asignar y se borran sus pagos pendientes. Los pagos ya marcados como pagados se conservan."
+        confirmLabel="Eliminar"
+        danger
+        onConfirm={() => {
+          const t = borrar!
+          setBorrar(null)
+          run(() => eliminarTarjeta(settings, t.id), `${t.nombre} eliminada`)
+        }}
+        onCancel={() => setBorrar(null)}
+      />
     </div>
   )
 }

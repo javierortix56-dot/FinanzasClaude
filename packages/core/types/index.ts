@@ -49,6 +49,42 @@ export interface Transaction {
   creadoPor: string
   recurrente?: boolean
   ahorroAssetId?: string | null
+  /**
+   * Egreso pagado con tarjeta de crédito (en lugar de asignarse a un ingreso):
+   * no consume ingresos este mes y se suma al pago de la tarjeta del mes siguiente.
+   */
+  tarjetaId?: string | null
+  /** Presente solo en el pago automático de una tarjeta (ver lib/tarjetas.ts) */
+  pagoTarjeta?: PagoTarjeta | null
+}
+
+/** Tarjeta de crédito (se configura en Ajustes) */
+export interface Tarjeta {
+  id: string
+  nombre: string
+  color: string
+  /** Primer mes (YYYY-MM) cuyo pago incluye las cuotas de la tarjeta */
+  desde: string
+}
+
+/**
+ * Desglose del pago mensual de una tarjeta, en una moneda. El monto del
+ * movimiento es el abono (lo que se paga); total − abono pasa al mes siguiente.
+ */
+export interface PagoTarjeta {
+  tarjetaId: string
+  /** Mes del pago (YYYY-MM) */
+  mes: string
+  moneda: Currency
+  /** Gastos del mes anterior asignados a la tarjeta */
+  consumos: number
+  /** Cuotas que vencen este mes */
+  cuotas: number
+  /** Lo que quedó sin pagar el mes anterior */
+  saldoAnterior: number
+  total: number
+  /** true si el abono se fijó a mano (menor al total) */
+  abonoManual: boolean
 }
 
 export interface AssetSnapshot {
@@ -129,6 +165,7 @@ export interface Settings {
   ahorroLinks?: AhorroLink[]
   /** Criterio de gastos hormiga en Resúmenes */
   hormiga?: { topeUsd: number; minCompras: number }
+  tarjetas?: Tarjeta[]
 }
 
 /** Compra en cuotas con tarjeta de crédito */

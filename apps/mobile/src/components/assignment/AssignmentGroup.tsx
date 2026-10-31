@@ -1,8 +1,8 @@
 'use client'
 
 import { AnimatePresence, motion } from 'motion/react'
-import { ChevronDown, Unlink, Check, Split } from 'lucide-react'
-import { Transaction, Settings, Currency } from '@finanzas/core/types'
+import { ChevronDown, Unlink, Check, Split, CreditCard } from 'lucide-react'
+import { Transaction, Settings, Currency, Tarjeta } from '@finanzas/core/types'
 import { getCatFromSettings, formatAmount } from '@finanzas/core/lib/constants'
 import { toBase, txToBase, txMonth } from '@finanzas/core/lib/currency'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
@@ -22,6 +22,10 @@ export interface GroupItem {
 
 interface Props {
   income: Transaction | null
+  /** Grupo de consumos con tarjeta (en lugar de un ingreso) */
+  tarjeta?: Tarjeta
+  /** Mes en que se pagan los consumos de la tarjeta (etiqueta) */
+  mesPago?: string
   items: GroupItem[]
   selectedIds: Set<string>
   onToggleSelect: (id: string) => void
@@ -36,6 +40,8 @@ interface Props {
 
 export default function AssignmentGroup({
   income,
+  tarjeta,
+  mesPago,
   items,
   selectedIds,
   onToggleSelect,
@@ -47,7 +53,7 @@ export default function AssignmentGroup({
   monedaBase,
 }: Props) {
   const { hideAmounts } = useSettingsStore()
-  const isUnassigned = income === null
+  const isUnassigned = income === null && !tarjeta
 
   const totalGastado = items.reduce(
     (sum, { exp, montoAsignado }) => sum + toBase(montoAsignado, exp.moneda, monedaBase, settings, txMonth(exp)),
@@ -92,7 +98,16 @@ export default function AssignmentGroup({
 
           {/* Title + meta */}
           <div className="flex-1 min-w-0">
-            {isUnassigned ? (
+            {tarjeta ? (
+              <>
+                <p className="text-[13px] font-semibold text-gray-900 truncate leading-tight flex items-center gap-1.5">
+                  <CreditCard size={13} style={{ color: tarjeta.color }} /> {tarjeta.nombre}
+                </p>
+                <p className="text-[11px] text-gray-400 mt-0.5">
+                  {items.length} egreso{items.length !== 1 ? 's' : ''} · se pagan en {mesPago}
+                </p>
+              </>
+            ) : isUnassigned ? (
               <p className="text-sm font-bold text-amber-600">Sin asignar</p>
             ) : (
               <>
@@ -108,7 +123,11 @@ export default function AssignmentGroup({
 
           {/* Right side */}
           <div className="flex-shrink-0 text-right">
-            {isUnassigned ? (
+            {tarjeta ? (
+              <p className={`text-sm font-bold text-gray-700 tabular-nums ${blur}`}>
+                {formatAmount(totalGastado, monedaBase)}
+              </p>
+            ) : isUnassigned ? (
               <>
                 <p className={`text-sm font-bold text-amber-600 tabular-nums ${blur}`}>
                   -{formatAmount(totalGastado, monedaBase)}

@@ -12,7 +12,8 @@ import { updateTransaction } from '@finanzas/core/lib/transactions'
 import { deleteTransactionsWithUndo, updateAsignacionesWithUndo, offerUndo } from '@/lib/undo'
 import { haptic } from '@/lib/haptics'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
-import { SHARED_USERS } from '@finanzas/core/lib/constants'
+import { SHARED_USERS, monthLabel, shiftMonth } from '@finanzas/core/lib/constants'
+import { esConsumoTarjeta, necesitaRespaldo, tarjetaDe } from '@finanzas/core/lib/tarjetas'
 import { planAutoAssign } from '@finanzas/core/lib/autoAssign'
 import { Transaction, Currency } from '@finanzas/core/types'
 import AssignmentGroup, { GroupItem } from './AssignmentGroup'
@@ -20,7 +21,7 @@ import ReassignModal from './ReassignModal'
 import { springSoft, stagger } from '@/components/ui/motion'
 
 export default function AssignmentTab({ onScrollY }: { onScrollY?: (y: number) => void }) {
-  const { transactions } = useTransactionStore()
+  const { transactions, currentMonth } = useTransactionStore()
   const { settings } = useSettingsStore()
   const { monedaBase } = useAuthStore()
   const { openEditModal } = useUIStore()
@@ -50,15 +51,20 @@ export default function AssignmentTab({ onScrollY }: { onScrollY?: (y: number) =
 
   // Un egreso dividido aparece bajo CADA ingreso al que está asignado, con su
   // monto parcial. Asignaciones huérfanas (ingreso borrado) caen en "Sin asignar".
+  // Los consumos con tarjeta van al grupo de su tarjeta (clave `tc:<id>`).
   const groups = useMemo(() => {
     const ingresoIds = new Set(ingresos.map((i) => i.id!))
     const map = new Map<string, { income: Transaction | null; items: GroupItem[] }>()
     ingresos.forEach((inc) => map.set(inc.id!, { income: inc, items: [] }))
+    ;(s.tarjetas ?? []).forEach((t) => map.set(`tc:${t.id}`, { income: null, items: [] }))
     map.set('unassigned', { income: null, items: [] })
     egresos.forEach((exp) => {
       const validas = exp.asignaciones.filter((a) => ingresoIds.has(a.ingresoId))
-      if (validas.length === 0) {
-        map.get('unassigned')!.items.push({ exp, montoAsignado: exp.monto, esParcial: false })
+      if (esConsumoTarjeta(exp) && map.has(`tc:${exp.tarjetaId}`)) {
+        map.get(`tc:${exp.tarjetaId}`)!.items.push({ exp, montoAsignado: exp.monto, esParcial: false })
+      } else if (validas.length === 0) {
+        // Un pago de tarjeta con abono 0 no necesita ingreso
+        if (necesitaRespaldo(exp, ingresoIds)) map.get('unassigned')!.items.push({ exp, montoAsignado: exp.monto, esParcial: false })
       } else {
         validas.forEach((a) => {
           map.get(a.ingresoId)!.items.push({ exp, montoAsignado: a.monto, esParcial: validas.length > 1 })
@@ -66,7 +72,8 @@ export default function AssignmentTab({ onScrollY }: { onScrollY?: (y: number) =
       }
     })
     return map
-  }, [ingresos, egresos])
+  }, [ingresos, egresos, s.tarjetas])
+  const mesPago = monthLabel(shiftMonth(currentMonth, 1)).split(' de ')[0]
 
   const totalEgresos       = egresos.length
   const realUnassigned     = groups.get('unassigned')?.items.length ?? 0
@@ -113,6 +120,13 @@ export default function AssignmentTab({ onScrollY }: { onScrollY?: (y: number) =
   async function desassignGroup(incomeId: string) {
     const group = groups.get(incomeId)
     if (!group) return
+    if (incomeId.startsWith('tc:')) {
+      await updateAsignacionesWithUndo(
+        group.items.map(({ exp }) => ({ tx: exp, asignaciones: [], tarjetaId: null })),
+        'Gastos de la tarjeta desasignados',
+      )
+      return
+    }
     // Quita solo el vínculo con ESTE ingreso; si el egreso estaba dividido,
     // conserva la parte asignada al otro ingreso.
     await updateAsignacionesWithUndo(
@@ -121,12 +135,17 @@ export default function AssignmentTab({ onScrollY }: { onScrollY?: (y: number) =
     )
   }
 
-  async function reassignSelected(newIncomeId: string) {
-    const elegidos = egresos.filter((e) => selectedIds.has(e.id!))
-    await updateAsignacionesWithUndo(
-      elegidos.map((tx) => ({ tx, asignaciones: [{ ingresoId: newIncomeId, monto: tx.monto }] })),
-      `${elegidos.length} egreso${elegidos.length !== 1 ? 's' : ''} reasignado${elegidos.length !== 1 ? 's' : ''}`,
-    )
+  /** Destino: id de ingreso o `tc:<id>` para una tarjeta */
+  async function reassignSelected(destino: string) {
+    const tarjetaId = destino.startsWith('tc:') ? destino.slice(3) : null
+    // Un pago de tarjeta no puede pagarse con otra tarjeta
+    const elegidos = egresos.filter((e) => selectedIds.has(e.id!) && !(tarjetaId && e.pagoTarjeta))
+    if (elegidos.length) {
+      await updateAsignacionesWithUndo(
+        elegidos.map((tx) => ({ tx, asignaciones: tarjetaId ? [] : [{ ingresoId: destino, monto: tx.monto }], tarjetaId })),
+        `${elegidos.length} egreso${elegidos.length !== 1 ? 's' : ''} reasignado${elegidos.length !== 1 ? 's' : ''}`,
+      )
+    }
     setSelectedIds(new Set())
     setReassignOpen(false)
   }
@@ -162,6 +181,9 @@ export default function AssignmentTab({ onScrollY }: { onScrollY?: (y: number) =
   const unassignedExpenses = groups.get('unassigned')?.items ?? []
   const groupEntries = [
     ...ingresos.map((inc) => ({ key: inc.id!, group: groups.get(inc.id!)! })),
+    ...(s.tarjetas ?? [])
+      .map((t) => ({ key: `tc:${t.id}`, group: groups.get(`tc:${t.id}`)! }))
+      .filter((g) => g.group.items.length > 0),
     { key: 'unassigned', group: { income: null, items: unassignedExpenses } },
   ]
 
@@ -268,6 +290,8 @@ export default function AssignmentTab({ onScrollY }: { onScrollY?: (y: number) =
               >
                 <AssignmentGroup
                   income={group.income}
+                  tarjeta={key.startsWith('tc:') ? tarjetaDe(key.slice(3), s) : undefined}
+                  mesPago={mesPago}
                   items={group.items}
                   selectedIds={selectedIds}
                   onToggleSelect={toggleSelect}

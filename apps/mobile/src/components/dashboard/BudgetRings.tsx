@@ -9,6 +9,7 @@ import { getCatFromSettings, getParentGroup } from '@finanzas/core/lib/constants
 import { toBase, txToBase } from '@finanzas/core/lib/currency'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { Currency, Transaction } from '@finanzas/core/types'
+import { cuentaEnCategorias } from '@finanzas/core/lib/tarjetas'
 import { CategoryIcon } from '@/lib/categoryIcons'
 
 const R = 15
@@ -36,7 +37,7 @@ export default function BudgetRings({ transactions, month, base }: {
     .filter((b) => b.mes === month && b.limite > 0)
     .map((b) => {
       const spentBase = transactions
-        .filter((t) => t.tipo === 'egreso' && (t.categoria === b.categoria || getParentGroup(t.categoria, s.categoriasGasto)?.id === b.categoria))
+        .filter((t) => t.tipo === 'egreso' && cuentaEnCategorias(t) && (t.categoria === b.categoria || getParentGroup(t.categoria, s.categoriasGasto)?.id === b.categoria))
         .reduce((sum, t) => sum + txToBase(t, base, s), 0)
       const spent = toBase(spentBase, base, b.moneda as Currency, s, b.mes)
       const pct = (spent / b.limite) * 100

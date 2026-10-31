@@ -1,5 +1,5 @@
 import { supabase, SHARED_UUID } from './supabase'
-import { Settings, CategoryGroup, Category } from '../types'
+import { Settings, CategoryGroup, Category, Tarjeta } from '../types'
 import { DEFAULT_GASTO_CATEGORY_GROUPS, DEFAULT_INGRESO_CATEGORY_GROUPS } from './constants'
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -17,6 +17,7 @@ export const DEFAULT_SETTINGS: Settings = {
   tiposPasivo:  ['Tarjeta de crédito', 'Préstamo', 'Deuda'],
   mesesCerrados: [],
   ahorroLinks: [],
+  tarjetas: [],
 }
 
 // ── Migración de formato viejo (Category[]) → nuevo (CategoryGroup[]) ────────
@@ -65,6 +66,9 @@ function rowToSettings(row: Record<string, any>): Settings {
     tiposPasivo:  Array.isArray(accountCats.tiposPasivo) ? accountCats.tiposPasivo : DEFAULT_SETTINGS.tiposPasivo,
     mesesCerrados: Array.isArray(row.closed_months) ? row.closed_months : [],
     ahorroLinks: Array.isArray(appSettings.ahorroLinks) ? appSettings.ahorroLinks : [],
+    tarjetas: Array.isArray(appSettings.tarjetas)
+      ? appSettings.tarjetas.filter((t: Tarjeta) => t && typeof t.id === 'string' && typeof t.nombre === 'string')
+      : [],
     hormiga: appSettings.hormiga && appSettings.hormiga.topeUsd > 0 && appSettings.hormiga.minCompras > 1
       ? { topeUsd: Number(appSettings.hormiga.topeUsd), minCompras: Number(appSettings.hormiga.minCompras) }
       : undefined,
@@ -81,6 +85,7 @@ function settingsToRow(settings: Settings) {
       fuenteCambio: settings.fuenteCambio ?? 'mep',
       cambioActualizado: settings.cambioActualizado ?? null,
       ...(settings.hormiga ? { hormiga: settings.hormiga } : {}),
+      tarjetas: settings.tarjetas ?? [],
     },
     monthly_rates:   settings.historialTipoCambio,
     transaction_cats: settings.categoriasGasto,
