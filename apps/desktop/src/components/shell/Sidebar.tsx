@@ -117,13 +117,13 @@ export function Sidebar({ onShowShortcuts }: { onShowShortcuts: () => void }) {
         <div className="flex justify-between text-[13px] tabular-nums">
           <span className="text-muted">USD / ARS</span>
           <strong className="text-foreground">
-            {settings.tipoCambio.ARS_USD.toLocaleString('es-AR')}
+            {settings.tipoCambio.ARS_USD.toLocaleString('es-AR', { maximumFractionDigits: 0 })}
           </strong>
         </div>
         <div className="flex justify-between text-[13px] tabular-nums">
           <span className="text-muted">USD / COP</span>
           <strong className="text-foreground">
-            {settings.tipoCambio.COP_USD.toLocaleString('es-AR')}
+            {settings.tipoCambio.COP_USD.toLocaleString('es-AR', { maximumFractionDigits: 0 })}
           </strong>
         </div>
       </div>

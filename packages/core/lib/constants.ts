@@ -121,12 +121,16 @@ export function getParentGroup(subId: string, groups: CategoryGroup[]): Category
   return groups.find((g) => g.subcategorias.some((s) => s.id === subId))
 }
 
+/** Montos siempre sin decimales (los centavos no se muestran en ninguna parte) */
 export function formatAmount(monto: number, moneda: string): string {
-  const num = new Intl.NumberFormat('es-AR', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(monto)
+  const entero = Math.round(monto) || 0 // evita "-0"
+  const num = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(entero)
   return `${moneda} ${num}`
+}
+
+/** Número sin decimales con separador de miles (tipos de cambio, metas) */
+export function formatEntero(n: number): string {
+  return new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(Math.round(n) || 0)
 }
 
 export function getCurrentMonth(): string {

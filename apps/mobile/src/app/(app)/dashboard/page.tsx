@@ -80,7 +80,7 @@ export default function DashboardPage() {
         <div className="relative flex items-center justify-between">
           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/70">Balance del mes</p>
           <p className="text-[10px] font-medium text-white/60 tabular-nums">
-            US$1 = ARS {s.tipoCambio.ARS_USD.toLocaleString('es-AR')} · COP {s.tipoCambio.COP_USD.toLocaleString('es-AR')}
+            US$1 = ARS {s.tipoCambio.ARS_USD.toLocaleString('es-AR', { maximumFractionDigits: 0 })} · COP {s.tipoCambio.COP_USD.toLocaleString('es-AR', { maximumFractionDigits: 0 })}
           </p>
         </div>
 

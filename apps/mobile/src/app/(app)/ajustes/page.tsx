@@ -636,7 +636,7 @@ export default function AjustesPage() {
             label="Tipos de cambio"
             icon={<ArrowLeftRight size={15} />}
             tint="#4e7d5b"
-            hint={`${(FUENTES_CAMBIO.find((f) => f.value === (s.fuenteCambio ?? 'mep'))?.label ?? '')} · ARS ${s.tipoCambio.ARS_USD.toLocaleString('es-AR')} · COP ${s.tipoCambio.COP_USD.toLocaleString('es-AR')}`}
+            hint={`${(FUENTES_CAMBIO.find((f) => f.value === (s.fuenteCambio ?? 'mep'))?.label ?? '')} · ARS ${s.tipoCambio.ARS_USD.toLocaleString('es-AR', { maximumFractionDigits: 0 })} · COP ${s.tipoCambio.COP_USD.toLocaleString('es-AR', { maximumFractionDigits: 0 })}`}
             open={openSection === 'cambio'}
             onToggle={() => { toggle('cambio'); setArsRate(String(s?.tipoCambio.ARS_USD ?? 1200)); setCopRate(String(s?.tipoCambio.COP_USD ?? 4100)) }}
           >
@@ -657,11 +657,11 @@ export default function AjustesPage() {
                 <div className="rounded-2xl bg-gray-500/[0.06] px-3.5 py-3 space-y-1.5">
                   <div className="flex justify-between text-sm tabular-nums">
                     <span className="text-gray-500">1 USD</span>
-                    <span className="font-semibold">ARS {s.tipoCambio.ARS_USD.toLocaleString('es-AR')}</span>
+                    <span className="font-semibold">ARS {s.tipoCambio.ARS_USD.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</span>
                   </div>
                   <div className="flex justify-between text-sm tabular-nums">
                     <span className="text-gray-500">1 USD</span>
-                    <span className="font-semibold">COP {s.tipoCambio.COP_USD.toLocaleString('es-AR')}</span>
+                    <span className="font-semibold">COP {s.tipoCambio.COP_USD.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</span>
                   </div>
                   <div className="flex items-center justify-between pt-1">
                     <span className="text-[11px] text-gray-500">Actualizado {haceCuanto(s.cambioActualizado)}</span>
@@ -705,7 +705,7 @@ export default function AjustesPage() {
                   {[...(s?.historialTipoCambio ?? [])].reverse().slice(0, 6).map((h) => (
                     <div key={h.mes} className="flex justify-between text-xs text-gray-500 py-1.5 border-b border-hairline tabular-nums">
                       <span className="capitalize">{monthLabel(h.mes)}{h.fuente ? '' : ' · manual'}</span>
-                      <span>ARS {h.ARS_USD.toLocaleString('es-AR')} · COP {h.COP_USD.toLocaleString('es-AR')}</span>
+                      <span>ARS {h.ARS_USD.toLocaleString('es-AR', { maximumFractionDigits: 0 })} · COP {h.COP_USD.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</span>
                     </div>
                   ))}
                 </div>

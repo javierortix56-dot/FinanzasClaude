@@ -763,7 +763,7 @@ function EstadoCuenta({ r }: { r: Resumen }) {
           {tasas.map(([k, v]) => (
             <span key={k} className="rounded-full bg-surface-2 px-2.5 py-1"><span className="text-muted">{k}</span> <b className="tnum">{pctFmt(v!)}</b></span>
           ))}
-          {d.tipoCambio !== null && <span className="rounded-full bg-surface-2 px-2.5 py-1"><span className="text-muted">Dólar del resumen</span> <b className="tnum">${d.tipoCambio.toLocaleString('es-AR')}</b></span>}
+          {d.tipoCambio !== null && <span className="rounded-full bg-surface-2 px-2.5 py-1"><span className="text-muted">Dólar del resumen</span> <b className="tnum">${d.tipoCambio.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</b></span>}
         </div>
       )}
 
