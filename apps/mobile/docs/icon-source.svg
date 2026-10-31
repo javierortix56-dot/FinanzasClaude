@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Fuente editable del ícono de Finanzas J&amp;M (opción "Lente dorado").
+       Fondo a sangre y opaco: iOS aplica solo el redondeado. El "$" es el trazo de Geist Black. -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4A7487"/>
+      <stop offset=".55" stop-color="#2F5363"/>
+      <stop offset="1" stop-color="#24424F"/>
+    </linearGradient>
+    <clipPath id="a"><circle cx="198" cy="256" r="124"/></clipPath>
+  </defs>
+  <rect width="512" height="512" fill="url(#g)"/>
+  <circle cx="198" cy="256" r="124" fill="#F3F1EC" fill-opacity=".92"/>
+  <circle cx="314" cy="256" r="124" fill="#F3F1EC" fill-opacity=".38"/>
+  <circle cx="314" cy="256" r="124" fill="#C9A46A" clip-path="url(#a)"/>
+  <path d="M247.30 354.00V335.28Q220.87 332.64 206.34 318.32Q191.80 304.01 190.26 281.11L232.33 279.12Q233.43 287.27 237.06 292.78Q240.69 298.28 247.30 300.71V270.53Q227.92 266.35 216.03 260.62Q204.14 254.90 198.63 246.09Q193.13 237.28 193.13 223.63Q193.13 203.59 207.33 190.70Q221.53 177.82 247.30 176.06V158.00H266.24V176.28Q291.35 179.14 304.45 193.68Q317.55 208.21 319.76 229.79L278.13 231.33Q277.03 217.02 266.24 211.51V240.36Q287.16 244.55 299.27 251.16Q311.39 257.76 316.56 266.79Q321.74 275.82 321.74 287.49Q321.74 308.63 307.20 321.30Q292.67 333.96 266.24 335.72V354.00ZM235.41 222.31Q235.41 227.37 238.05 230.67Q240.69 233.98 247.30 236.18V209.75Q235.41 212.40 235.41 222.31ZM279.45 289.25Q279.45 284.63 276.92 281.33Q274.39 278.02 266.24 275.38V302.03Q279.45 299.82 279.45 289.25Z" fill="#26363F"/>
+</svg>
