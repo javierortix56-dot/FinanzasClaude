@@ -37,7 +37,7 @@ const PAY_TABS: { value: PayTab; label: string }[] = [
 ]
 
 /** Fila de lista con interruptor (estilo ajustes de iOS) */
-function SwitchRow({ label, hint, checked, onChange, color = '#10b981' }: {
+function SwitchRow({ label, hint, checked, onChange, color = '#4e7d5b' }: {
   label: string
   hint?: string
   checked: boolean
@@ -343,10 +343,10 @@ export default function TransactionModal() {
     }
   }
 
-  const accentColor = tipo === 'egreso' ? '#f43f5e' : '#10b981'
+  const accentColor = tipo === 'egreso' ? '#b4533f' : '#4e7d5b'
   const accentGrad  = tipo === 'egreso'
-    ? 'linear-gradient(135deg, #fb7185 0%, #e11d48 100%)'
-    : 'linear-gradient(135deg, #34d399 0%, #059669 100%)'
+    ? 'linear-gradient(135deg, #c86f5c 0%, #9c4434 100%)'
+    : 'linear-gradient(135deg, #6e9e7b 0%, #3f6b4b 100%)'
 
   async function handleSave() {
     if (!canSave) return
@@ -541,8 +541,8 @@ export default function TransactionModal() {
           value={tipo}
           onChange={(t) => { setTipo(t); setSelectedGroup(''); setSelectedSub(''); setAsigs([]) }}
           options={[
-            { value: 'egreso',  label: '↓ Egreso',  activeColor: 'linear-gradient(135deg, #fb7185, #e11d48)' },
-            { value: 'ingreso', label: '↑ Ingreso', activeColor: 'linear-gradient(135deg, #34d399, #059669)' },
+            { value: 'egreso',  label: '↓ Egreso',  activeColor: 'linear-gradient(135deg, #c86f5c, #9c4434)' },
+            { value: 'ingreso', label: '↑ Ingreso', activeColor: 'linear-gradient(135deg, #6e9e7b, #3f6b4b)' },
           ]}
         />
       )}

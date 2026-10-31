@@ -81,7 +81,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Dock flotante */}
       <nav className="fixed bottom-[max(12px,env(safe-area-inset-bottom))] inset-x-0 mx-auto w-[calc(100%-24px)] max-w-[366px] z-40">
-        <div className="glass-strong rounded-[26px] h-16 flex items-stretch px-1">
+        <div className="glass-strong rounded-[24px] h-[58px] flex items-stretch px-1">
           {leftNav.map((item) => (
             <NavItem key={item.href} {...item} active={pathname.startsWith(item.href)} />
           ))}
@@ -93,7 +93,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               whileTap={{ scale: 0.9 }}
               whileHover={{ scale: 1.04 }}
               transition={springPop}
-              className="relative -mt-7 w-[58px] h-[58px] rounded-[20px] bg-brand flex items-center justify-center shadow-[0_10px_28px_-6px_rgba(91,79,214,0.65)] ring-4 ring-[var(--background)]"
+              className="relative -mt-6 w-[54px] h-[54px] rounded-[18px] bg-brand flex items-center justify-center shadow-[0_10px_24px_-8px_rgba(38,54,63,0.6)] ring-4 ring-[var(--background)]"
               aria-label="Agregar movimiento"
             >
               <motion.span

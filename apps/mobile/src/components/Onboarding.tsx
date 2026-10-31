@@ -9,7 +9,7 @@ import { springSoft } from '@/components/ui/motion'
 const SLIDES = [
   {
     icon: Link2,
-    tint: '#5b4fd6',
+    tint: '#2f5363',
     title: 'Cada gasto, con su ingreso',
     body: 'En Asignación vinculan cada egreso al sueldo o ingreso que lo pagó. Auto-asignar lo resuelve por fecha y disponible; un egreso se puede dividir entre dos ingresos.',
   },
@@ -21,13 +21,13 @@ const SLIDES = [
   },
   {
     icon: Hand,
-    tint: '#10b981',
+    tint: '#4e7d5b',
     title: 'Gestos rápidos',
     body: 'Deslizá un movimiento a la derecha para marcarlo ejecutado o a la izquierda para eliminarlo. Si te equivocás, tocá "Deshacer" en el aviso.',
   },
   {
     icon: EyeOff,
-    tint: '#f43f5e',
+    tint: '#b4533f',
     title: 'Privacidad primero',
     body: 'La app abre con los montos ocultos. Tocá el ojo para mostrarlos durante la sesión; se vuelven a ocultar al reabrir.',
   },

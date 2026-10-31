@@ -87,7 +87,7 @@ export default function AssetCard({ asset, settings, onClick, onUpdateSnapshot }
           </div>
           <div className="flex items-center justify-between gap-2 mt-0.5">
             <span className="text-xs text-gray-400 capitalize">{asset.tipo}</span>
-            <Sparkline values={serie} color={isActivo ? '#10b981' : '#f43f5e'} width={56} height={18} className="flex-shrink-0 opacity-90" />
+            <Sparkline values={serie} color={isActivo ? '#4e7d5b' : '#b4533f'} width={56} height={18} className="flex-shrink-0 opacity-90" />
             {asset.moneda !== 'USD' && (
               <span className="text-xs text-gray-400">≈ <Money value={usdValue} currency="USD" animated={false} /></span>
             )}

@@ -1,32 +1,83 @@
 @import "tailwindcss";
 
-/* ── Tokens de marca ──────────────────────────────────────────────────────────
-   Superficies "glass" (translúcidas + blur) sobre un fondo ambiental con
-   gradientes suaves. Todo color de superficie sale de estas variables para
-   que el modo oscuro sea un simple cambio de tokens. */
+/* ── Tokens de marca · paleta "Nórdico" ─────────────────────────────────────
+   Piedra cálida, azul fiordo y tonos tierra. Todo color de superficie sale
+   de estas variables para que el modo oscuro sea un simple cambio de tokens. */
 :root {
-  --background: #f3f2fa;
-  --foreground: #14131c;
+  --background: #f3f1ec;
+  --foreground: #1f2328;
   --surface: #ffffff;
-  --primary: #5b4fd6;
-  --primary-2: #8b7bff;
+  --primary: #2f5363;
+  --primary-2: #4a7487;
   --primary-foreground: #ffffff;
-  --income: #10b981;
-  --expense: #f43f5e;
-  --unassigned: #f59e0b;
+  --income: #4e7d5b;
+  --expense: #b4533f;
+  --unassigned: #b8873b;
+  /* Tarjeta héroe (balance) y botones de marca */
+  --hero-1: #34505e;
+  --hero-2: #26363f;
+  --hero-3: #1e2b33;
 
-  --glass: rgba(255, 255, 255, 0.62);
-  --glass-strong: rgba(255, 255, 255, 0.86);
-  --sheet: rgba(250, 250, 255, 0.94);
-  --glass-border: rgba(255, 255, 255, 0.75);
-  --hairline: rgba(20, 19, 28, 0.06);
-  --shadow-soft: 0 1px 2px rgba(20, 19, 28, 0.04), 0 10px 30px -12px rgba(83, 74, 183, 0.22);
-  --shadow-lift: 0 2px 6px rgba(20, 19, 28, 0.06), 0 22px 44px -16px rgba(83, 74, 183, 0.35);
+  --glass: rgba(255, 255, 255, 0.72);
+  --glass-strong: rgba(255, 255, 255, 0.9);
+  --sheet: rgba(251, 250, 247, 0.97);
+  --glass-border: rgba(255, 255, 255, 0.8);
+  --hairline: rgba(31, 35, 40, 0.07);
+  --shadow-soft: 0 1px 2px rgba(31, 35, 40, 0.04), 0 8px 24px -14px rgba(38, 54, 63, 0.18);
+  --shadow-lift: 0 2px 6px rgba(31, 35, 40, 0.06), 0 18px 36px -16px rgba(38, 54, 63, 0.28);
 
   color-scheme: light;
-  --blob-1: #a99cff;
-  --blob-2: #7dd3fc;
-  --blob-3: #f9a8d4;
+  --blob-1: #e7e2d8;
+  --blob-2: #dde5e8;
+  --blob-3: #ebe4d6;
+}
+
+/* Escalas de Tailwind remapeadas a la paleta: los usos sueltos de
+   emerald/rose/amber/gray en los componentes toman los tonos nórdicos. */
+@theme {
+  --color-emerald-50: #eef4ef;
+  --color-emerald-100: #dce9de;
+  --color-emerald-200: #bcd5c0;
+  --color-emerald-300: #93ba9a;
+  --color-emerald-400: #6e9e7b;
+  --color-emerald-500: #4e7d5b;
+  --color-emerald-600: #436e4f;
+  --color-emerald-700: #375a41;
+  --color-emerald-800: #2c4834;
+  --color-emerald-900: #233a2a;
+
+  --color-rose-50: #f8ece8;
+  --color-rose-100: #f1d8d1;
+  --color-rose-200: #e5b6a9;
+  --color-rose-300: #d6907e;
+  --color-rose-400: #c86f5c;
+  --color-rose-500: #b4533f;
+  --color-rose-600: #9c4434;
+  --color-rose-700: #80372b;
+  --color-rose-800: #662c23;
+  --color-rose-900: #52241d;
+
+  --color-amber-50: #f7f0e3;
+  --color-amber-100: #efe0c3;
+  --color-amber-200: #e2c894;
+  --color-amber-300: #d7b57a;
+  --color-amber-400: #c9a055;
+  --color-amber-500: #b8873b;
+  --color-amber-600: #9c7030;
+  --color-amber-700: #7d5927;
+  --color-amber-800: #64471f;
+  --color-amber-900: #4f381a;
+
+  --color-gray-50: #faf9f6;
+  --color-gray-100: #f1efea;
+  --color-gray-200: #e4e1da;
+  --color-gray-300: #cfcbc2;
+  --color-gray-400: #9c9890;
+  --color-gray-500: #77746d;
+  --color-gray-600: #5c5953;
+  --color-gray-700: #45433f;
+  --color-gray-800: #2e2d2a;
+  --color-gray-900: #1f2328;
 }
 
 @theme inline {
@@ -56,49 +107,55 @@
    la elección manual en Ajustes (data-theme="dark" en <html>). */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --background: #0c0d14;
-    --foreground: #f2f4f8;
-    --surface: #171923;
-    --primary: #7b6ff0;
-    --primary-2: #a59bff;
+    --background: #121517;
+    --foreground: #ece9e2;
+    --surface: #1b2024;
+    --primary: #7fa6b8;
+    --primary-2: #9cbbc9;
+    --income: #7fb08c;
+    --expense: #d9806c;
+    --unassigned: #d4af6e;
+    --hero-1: #2b4250;
+    --hero-2: #22313a;
+    --hero-3: #1a252c;
 
-    --glass: rgba(28, 30, 42, 0.55);
-    --glass-strong: rgba(30, 32, 46, 0.86);
-    --sheet: rgba(22, 24, 34, 0.95);
+    --glass: rgba(30, 36, 40, 0.6);
+    --glass-strong: rgba(30, 36, 40, 0.9);
+    --sheet: rgba(24, 29, 32, 0.97);
     --glass-border: rgba(255, 255, 255, 0.08);
     --hairline: rgba(255, 255, 255, 0.06);
     --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px -14px rgba(0, 0, 0, 0.6);
     --shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.35), 0 24px 48px -16px rgba(0, 0, 0, 0.7);
 
     color-scheme: dark;
-    --blob-1: #4c3fb8;
-    --blob-2: #0e5a78;
-    --blob-3: #6b1f4f;
+    --blob-1: #1c2226;
+    --blob-2: #1a2327;
+    --blob-3: #1f2224;
 
     /* Rampa de grises invertida (50 = fondos, 900 = texto principal) */
-    --color-gray-50:  #151823;
-    --color-gray-100: #232734;
-    --color-gray-200: #2f3444;
-    --color-gray-300: #434a5e;
-    --color-gray-400: #8f97ab;
-    --color-gray-500: #a6adc0;
-    --color-gray-600: #bac1d2;
-    --color-gray-700: #cfd4e2;
-    --color-gray-800: #e3e7f0;
-    --color-gray-900: #f2f4f8;
+    --color-gray-50:  #181c1f;
+    --color-gray-100: #22282c;
+    --color-gray-200: #2d3439;
+    --color-gray-300: #414a50;
+    --color-gray-400: #8a9399;
+    --color-gray-500: #a3aaaf;
+    --color-gray-600: #b9bec1;
+    --color-gray-700: #cfd2d3;
+    --color-gray-800: #e2e3e2;
+    --color-gray-900: #ece9e2;
 
     /* Tintes suaves (solo tonos 50-200 usados como fondos/bordes) */
     --color-green-50:  #122a1c;
     --color-green-100: #1a3d28;
     --color-green-200: #245538;
-    --color-emerald-50: #0f2a22;
+    --color-emerald-50: #1a2620;
     --color-red-50:    #2c1519;
     --color-red-100:   #401e24;
     --color-red-200:   #57282f;
-    --color-rose-50:   #2c1520;
-    --color-amber-50:  #2c2312;
-    --color-amber-100: #3a2e14;
-    --color-amber-200: #4d3c18;
+    --color-rose-50:   #2a1a16;
+    --color-amber-50:  #2a2216;
+    --color-amber-100: #362b1a;
+    --color-amber-200: #463720;
     --color-blue-50:   #14203a;
     --color-blue-200:  #274572;
     --color-orange-50: #2d1d10;
@@ -106,49 +163,55 @@
 }
 
 :root[data-theme="dark"] {
-  --background: #0c0d14;
-  --foreground: #f2f4f8;
-  --surface: #171923;
-  --primary: #7b6ff0;
-  --primary-2: #a59bff;
+  --background: #121517;
+  --foreground: #ece9e2;
+  --surface: #1b2024;
+  --primary: #7fa6b8;
+  --primary-2: #9cbbc9;
+  --income: #7fb08c;
+  --expense: #d9806c;
+  --unassigned: #d4af6e;
+  --hero-1: #2b4250;
+  --hero-2: #22313a;
+  --hero-3: #1a252c;
 
-  --glass: rgba(28, 30, 42, 0.55);
-  --glass-strong: rgba(30, 32, 46, 0.86);
-  --sheet: rgba(22, 24, 34, 0.95);
+  --glass: rgba(30, 36, 40, 0.6);
+  --glass-strong: rgba(30, 36, 40, 0.9);
+  --sheet: rgba(24, 29, 32, 0.97);
   --glass-border: rgba(255, 255, 255, 0.08);
   --hairline: rgba(255, 255, 255, 0.06);
   --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px -14px rgba(0, 0, 0, 0.6);
   --shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.35), 0 24px 48px -16px rgba(0, 0, 0, 0.7);
 
   color-scheme: dark;
-  --blob-1: #4c3fb8;
-  --blob-2: #0e5a78;
-  --blob-3: #6b1f4f;
+  --blob-1: #1c2226;
+  --blob-2: #1a2327;
+  --blob-3: #1f2224;
 
   /* Rampa de grises invertida (50 = fondos, 900 = texto principal) */
-  --color-gray-50:  #151823;
-  --color-gray-100: #232734;
-  --color-gray-200: #2f3444;
-  --color-gray-300: #434a5e;
-  --color-gray-400: #8f97ab;
-  --color-gray-500: #a6adc0;
-  --color-gray-600: #bac1d2;
-  --color-gray-700: #cfd4e2;
-  --color-gray-800: #e3e7f0;
-  --color-gray-900: #f2f4f8;
+  --color-gray-50:  #181c1f;
+  --color-gray-100: #22282c;
+  --color-gray-200: #2d3439;
+  --color-gray-300: #414a50;
+  --color-gray-400: #8a9399;
+  --color-gray-500: #a3aaaf;
+  --color-gray-600: #b9bec1;
+  --color-gray-700: #cfd2d3;
+  --color-gray-800: #e2e3e2;
+  --color-gray-900: #ece9e2;
 
   /* Tintes suaves (solo tonos 50-200 usados como fondos/bordes) */
   --color-green-50:  #122a1c;
   --color-green-100: #1a3d28;
   --color-green-200: #245538;
-  --color-emerald-50: #0f2a22;
+  --color-emerald-50: #1a2620;
   --color-red-50:    #2c1519;
   --color-red-100:   #401e24;
   --color-red-200:   #57282f;
-  --color-rose-50:   #2c1520;
-  --color-amber-50:  #2c2312;
-  --color-amber-100: #3a2e14;
-  --color-amber-200: #4d3c18;
+  --color-rose-50:   #2a1a16;
+  --color-amber-50:  #2a2216;
+  --color-amber-100: #362b1a;
+  --color-amber-200: #463720;
   --color-blue-50:   #14203a;
   --color-blue-200:  #274572;
   --color-orange-50: #2d1d10;
@@ -177,7 +240,7 @@
   backdrop-filter: blur(30px) saturate(180%);
   -webkit-backdrop-filter: blur(30px) saturate(180%);
   border-top: 1px solid var(--glass-border);
-  box-shadow: 0 -12px 40px -12px rgba(20, 19, 28, 0.25);
+  box-shadow: 0 -12px 40px -12px rgba(31, 35, 40, 0.22);
 }
 
 @utility shadow-soft {
@@ -191,8 +254,8 @@
 /* Gradiente de marca para héroes y CTA */
 @utility bg-brand {
   background-image:
-    radial-gradient(120% 140% at 100% 0%, rgba(255, 255, 255, 0.22) 0%, transparent 45%),
-    linear-gradient(135deg, var(--primary-2) 0%, var(--primary) 55%, #3b2fa0 100%);
+    radial-gradient(120% 140% at 100% 0%, rgba(255, 255, 255, 0.1) 0%, transparent 45%),
+    linear-gradient(135deg, var(--hero-1) 0%, var(--hero-2) 60%, var(--hero-3) 100%);
 }
 
 /* Etiqueta de sección (sobre-título en mayúsculas) */
@@ -235,6 +298,8 @@
 }
 
 .ambient-blob {
+  /* Paleta nórdica: fondo plano, sin manchas de color */
+  display: none;
   position: absolute;
   border-radius: 9999px;
   filter: blur(70px);

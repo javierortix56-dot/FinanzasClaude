@@ -159,8 +159,8 @@ export default function AssetModal({ open, onClose, editing }: Props) {
         value={clase}
         onChange={setClase}
         options={[
-          { value: 'activo', label: 'Activo', activeColor: 'linear-gradient(135deg, #34d399, #059669)' },
-          { value: 'pasivo', label: 'Pasivo', activeColor: 'linear-gradient(135deg, #fb7185, #e11d48)' },
+          { value: 'activo', label: 'Activo', activeColor: 'linear-gradient(135deg, #6e9e7b, #3f6b4b)' },
+          { value: 'pasivo', label: 'Pasivo', activeColor: 'linear-gradient(135deg, #c86f5c, #9c4434)' },
         ]}
       />
 

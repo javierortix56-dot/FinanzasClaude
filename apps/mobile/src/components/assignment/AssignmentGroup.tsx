@@ -64,7 +64,7 @@ export default function AssignmentGroup({
   const usedPercent = incomeBase > 0 ? Math.min((totalGastado / incomeBase) * 100, 100) : 0
   const isOver      = disponible < 0
 
-  const barColor = isOver ? '#f43f5e' : usedPercent >= 85 ? '#f59e0b' : '#10b981'
+  const barColor = isOver ? '#b4533f' : usedPercent >= 85 ? '#b8873b' : '#4e7d5b'
 
   const incomeDate = income?.fecha.toDate().toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
 

@@ -517,7 +517,7 @@ export default function AjustesPage() {
           <Section
             label="Cuenta"
             icon={<UserRound size={15} />}
-            tint="#5b4fd6"
+            tint="#2f5363"
             hint="Moneda base y sesión"
             open={openSection === 'cuenta'}
             onToggle={() => toggle('cuenta')}
@@ -560,7 +560,7 @@ export default function AjustesPage() {
           <Section
             label="Apariencia"
             icon={<Palette size={15} />}
-            tint="#0ea5e9"
+            tint="#4f8fa8"
             hint={theme === 'system' ? 'Según el sistema' : theme === 'dark' ? 'Oscuro' : 'Claro'}
             open={openSection === 'apariencia'}
             onToggle={() => toggle('apariencia')}
@@ -586,7 +586,7 @@ export default function AjustesPage() {
           <Section
             label="Notificaciones"
             icon={<Bell size={15} />}
-            tint="#f43f5e"
+            tint="#b4533f"
             hint="Recordatorios push"
             open={openSection === 'notif'}
             onToggle={() => { toggle('notif'); setPushError(null); checkPushEstado() }}
@@ -635,7 +635,7 @@ export default function AjustesPage() {
           <Section
             label="Tipos de cambio"
             icon={<ArrowLeftRight size={15} />}
-            tint="#10b981"
+            tint="#4e7d5b"
             hint={`${(FUENTES_CAMBIO.find((f) => f.value === (s.fuenteCambio ?? 'mep'))?.label ?? '')} · ARS ${s.tipoCambio.ARS_USD.toLocaleString('es-AR')} · COP ${s.tipoCambio.COP_USD.toLocaleString('es-AR')}`}
             open={openSection === 'cambio'}
             onToggle={() => { toggle('cambio'); setArsRate(String(s?.tipoCambio.ARS_USD ?? 1200)); setCopRate(String(s?.tipoCambio.COP_USD ?? 4100)) }}
@@ -717,7 +717,7 @@ export default function AjustesPage() {
           <Section
             label="Gastos hormiga"
             icon={<Bug size={15} />}
-            tint="#f59e0b"
+            tint="#b8873b"
             hint={`Hasta USD ${(s.hormiga ?? HORMIGA_DEFAULT).topeUsd} · hábito desde ${(s.hormiga ?? HORMIGA_DEFAULT).minCompras} compras`}
             open={openSection === 'hormiga'}
             onToggle={() => toggle('hormiga')}
@@ -735,7 +735,7 @@ export default function AjustesPage() {
           <Section
             label="Tarjetas de crédito"
             icon={<CreditCard size={15} />}
-            tint="#1e3a8a"
+            tint="#26363f"
             hint={(s.tarjetas ?? []).length ? (s.tarjetas ?? []).map((t) => t.nombre).join(', ') : 'Sin tarjetas'}
             open={openSection === 'tarjetas'}
             onToggle={() => toggle('tarjetas')}
@@ -747,7 +747,7 @@ export default function AjustesPage() {
           <Section
             label="Categorías de gasto"
             icon={<Tags size={15} />}
-            tint="#f97316"
+            tint="#b86b3f"
             hint={`${s.categoriasGasto.length} grupos`}
             open={openSection === 'categorias'}
             onToggle={() => toggle('categorias')}
@@ -759,7 +759,7 @@ export default function AjustesPage() {
           <Section
             label="Categorías de ingreso"
             icon={<Coins size={15} />}
-            tint="#eab308"
+            tint="#c9a055"
             hint={`${s.categoriasIngreso.length} grupos`}
             open={openSection === 'categorias_ing'}
             onToggle={() => toggle('categorias_ing')}
@@ -771,7 +771,7 @@ export default function AjustesPage() {
           <Section
             label="Tipos de activo / pasivo"
             icon={<Layers size={15} />}
-            tint="#06b6d4"
+            tint="#4f8f8a"
             open={openSection === 'tipos'}
             onToggle={() => { toggle('tipos'); setTiposActivo(s?.tiposActivo ?? []); setTiposPasivo(s?.tiposPasivo ?? []) }}
           >
@@ -845,7 +845,7 @@ export default function AjustesPage() {
           <Section
             label="Vínculos de ahorro"
             icon={<PiggyBank size={15} />}
-            tint="#8b5cf6"
+            tint="#6b5f8a"
             hint={`${(s.ahorroLinks ?? []).length} configurados`}
             open={openSection === 'ahorro_links'}
             onToggle={() => { toggle('ahorro_links'); setNewLinkCatId(''); setNewLinkAssetId('') }}
@@ -947,7 +947,7 @@ export default function AjustesPage() {
           <Section
             label="Acciones del mes"
             icon={<CalendarCog size={15} />}
-            tint="#3b82f6"
+            tint="#3f6f8f"
             hint={<span className="capitalize">{monthLabel(currentMonth)}{isClosed ? ' · cerrado' : ''}</span>}
             open={openSection === 'mes'}
             onToggle={() => {
@@ -1003,7 +1003,7 @@ export default function AjustesPage() {
           <Section
             label="Importar / Exportar"
             icon={<DatabaseBackup size={15} />}
-            tint="#64748b"
+            tint="#6b6a66"
             hint="Backup en JSON"
             open={openSection === 'datos'}
             onToggle={() => { toggle('datos'); setBackupResult(null) }}

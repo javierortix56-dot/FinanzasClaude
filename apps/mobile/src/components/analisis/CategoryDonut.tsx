@@ -185,8 +185,8 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
         value={tipoTab}
         onChange={(t) => { setTipoTab(t); setSelectedGroup(null); setSelectedSub(null) }}
         options={[
-          { value: 'egreso',  label: 'Gastos',   activeColor: '#f43f5e' },
-          { value: 'ingreso', label: 'Ingresos', activeColor: '#10b981' },
+          { value: 'egreso',  label: 'Gastos',   activeColor: '#b4533f' },
+          { value: 'ingreso', label: 'Ingresos', activeColor: '#4e7d5b' },
         ]}
         className="mt-2"
       />
@@ -277,7 +277,7 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
                     budgetPct        = limiteUSD > 0 ? Math.min((spentUSD / limiteUSD) * 100, 100) : 0
                     spentInBudgetMoneda = toBase(spentUSD, 'USD', budget.moneda as Currency, settings, budget.mes)
                   }
-                  const budgetColor = budgetPct >= 100 ? '#f43f5e' : budgetPct >= 80 ? '#f59e0b' : '#10b981'
+                  const budgetColor = budgetPct >= 100 ? '#b4533f' : budgetPct >= 80 ? '#b8873b' : '#4e7d5b'
 
                   return (
                     <motion.div

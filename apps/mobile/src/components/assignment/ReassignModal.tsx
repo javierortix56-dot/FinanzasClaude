@@ -89,7 +89,7 @@ export default function ReassignModal({
                     <span className="tabular-nums">{formatAmount(Math.abs(disponible), monedaBase)}</span>
                   </p>
                 </div>
-                <ProgressBar value={used} color={isOver ? '#f43f5e' : used >= 85 ? '#f59e0b' : '#10b981'} height={4} className="mt-2.5" />
+                <ProgressBar value={used} color={isOver ? '#b4533f' : used >= 85 ? '#b8873b' : '#4e7d5b'} height={4} className="mt-2.5" />
               </motion.button>
             )
           })}

@@ -27,7 +27,7 @@ export const CATEGORIA_PAGO_TARJETA = 'pago_tarjeta'
 /** Día del mes en que se registra el pago automático */
 const DIA_PAGO = 10
 
-export const COLORES_TARJETA = ['#1E3A8A', '#0F766E', '#B45309', '#9D174D', '#4338CA', '#334155']
+export const COLORES_TARJETA = ['#26363F', '#3F6B4B', '#9C7030', '#8A4A3C', '#3F5F7A', '#5C5953']
 
 // ── Reglas de conteo ─────────────────────────────────────────────────────────
 
