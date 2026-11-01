@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import { motion } from 'motion/react'
 import { AlertTriangle, ChevronDown, Plus, Trash2 } from 'lucide-react'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
@@ -8,6 +9,7 @@ import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { useConsumos } from '@finanzas/core/lib/useConsumos'
 import { borrarConsumo } from '@finanzas/core/lib/consumos'
 import { calcularCupos, Cupo } from '@finanzas/core/lib/planVsReal'
+import { categoriasCupo } from '@finanzas/core/lib/modoGasto'
 import { Currency, Transaction } from '@finanzas/core/types'
 import ProgressBar from '@/components/ui/ProgressBar'
 import Collapse from '@/components/ui/Collapse'
@@ -18,8 +20,9 @@ import { haptic } from '@/lib/haptics'
 const COLOR = { ok: '#10b981', atento: '#f59e0b', excedido: '#f43f5e', sin_plan: '#94a3b8' } as const
 
 /**
- * Planificado contra real del mes: cada consumo registrado llena el cupo de su
- * categoría (lo planificado en ese mes). Avisa si a este ritmo se pasa.
+ * Cupos del mes (solo categorías con cupo, Ajustes → Gastos con cupo): cada
+ * gasto registrado llena lo planificado en esa categoría. Avisa si a este
+ * ritmo se pasa.
  */
 export default function CuposDelMes({ transactions, month, base }: { transactions: Transaction[]; month: string; base: Currency }) {
   const s = useSettingsStore((st) => st.settings) ?? DEFAULT_SETTINGS
@@ -31,16 +34,23 @@ export default function CuposDelMes({ transactions, month, base }: { transaction
   return (
     <motion.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-2 glass rounded-[22px] px-3.5 py-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="eyebrow">Planificado vs real</p>
+        <p className="eyebrow">Cupos del mes</p>
         <button onClick={() => { haptic(); setRegistrar({ categoria: null }) }}
           className="h-7 px-2.5 rounded-full bg-primary/12 text-primary text-[11px] font-bold inline-flex items-center gap-1">
-          <Plus size={12} /> Registrar consumo
+          <Plus size={12} /> Registrar gasto
         </button>
       </div>
       {consumos !== null && cupos.length === 0 && (
-        <p className="mt-1.5 text-[11px] text-gray-400 leading-snug">
-          Registre lo que va gastando (a mano, foto o captura) y verá cuánto le queda de lo planificado en cada categoría.
-        </p>
+        categoriasCupo(s).size === 0 ? (
+          <p className="mt-1.5 text-[11px] text-gray-400 leading-snug">
+            Ninguna categoría tiene cupo. Elija cuáles (Mercado, Uber, Salud…) en{' '}
+            <Link href="/ajustes?seccion=cupos" className="font-semibold text-primary">Ajustes → Gastos con cupo</Link>.
+          </p>
+        ) : (
+          <p className="mt-1.5 text-[11px] text-gray-400 leading-snug">
+            Planifique un monto en una categoría con cupo y registre lo que va gastando (a mano, foto o captura): verá cuánto le queda.
+          </p>
+        )
       )}
       <div className="mt-1.5 space-y-2">
         {cupos.map((c) => (

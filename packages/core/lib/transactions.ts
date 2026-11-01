@@ -53,6 +53,8 @@ export function rowToTx(row: Record<string, any>): Transaction {
     ahorroAssetId: extra.ahorroAssetId ?? null,
     tarjetaId: typeof extra.tarjetaId === 'string' && extra.tarjetaId ? extra.tarjetaId : null,
     pagoTarjeta: extra.pagoTarjeta && typeof extra.pagoTarjeta.tarjetaId === 'string' ? extra.pagoTarjeta : null,
+    montoPlanificado: typeof extra.montoPlanificado === 'number' ? extra.montoPlanificado : null,
+    noPlanificado: extra.noPlanificado === true,
   }
 }
 
@@ -78,6 +80,8 @@ export function txToRow(tx: Omit<Transaction, 'id'>) {
       ahorroAssetId: tx.ahorroAssetId ?? null,
       tarjetaId: tx.tarjetaId ?? null,
       pagoTarjeta: tx.pagoTarjeta ?? null,
+      montoPlanificado: tx.montoPlanificado ?? null,
+      noPlanificado: tx.noPlanificado ?? false,
     },
   }
 }
@@ -161,6 +165,8 @@ export async function updateTransaction(id: string, data: Partial<Omit<Transacti
   if (data.ahorroAssetId !== undefined) childrenFields.ahorroAssetId = data.ahorroAssetId
   if (data.tarjetaId !== undefined) childrenFields.tarjetaId = data.tarjetaId
   if (data.pagoTarjeta !== undefined) childrenFields.pagoTarjeta = data.pagoTarjeta
+  if (data.montoPlanificado !== undefined) childrenFields.montoPlanificado = data.montoPlanificado
+  if (data.noPlanificado !== undefined) childrenFields.noPlanificado = data.noPlanificado
 
   if (Object.keys(childrenFields).length > 0) {
     const { data: current } = await supabase
@@ -271,15 +277,18 @@ export async function cloneMonthTransactions(fromMonth: string, toMonth: string)
     .lte('date', endF)
 
   if (error) throw error
-  // Los pagos de tarjeta no se clonan: se generan solos en cada mes
-  const rows = (data ?? []).filter((r) => !r.children?.pagoTarjeta)
+  // Los pagos de tarjeta no se clonan (se generan solos) ni los gastos no
+  // planificados (no son parte del plan)
+  const rows = (data ?? []).filter((r) => !r.children?.pagoTarjeta && !r.children?.noPlanificado)
   if (rows.length === 0) return 0
 
   const inserts = rows.map((row) => {
     const origDate = new Date(row.date + 'T12:00:00')
     const day = Math.min(origDate.getDate(), new Date(ty, tm, 0).getDate())
     const newDate = `${ty}-${String(tm).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-    return { ...txToRow({ ...rowToTx(row), ejecutado: false, asignaciones: [] }), date: newDate }
+    // Se copia lo planificado (si se pagó con otro monto, el original)
+    const t = rowToTx(row)
+    return { ...txToRow({ ...t, monto: t.montoPlanificado ?? t.monto, montoPlanificado: null, ejecutado: false, asignaciones: [] }), date: newDate }
   })
 
   const { error: insErr } = await supabase.from('movimientos').insert(inserts)
@@ -304,14 +313,15 @@ export async function createRecurringTransactions(toMonth: string): Promise<numb
     .lte('date', endF)
 
   if (error) throw error
-  const recurring = (data ?? []).filter((r) => r.children?.recurrente === true && !r.children?.pagoTarjeta)
+  const recurring = (data ?? []).filter((r) => r.children?.recurrente === true && !r.children?.pagoTarjeta && !r.children?.noPlanificado)
   if (recurring.length === 0) return 0
 
   const inserts = recurring.map((row) => {
     const origDate = new Date(row.date + 'T12:00:00')
     const day = Math.min(origDate.getDate(), new Date(ty, tm, 0).getDate())
     const newDate = `${ty}-${String(tm).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-    return { ...txToRow({ ...rowToTx(row), ejecutado: false, asignaciones: [] }), date: newDate }
+    const t = rowToTx(row)
+    return { ...txToRow({ ...t, monto: t.montoPlanificado ?? t.monto, montoPlanificado: null, ejecutado: false, asignaciones: [] }), date: newDate }
   })
 
   const { error: insErr } = await supabase.from('movimientos').insert(inserts)

@@ -40,7 +40,7 @@ export default function AgregarSheet({ open, onClose }: { open: boolean; onClose
     <>
       <Sheet open={open} onClose={onClose} title="Agregar" bodyClassName="px-5 pb-6 space-y-2.5">
         <Opcion icon={ReceiptText} principal titulo="Registrar gasto"
-          texto="Lo que ya gastó: a mano, foto del ticket o captura. Llena el cupo de lo planificado."
+          texto="Lo que ya gastó: a mano, foto del ticket o captura. Llena un cupo o paga lo planificado."
           onClick={() => { onClose(); setRegistrar(true) }} />
         <Opcion icon={CalendarPlus} titulo="Planificar"
           texto="Un ingreso o un gasto previsto del mes (el presupuesto)."

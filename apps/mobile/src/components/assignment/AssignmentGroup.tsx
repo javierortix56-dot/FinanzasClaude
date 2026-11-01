@@ -6,7 +6,7 @@ import { Transaction, Settings, Currency, Tarjeta } from '@finanzas/core/types'
 import { getCatFromSettings, formatAmount } from '@finanzas/core/lib/constants'
 import { toBase, txToBase, txMonth } from '@finanzas/core/lib/currency'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
-import { markEjecutado } from '@finanzas/core/lib/transactions'
+import { alternarEjecutado } from '@/components/consumos/MarcarPagado'
 import { haptic } from '@/lib/haptics'
 import Collapse from '@/components/ui/Collapse'
 import ProgressBar from '@/components/ui/ProgressBar'
@@ -253,7 +253,7 @@ export default function AssignmentGroup({
                     </div>
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); haptic('light'); markEjecutado(exp.id!, !exp.ejecutado) }}
+                      onClick={(e) => { e.stopPropagation(); haptic('light'); alternarEjecutado(exp, settings) }}
                       className="hit-44 p-1 -m-1 flex-shrink-0 inline-flex"
                       title={exp.ejecutado ? 'Marcar pendiente' : 'Marcar ejecutado'}
                       aria-label={exp.ejecutado ? 'Marcar pendiente' : 'Marcar ejecutado'}

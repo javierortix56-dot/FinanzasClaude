@@ -1,9 +1,11 @@
 // Cierre de mes: planificado contra real de cada categoría, propuesta para el
 // mes siguiente y cierre (concreta lo ejecutado y fija el mes).
 //
-//   Planificado: las líneas del mes (egresos e ingresos), sumadas por categoría.
-//   Real: si la categoría tiene consumos registrados, su suma; si no, las
-//     líneas marcadas como ejecutadas (las que faltan quedan pendientes).
+//   Planificado: las líneas del mes (egresos e ingresos), sumadas por categoría
+//     (con el monto planificado aunque se hayan pagado con otro).
+//   Real: categorías con cupo → los consumos registrados; pagos únicos → lo
+//     pagado (las líneas pendientes quedan a la vista) más los gastos no
+//     planificados de esa categoría.
 //   Pagos de tarjeta: no se planifican a mano; se muestran aparte con su
 //     estado (estimado o confirmado por el resumen).
 //
@@ -14,6 +16,7 @@ import { supabase } from './supabase'
 import { rowToTx, txToRow, updateTransaction } from './transactions'
 import { fetchConsumos } from './consumos'
 import { claveCupo, planPorCategoria } from './planVsReal'
+import { esCupo } from './modoGasto'
 import { cuentaEnCategorias, esPagoTarjeta, programarSyncPagos } from './tarjetas'
 import { toBase, txToBase } from './currency'
 import { updateSettings } from './settings'
@@ -44,6 +47,8 @@ export interface FilaCierre {
   promedioBase: number | null
   /** Lo ya planificado en el mes siguiente */
   siguienteBase: number
+  /** La categoría se controla con cupo */
+  cupo: boolean
   /** Monto sugerido para el mes siguiente y de qué opción sale */
   sugerida: OpcionPropuesta
   opciones: Record<OpcionPropuesta, number | null>
@@ -91,7 +96,7 @@ export function armarCierre(txs: Transaction[], consumos: Consumo[], mes: string
     const plan = planPorCategoria(txs, m, base, s)
     const r = new Map<string, number>()
     for (const c of consumos) {
-      if (c.fecha.slice(0, 7) !== m) continue
+      if (c.fecha.slice(0, 7) !== m || !esCupo(c.categoria, s)) continue
       const k = claveCupo(c.categoria, plan, s)
       r.set(k, (r.get(k) ?? 0) + toBase(c.monto, c.moneda, base, s, m))
     }
@@ -106,41 +111,49 @@ export function armarCierre(txs: Transaction[], consumos: Consumo[], mes: string
   for (const k of realMes.keys()) if (!claves.has(k)) claves.set(k, 'egreso')
 
   const suma = (xs: Transaction[]) => xs.reduce((a, t) => a + txToBase(t, base, s), 0)
+  /** Lo planificado de las líneas (sin los gastos no planificados) */
+  const sumaPlan = (xs: Transaction[]) => xs.filter((t) => !t.noPlanificado)
+    .reduce((a, t) => a + txToBase({ ...t, monto: t.montoPlanificado ?? t.monto }, base, s), 0)
 
   const filas = [...claves].map(([clave, tipo]): FilaCierre => {
-    const lineas = delMes.filter((t) => planificables(t) && t.categoria === clave && t.tipo === tipo)
-    const siguiente = delSiguiente.filter((t) => planificables(t) && t.categoria === clave && t.tipo === tipo)
-    const planBase = suma(lineas)
-    const conConsumos = realMes.get(clave)
-    const pendientes = lineas.filter((t) => !t.ejecutado)
+    const todas = delMes.filter((t) => planificables(t) && t.categoria === clave && t.tipo === tipo)
+    const lineas = todas.filter((t) => !t.noPlanificado)
+    const siguiente = delSiguiente.filter((t) => planificables(t) && !t.noPlanificado && t.categoria === clave && t.tipo === tipo)
+    const planBase = sumaPlan(lineas)
+    const cupo = tipo === 'egreso' && esCupo(clave, s)
+    const pendientes = cupo ? [] : lineas.filter((t) => !t.ejecutado)
     let seguimiento: Seguimiento
     let realBase: number | null
-    if (conConsumos !== undefined) {
+    if (cupo) {
+      // Cupo: lo real son los consumos (0 si no se registró nada)
       seguimiento = planBase > 0 ? 'consumos' : 'sin_plan'
-      realBase = conConsumos
-    } else if (pendientes.length === 0) {
-      seguimiento = 'ejecutado'
-      realBase = planBase
+      realBase = realMes.get(clave) ?? 0
     } else {
-      seguimiento = 'pendiente'
-      realBase = null
+      // Pago único: lo pagado (con su monto real) y lo no planificado
+      const pagado = suma(todas.filter((t) => t.ejecutado || t.noPlanificado))
+      if (lineas.length === 0) { seguimiento = 'sin_plan'; realBase = pagado }
+      else if (pendientes.length === 0) { seguimiento = 'ejecutado'; realBase = pagado }
+      else { seguimiento = 'pendiente'; realBase = pagado > 0 ? pagado : null }
     }
     // Promedio de los 3 meses anteriores: lo real si hubo consumos; si no, lo planificado
     const historicos = previos.map((m, i) => {
       const r = realPrevios[i].get(clave)
-      if (r !== undefined) return r
-      const p = suma(txs.filter((t) => mesTx(t) === m && planificables(t) && t.categoria === clave && t.tipo === tipo))
+      if (cupo && r !== undefined) return r
+      // Pagos únicos: lo pagado ese mes (o lo planificado si no se marcó)
+      const xs = txs.filter((t) => mesTx(t) === m && planificables(t) && t.categoria === clave && t.tipo === tipo)
+      const pagado = suma(xs.filter((t) => t.ejecutado || t.noPlanificado))
+      const p = pagado > 0 ? pagado : sumaPlan(xs)
       return p > 0 ? p : null
     }).filter((x): x is number => x !== null)
     const actual = realBase ?? planBase
     const promedioBase = historicos.length ? (historicos.reduce((a, x) => a + x, 0) + actual) / (historicos.length + 1) : null
     const opciones: Record<OpcionPropuesta, number | null> = { plan: planBase || null, real: realBase, promedio: promedioBase }
-    // Sugerencia: lo real si se siguió con consumos (refleja lo que se gasta); si no, mantener el plan
-    const sugerida: OpcionPropuesta = seguimiento === 'consumos' || seguimiento === 'sin_plan' ? 'real' : 'plan'
+    // Cupo: lo que realmente se gastó (si no se registró nada, se mantiene lo planificado)
+    const sugerida: OpcionPropuesta = seguimiento === 'sin_plan' || (cupo && (realBase ?? 0) > 0) ? 'real' : 'plan'
     const cat = getCatFromSettings(clave, s)
     return {
       clave, tipo, nombre: cat?.nombre ?? clave, color: cat?.color ?? '#94a3b8',
-      lineas, siguiente, planBase, realBase, seguimiento, pendientes,
+      lineas, siguiente, planBase, realBase, seguimiento, pendientes, cupo,
       difBase: realBase === null ? null : realBase - planBase,
       promedioBase, siguienteBase: suma(siguiente), sugerida, opciones,
     }
@@ -187,7 +200,8 @@ export async function aplicarPlanSiguiente(c: Cierre, montos: Record<string, num
         const dia = Math.min(d.getDate(), new Date(y, m, 0).getDate())
         const { id: _id, ...resto } = t
         inserts.push({
-          ...resto, monto: r0(t.monto * factor), ejecutado: false, asignaciones: [],
+          ...resto, monto: r0((t.montoPlanificado ?? t.monto) * factor), montoPlanificado: null, noPlanificado: false,
+          ejecutado: false, asignaciones: [],
           fecha: { toDate: () => new Date(`${c.siguiente}-${String(dia).padStart(2, '0')}T12:00:00`) },
         })
       }

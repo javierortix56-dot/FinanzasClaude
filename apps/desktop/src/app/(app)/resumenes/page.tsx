@@ -1,11 +1,10 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import Link from 'next/link'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   Upload, FileText, Repeat, Bug, Store, CreditCard, Landmark, AlertCircle, Trash2,
-  Plus, Sparkles, TrendingUp, Loader2, CheckCircle2, CalendarClock, Megaphone, PieChart, Tags, Target, Percent, GitCompareArrows, ListChecks,
+  Plus, Sparkles, TrendingUp, Loader2, CheckCircle2, CalendarClock, Megaphone, PieChart, Tags, Percent, GitCompareArrows, ListChecks,
 } from 'lucide-react'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
@@ -16,10 +15,11 @@ import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { addCompraCuotas, deleteCompraCuotas, restoreCompraCuotas, updateCompraCuotas } from '@finanzas/core/lib/cuotas'
 import { offerUndo } from '@finanzas/core/lib/undo'
 import { getCatFromSettings, monthLabel } from '@finanzas/core/lib/constants'
-import { CompraCuotas, Consumo, Currency, Resumen, ResumenItem, Settings, Tarjeta } from '@finanzas/core/types'
+import { CompraCuotas, Currency, Resumen, ResumenItem, Settings, Tarjeta } from '@finanzas/core/types'
 import { toBase } from '@finanzas/core/lib/currency'
 import { AnalisisFinanciacion, Comparativa, Variacion } from '@finanzas/core/lib/resumenExtras'
 import type { ConciliacionResumen } from '@finanzas/core/lib/useResumenes'
+import type { GastoRegistrado } from '@finanzas/core/lib/conciliacion'
 import { CompromisoMes, ETIQUETA_CARGO, conciliacion, mesCorto, montoCorto } from '@finanzas/core/lib/resumenAnalisis'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -540,14 +540,14 @@ function ConciliacionSeccion({ c, tarjetas, s, onElegir, onAgregar, onPasar }: {
   c: ConciliacionResumen; tarjetas: Tarjeta[]; s: Settings
   onElegir: (tarjetaId: string) => void
   onAgregar: (items: ResumenItem[], t: Tarjeta) => Promise<void>
-  onPasar: (cs: Consumo[], t: Tarjeta) => Promise<void>
+  onPasar: (cs: GastoRegistrado[], t: Tarjeta) => Promise<void>
 }) {
   const [busy, setBusy] = useState(false)
   const correr = async (fn: () => Promise<void>) => { setBusy(true); try { await fn() } finally { setBusy(false) } }
   const res = c.resultado
   const t = c.tarjeta
   const cat = (id: string | null) => (id ? getCatFromSettings(id, s)?.nombre : undefined) ?? 'sin categoría'
-  const sub = res ? <>Del {fechaCorta(res.desde)} al {fechaCorta(res.hasta)} · consumos registrados con tarjeta de crédito (efectivo, débito y transferencias no figuran en el resumen)</> : 'Consumos registrados con la tarjeta contra los del resumen'
+  const sub = res ? <>Del {fechaCorta(res.desde)} al {fechaCorta(res.hasta)} · gastos registrados con tarjeta de crédito (efectivo, débito y transferencias no figuran en el resumen)</> : 'Consumos registrados con la tarjeta contra los del resumen'
   return (
     <Seccion icon={ListChecks} titulo={`Contraste con lo registrado · ${c.resumen.emisor}`} sub={sub} delay={0.025}>
       {tarjetas.length === 0 ? (

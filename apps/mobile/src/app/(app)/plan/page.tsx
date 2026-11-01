@@ -6,10 +6,11 @@ import { Currency } from '@finanzas/core/types'
 import PageHeader, { MonthSwitcher, PrivacyToggle } from '@/components/ui/PageHeader'
 import CuposDelMes from '@/components/consumos/CuposDelMes'
 import PlanVsRealTab from '@/components/consumos/PlanVsRealTab'
+import PagosDelMes from '@/components/consumos/PagosDelMes'
 
 /**
- * Planificado vs real: el cupo de cada categoría del mes (lo que se registra
- * lo va llenando), el cierre del mes y el desvío mes a mes.
+ * Planificado vs real: los cupos del mes (lo que se registra los va llenando),
+ * los pagos únicos pendientes, el cierre del mes y el desvío mes a mes.
  */
 export default function PlanPage() {
   const { currentMonth, transactions, prevMonth, nextMonth } = useTransactionStore()
@@ -21,7 +22,10 @@ export default function PlanPage() {
         actions={<><PrivacyToggle /><MonthSwitcher month={currentMonth} onPrev={prevMonth} onNext={nextMonth} compact /></>}
       />
       <div className="flex-1 min-h-0 overflow-hidden">
-        <PlanVsRealTab encabezado={<CuposDelMes transactions={transactions} month={currentMonth} base={base} />} />
+        <PlanVsRealTab encabezado={<>
+          <CuposDelMes transactions={transactions} month={currentMonth} base={base} />
+          <PagosDelMes transactions={transactions} base={base} />
+        </>} />
       </div>
     </div>
   )

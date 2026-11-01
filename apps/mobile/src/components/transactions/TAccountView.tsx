@@ -11,7 +11,8 @@ import { Transaction, Currency, Settings } from '@finanzas/core/types'
 import { getCatFromSettings, formatAmount } from '@finanzas/core/lib/constants'
 import { txToBase } from '@finanzas/core/lib/currency'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
-import { markEjecutado } from '@finanzas/core/lib/transactions'
+import { esCupo } from '@finanzas/core/lib/modoGasto'
+import { alternarEjecutado } from '@/components/consumos/MarcarPagado'
 import { Money } from '@/components/ui/AnimatedNumber'
 import { springPop, stagger, pulse } from '@/components/ui/motion'
 import { cuentaEnCaja, esConsumoTarjeta, tarjetaDe } from '@finanzas/core/lib/tarjetas'
@@ -41,8 +42,10 @@ const TxRow = memo(function TxRow({ tx, hideAmounts, settings, monedaBase, linke
   const dotColor = cat?.color ?? (isIngreso ? '#4e7d5b' : '#b4533f')
   const montoBase = txToBase(tx, monedaBase, settings ?? DEFAULT_SETTINGS)
   const blur = hideAmounts ? 'blur-[5px] select-none' : ''
+  // Gasto con cupo: no se tilda, se llena con lo que se registra
+  const cupo = tx.tipo === 'egreso' && !tx.pagoTarjeta && !tx.ejecutado && esCupo(tx.categoria, settings ?? DEFAULT_SETTINGS)
 
-  // Swipe: derecha = marcar ejecutado/pendiente · izquierda = eliminar (con Deshacer)
+  // Swipe: derecha = marcar pagado/pendiente (o registrar, si tiene cupo) · izquierda = eliminar (con Deshacer)
   const x = useMotionValue(0)
   const rightOpacity = useTransform(x, [12, SWIPE_THRESHOLD], [0, 1])
   const leftOpacity  = useTransform(x, [-12, -SWIPE_THRESHOLD], [0, 1])
@@ -65,7 +68,7 @@ const TxRow = memo(function TxRow({ tx, hideAmounts, settings, monedaBase, linke
     setTimeout(() => { dragged.current = false }, 0)
     if (info.offset.x > SWIPE_THRESHOLD) {
       haptic('success')
-      markEjecutado(tx.id!, !tx.ejecutado)
+      alternarEjecutado(tx, settings ?? DEFAULT_SETTINGS)
     } else if (info.offset.x < -SWIPE_THRESHOLD) {
       deleteTransactionsWithUndo([tx]).catch((err) => console.error('[swipe] delete error:', err))
     }
@@ -99,7 +102,7 @@ const TxRow = memo(function TxRow({ tx, hideAmounts, settings, monedaBase, linke
     <motion.div
       role="button"
       tabIndex={0}
-      aria-label={`${tx.descripcion || cat?.nombre || 'Movimiento'}. Deslizá a la derecha para marcar ejecutado, a la izquierda para eliminar.`}
+      aria-label={`${tx.descripcion || cat?.nombre || 'Movimiento'}. Deslice a la derecha para marcar pagado, a la izquierda para eliminar.`}
       onClick={() => { if (!dragged.current) onEdit(tx) }}
       onKeyDown={(e) => { if (e.key === 'Enter') onEdit(tx) }}
       drag="x"
@@ -122,11 +125,14 @@ const TxRow = memo(function TxRow({ tx, hideAmounts, settings, monedaBase, linke
         </p>
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); haptic('light'); markEjecutado(tx.id!, !tx.ejecutado) }}
+          onClick={(e) => { e.stopPropagation(); haptic('light'); alternarEjecutado(tx, settings ?? DEFAULT_SETTINGS) }}
           className="hit-44 p-1 -m-1 flex-shrink-0 inline-flex"
-          title={tx.ejecutado ? 'Marcar pendiente' : 'Marcar ejecutado'}
-          aria-label={tx.ejecutado ? 'Marcar pendiente' : 'Marcar ejecutado'}
+          title={cupo ? 'Registrar gasto (cupo)' : tx.ejecutado ? 'Marcar pendiente' : 'Marcar pagado'}
+          aria-label={cupo ? 'Registrar gasto (cupo)' : tx.ejecutado ? 'Marcar pendiente' : 'Marcar pagado'}
         >
+          {cupo ? (
+            <span className="h-4 px-1 rounded-full bg-primary/12 text-primary text-[8.5px] font-bold uppercase tracking-wide inline-flex items-center">cupo</span>
+          ) : (
           <motion.span
             className={`w-4 h-4 rounded-full flex items-center justify-center border ${
               tx.ejecutado ? 'bg-emerald-500 border-emerald-500' : 'border-gray-300'
@@ -142,6 +148,7 @@ const TxRow = memo(function TxRow({ tx, hideAmounts, settings, monedaBase, linke
               )}
             </AnimatePresence>
           </motion.span>
+          )}
         </button>
       </div>
 

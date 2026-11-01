@@ -12,6 +12,7 @@ import { programarSyncPagos } from '@finanzas/core/lib/tarjetas'
 import { subscribeToAssets } from '@finanzas/core/lib/assets'
 import TransactionModal from '@/components/transactions/TransactionModal'
 import AgregarSheet from '@/components/consumos/AgregarSheet'
+import MarcarPagadoHost from '@/components/consumos/MarcarPagado'
 import Toast from '@/components/ui/Toast'
 import Onboarding from '@/components/Onboarding'
 import { spring, springPop } from '@/components/ui/motion'
@@ -117,6 +118,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Global modal — mounted once, always available */}
       <TransactionModal />
       <AgregarSheet open={agregar} onClose={() => setAgregar(false)} />
+      <MarcarPagadoHost />
       <Toast />
       <Onboarding />
     </div>
