@@ -2,14 +2,13 @@
 // Todo se calcula en el cliente sobre los renglones guardados: suscripciones
 // (cobros que se repiten mes a mes), gastos hormiga, comercios principales,
 // cuotas y refinanciaciones en curso, cargos bancarios (impuestos, percepciones,
-// intereses, comisiones), gasto por categoría y por titular, y consumos que no
-// están cargados en la app. La cabecera que informa el banco (saldos, cuotas a
+// intereses, comisiones) y gasto por categoría y por titular. La cabecera que informa el banco (saldos, cuotas a
 // vencer, tasas, avisos) va en Resumen.detalle y tiene prioridad sobre lo
 // calculado cuando existe.
 import { toBase } from './currency'
 import { shiftMonth } from './constants'
 import { cuotaEnMes } from './cuotas'
-import { CompraCuotas, Currency, Resumen, ResumenItem, Settings, Transaction } from '../types'
+import { CompraCuotas, Currency, Resumen, ResumenItem, Settings } from '../types'
 
 /** Clave estable para agrupar un comercio entre meses */
 export function claveComercio(nombre: string): string {
@@ -92,15 +91,34 @@ export interface CuotaEnCurso {
   finMes: string
   /** id de categoría sugerida (null si no hay una razonable) */
   categoria: string | null
+  /** Refinanciación del saldo (Plan V, financiación de saldo): cuota con intereses */
+  refinanciacion?: boolean
   /** Cuota cargada a mano (no figura en ningún resumen subido) */
   manual?: CompraCuotas
 }
 
 /**
- * Cuánto de los próximos resúmenes ya está comprometido por cuotas. Si el banco
- * informa su cuadro de cuotas a vencer se usa ese (cantidad = null).
+ * Cuánto de los próximos resúmenes ya está comprometido por cuotas, separado
+ * por origen. Se calcula renglón por renglón (cada cuota vuelve a caer en los
+ * meses que le quedan); `bancoBase` es lo que informa el banco en su cuadro de
+ * cuotas a vencer para ese mes, como control.
  */
-export interface CompromisoMes { mes: string; totalBase: number; cantidad: number | null }
+export interface CompromisoMes {
+  mes: string
+  totalBase: number
+  comprasBase: number
+  refinanciacionBase: number
+  /** Cuotas cargadas a mano (otras tarjetas, préstamos) */
+  manualBase: number
+  /** null cuando el dato sale solo del cuadro del banco */
+  cantidad: number | null
+  bancoBase: number | null
+  /** Comercios cuya última cuota cae este mes */
+  terminan: string[]
+}
+
+/** Cuota cargada a mano que ya figura en un resumen (se muestra una sola vez) */
+export interface ManualDuplicada { manual: CompraCuotas; comercio: string; emisor: string }
 
 export interface TotalPor { clave: string | null; totalBase: number; pct: number }
 
@@ -115,14 +133,14 @@ export interface AnalisisPeriodo {
   suscripciones: Suscripcion[]
   hormiga: Hormiga
   topComercios: ComercioTotal[]
-  /** Cuotas de compras */
+  /** Cuotas de compras, refinanciaciones y cuotas cargadas a mano */
   cuotas: CuotaEnCurso[]
-  /** Refinanciaciones del saldo (Plan V, financiación de saldo…) */
-  financiaciones: CuotaEnCurso[]
+  /** Cuotas manuales que coinciden con una del resumen (no se cuentan dos veces) */
+  manualesDuplicadas: ManualDuplicada[]
   /** Cuotas que siguen cayendo en los meses siguientes (hasta que terminan) */
   compromiso: CompromisoMes[]
-  /** Acumulado "a partir de" que informa el banco después de su cuadro */
-  compromisoResto: CompromisoMes | null
+  /** Acumulado "a partir de" que informa el banco después de su cuadro (solo si no hay renglones de cuotas) */
+  compromisoResto: { mes: string; totalBase: number } | null
   /** Último mes con cuotas pendientes (null si no hay) */
   libreDesde: string | null
   /** Gasto por categoría (clave = id de categoría o null) */
@@ -277,8 +295,9 @@ export function analizarPeriodo(
     anualBase: hormigaTotal * 12,
   }
 
-  // ── Cuotas en curso (compras y refinanciaciones)
-  const enCurso = items
+  // ── Cuotas en curso (compras y refinanciaciones: la refinanciación es una
+  // cuota más, con intereses)
+  const enCurso: CuotaEnCurso[] = items
     .filter(enCuotas)
     .map((i) => {
       const restantes = Math.max(i.cuotaTotal! - i.cuotaActual!, 0)
@@ -288,19 +307,21 @@ export function analizarPeriodo(
         restantes, restante: restantes * i.monto,
         finMes: shiftMonth(periodo, restantes),
         categoria: i.categoria,
-        financiacion: i.tipo === 'financiacion',
+        refinanciacion: i.tipo === 'financiacion',
       }
     })
-    // Primero las que terminan más tarde (las que más pesan en el tiempo)
-    .sort((a, b) => b.finMes.localeCompare(a.finMes) || b.restante - a.restante)
-  const sinMarca = ({ financiacion: _f, ...c }: CuotaEnCurso & { financiacion: boolean }): CuotaEnCurso => c
 
-  // Cuotas cargadas a mano: las que siguen vigentes o todavía no empezaron
+  // Cuotas cargadas a mano: las que siguen vigentes o todavía no empezaron.
+  // Si una ya figura en el resumen (misma cantidad de cuotas y mismo comercio
+  // o mismo monto) se usa la del resumen y la manual no se suma.
+  const manualesDuplicadas: ManualDuplicada[] = []
   const deManuales: CuotaEnCurso[] = manuales.flatMap((c) => {
     const actual = cuotaEnMes(c, periodo) ?? 0
     const futuras = Array.from({ length: c.totalCuotas }, (_, k) => shiftMonth(periodo, k + 1))
       .filter((mes) => cuotaEnMes(c, mes) !== null)
     if (actual === 0 && futuras.length === 0) return []
+    const igual = enCurso.find((x) => mismaCuota(c, x))
+    if (igual) { manualesDuplicadas.push({ manual: c, comercio: igual.comercio, emisor: igual.emisor }); return [] }
     return [{
       comercio: c.descripcion, emisor: c.tarjeta || 'Manual', moneda: c.moneda,
       actual, total: c.totalCuotas, montoCuota: c.montoCuota,
@@ -309,44 +330,64 @@ export function analizarPeriodo(
       categoria: null, manual: c,
     }]
   })
-  const cuotas = [...enCurso.filter((c) => !c.financiacion).map(sinMarca), ...deManuales]
+  // Primero las que terminan más tarde (las que más pesan en el tiempo)
+  const cuotas = [...enCurso, ...deManuales]
     .sort((a, b) => b.finMes.localeCompare(a.finMes) || b.restante - a.restante)
-  const financiaciones = enCurso.filter((c) => c.financiacion).map(sinMarca)
 
-  // Compromiso mes a mes. Por cada resumen: el cuadro del banco si lo trae;
-  // si no, cada cuota vuelve a caer en los `restantes` meses siguientes. Los
-  // meses futuros se convierten con la cotización actual.
+  // Compromiso mes a mes, renglón por renglón (los meses futuros se convierten
+  // con la cotización actual). El cuadro del banco queda como control; si el
+  // resumen no trae renglones de cuotas se usa el cuadro directamente.
   const compromisoPorMes = new Map<string, CompromisoMes>()
-  const sumar = (mes: string, monto: number, moneda: Currency, cantidad: number | null) => {
-    const m = compromisoPorMes.get(mes) ?? { mes, totalBase: 0, cantidad: 0 }
-    m.totalBase += toBase(monto, moneda, base, s)
-    m.cantidad = m.cantidad === null || cantidad === null ? null : m.cantidad + cantidad
+  const mesDe = (mes: string) => {
+    const m = compromisoPorMes.get(mes) ?? {
+      mes, totalBase: 0, comprasBase: 0, refinanciacionBase: 0, manualBase: 0, cantidad: 0, bancoBase: null, terminan: [],
+    }
     compromisoPorMes.set(mes, m)
+    return m
   }
-  let compromisoResto: CompromisoMes | null = null
-  for (const r of delPeriodo) {
-    const cuadro = r.detalle?.cuotasAVencer ?? []
-    if (cuadro.length > 0) {
-      for (const c of cuadro) {
-        if (!c.desde) { sumar(c.mes, c.monto, r.moneda, null); continue }
-        const totalBase: number = (compromisoResto?.totalBase ?? 0) + toBase(c.monto, r.moneda, base, s)
-        const mes: string = compromisoResto && compromisoResto.mes < c.mes ? compromisoResto.mes : c.mes
-        compromisoResto = { mes, totalBase, cantidad: null }
-      }
-      continue
-    }
-    for (const c of enCurso.filter((x) => x.emisor === r.emisor)) {
-      for (let k = 1; k <= c.restantes; k++) sumar(shiftMonth(periodo, k), c.montoCuota, c.moneda, 1)
-    }
+  const sumar = (mes: string, c: CuotaEnCurso, ultima: boolean) => {
+    const m = mesDe(mes)
+    const v = toBase(c.montoCuota, c.moneda, base, s)
+    m.totalBase += v
+    if (c.manual) m.manualBase += v
+    else if (c.refinanciacion) m.refinanciacionBase += v
+    else m.comprasBase += v
+    if (m.cantidad !== null) m.cantidad += 1
+    if (ultima) m.terminan.push(c.comercio)
+  }
+  for (const c of enCurso) {
+    for (let k = 1; k <= c.restantes; k++) sumar(shiftMonth(periodo, k), c, k === c.restantes)
   }
   for (const c of deManuales) {
     for (let k = 1; k <= c.total; k++) {
       const mes = shiftMonth(periodo, k)
-      if (cuotaEnMes(c.manual!, mes) !== null) sumar(mes, c.montoCuota, c.moneda, 1)
+      if (cuotaEnMes(c.manual!, mes) !== null) sumar(mes, c, mes === c.finMes)
     }
   }
-  const compromiso = [...compromisoPorMes.values()].sort((a, b) => a.mes.localeCompare(b.mes))
-  const libreDesde = [...enCurso, ...deManuales].reduce<string | null>((max, c) => (c.restantes > 0 && (!max || c.finMes > max) ? c.finMes : max), null)
+  let compromisoResto = null as AnalisisPeriodo['compromisoResto']
+  for (const r of delPeriodo) {
+    const cuadro = r.detalle?.cuotasAVencer ?? []
+    const sinRenglones = !enCurso.some((x) => x.emisor === r.emisor)
+    for (const c of cuadro) {
+      const v = toBase(c.monto, r.moneda, base, s)
+      if (c.desde) {
+        if (sinRenglones) {
+          compromisoResto = {
+            mes: compromisoResto && compromisoResto.mes < c.mes ? compromisoResto.mes : c.mes,
+            totalBase: (compromisoResto?.totalBase ?? 0) + v,
+          }
+        }
+        continue
+      }
+      const m = mesDe(c.mes)
+      m.bancoBase = (m.bancoBase ?? 0) + v
+      if (sinRenglones) { m.totalBase += v; m.comprasBase += v; m.cantidad = null }
+    }
+  }
+  const compromiso = [...compromisoPorMes.values()]
+    .filter((m) => m.totalBase > 0)
+    .sort((a, b) => a.mes.localeCompare(b.mes))
+  const libreDesde = cuotas.reduce<string | null>((max, c) => (c.restantes > 0 && (!max || c.finMes > max) ? c.finMes : max), null)
 
   // ── Cargos bancarios (impuestos, percepciones, intereses, comisiones). Las
   // percepciones se netean con sus devoluciones (vienen con monto negativo).
@@ -383,7 +424,7 @@ export function analizarPeriodo(
     hormiga,
     topComercios,
     cuotas,
-    financiaciones,
+    manualesDuplicadas,
     compromiso,
     compromisoResto,
     libreDesde,
@@ -396,21 +437,6 @@ export function analizarPeriodo(
       items: cargosItems,
     },
   }
-}
-
-/** Rango de meses 'YYYY-MM' que cubren los renglones (para traer los movimientos a comparar) */
-export function mesesDeItems(items: ResumenItem[]): string[] {
-  if (items.length === 0) return []
-  const fechas = items.map((i) => i.fecha).sort()
-  const out: string[] = []
-  let m = fechas[0].slice(0, 7)
-  const fin = fechas[fechas.length - 1].slice(0, 7)
-  while (m <= fin && out.length < 24) {
-    out.push(m)
-    const [y, mm] = m.split('-').map(Number)
-    m = mm === 12 ? `${y + 1}-01` : `${y}-${String(mm + 1).padStart(2, '0')}`
-  }
-  return out
 }
 
 /**
@@ -429,31 +455,28 @@ export function conciliacion(r: Resumen): { ars: number | null; usd: number | nu
   return { ars: dif(d?.saldoAnteriorArs, d?.saldoActualArs, 'ARS'), usd: dif(d?.saldoAnteriorUsd, d?.saldoActualUsd, 'USD') }
 }
 
-const DIA = 86400000
+/** Palabras significativas de un nombre de comercio (3+ letras) */
+const palabras = (n: string) => new Set(claveComercio(n).split(' ').filter((w) => w.length >= 3))
 
 /**
- * Gastos del resumen que no tienen un egreso equivalente en la app: misma
- * moneda, monto dentro del 1 % y fecha a ±7 días (emparejamiento uno a uno).
- * Las cuotas se excluyen: se siguen desde Cuotas, no como movimientos.
+ * ¿La cuota cargada a mano es la misma que la del resumen? Misma moneda y
+ * cantidad de cuotas, y el mismo comercio (comparten una palabra) o el mismo
+ * monto de cuota (±3 %).
  */
-export function noCargados(items: ResumenItem[], transacciones: Transaction[]): ResumenItem[] {
-  const candidatos = transacciones.filter((t) => t.tipo === 'egreso')
-  const usados = new Set<string>()
-  const faltan: ResumenItem[] = []
-  const ordenados = items.filter((i) => esGasto(i) && !esCuota(i)).sort((a, b) => b.monto - a.monto)
-  for (const i of ordenados) {
-    const f = new Date(i.fecha + 'T12:00:00').getTime()
-    const tol = Math.max(1, Math.abs(i.monto) * 0.01)
-    const match = candidatos.find((t) =>
-      !usados.has(t.id!) &&
-      t.moneda === i.moneda &&
-      Math.abs(t.monto - i.monto) <= tol &&
-      Math.abs(t.fecha.toDate().getTime() - f) <= 7 * DIA,
-    )
-    if (match) usados.add(match.id!)
-    else faltan.push(i)
-  }
-  return faltan.sort((a, b) => a.fecha.localeCompare(b.fecha))
+function mismaCuota(m: CompraCuotas, x: CuotaEnCurso): boolean {
+  if (x.refinanciacion || m.moneda !== x.moneda || m.totalCuotas !== x.total) return false
+  const pm = palabras(m.descripcion)
+  const nombre = [...palabras(x.comercio)].some((w) => pm.has(w))
+  const monto = Math.abs(m.montoCuota - x.montoCuota) <= x.montoCuota * 0.03
+  return nombre || monto
+}
+
+/** Monto abreviado para etiquetas de gráficos: 737476 → "737k", 1250000 → "1,25M" */
+export function montoCorto(n: number): string {
+  const a = Math.abs(n)
+  if (a >= 1e6) return `${(n / 1e6).toLocaleString('es-AR', { maximumFractionDigits: a >= 1e7 ? 1 : 2 })}M`
+  if (a >= 1e3) return `${Math.round(n / 1e3).toLocaleString('es-AR')}k`
+  return Math.round(n).toLocaleString('es-AR')
 }
 
 export const ETIQUETA_CARGO: Record<TipoCargo, { singular: string; plural: string }> = {

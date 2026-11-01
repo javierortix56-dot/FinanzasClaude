@@ -4,7 +4,7 @@ import { useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   Upload, FileText, Repeat, Bug, Store, CreditCard, Landmark, AlertCircle, Trash2,
-  Plus, Sparkles, TrendingUp, Loader2, CheckCircle2, CalendarClock, Megaphone, PieChart, RefreshCcw, Tags,
+  Plus, Sparkles, TrendingUp, Loader2, CheckCircle2, CalendarClock, Megaphone, PieChart, Tags,
 } from 'lucide-react'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
@@ -15,10 +15,9 @@ import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { addCompraCuotas, deleteCompraCuotas, restoreCompraCuotas, updateCompraCuotas } from '@finanzas/core/lib/cuotas'
 import { offerUndo } from '@finanzas/core/lib/undo'
 import { getCatFromSettings, monthLabel } from '@finanzas/core/lib/constants'
-import { CategoryIcon } from '@finanzas/core/lib/categoryIcons'
-import { CompraCuotas, Currency, Resumen, ResumenItem, Settings } from '@finanzas/core/types'
+import { CompraCuotas, Currency, Resumen, Settings } from '@finanzas/core/types'
 import { toBase } from '@finanzas/core/lib/currency'
-import { ETIQUETA_CARGO, conciliacion, mesCorto } from '@finanzas/core/lib/resumenAnalisis'
+import { CompromisoMes, ETIQUETA_CARGO, conciliacion, mesCorto, montoCorto } from '@finanzas/core/lib/resumenAnalisis'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
@@ -29,14 +28,6 @@ import { PageScroll } from '@/components/shell/PageScroll'
 import { cn } from '@finanzas/core/lib/utils'
 
 const ACCEPT = '.pdf,.csv,.txt,.xlsx,application/pdf,text/csv'
-
-/** Categoría por defecto para un consumo sin sugerencia: "Otros" si existe */
-function categoriaPorDefecto(s: Settings): string {
-  const grupos = s.categoriasGasto.filter((g) => g.activa)
-  const otros = grupos.find((g) => /otro/i.test(g.nombre))
-  const g = otros ?? grupos[grupos.length - 1]
-  return g?.subcategorias.find((c) => c.activa)?.id ?? g?.id ?? 'otros'
-}
 
 /** "octubre de 2026" → "Octubre de 2026" */
 const mesLabel = (p: string) => { const l = monthLabel(p); return l.charAt(0).toUpperCase() + l.slice(1) }
@@ -140,7 +131,8 @@ export default function ResumenesPage() {
             <div className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-3">
               <Kpi icon={Repeat} tone="primary" label="Suscripciones / año" value={<MoneyText amount={a.suscripciones.reduce((t, x) => t + x.anualBase, 0)} currency={base} />} sub={`${a.suscripciones.length} detectadas`} />
               <Kpi icon={Bug} tone="warning" label="Gastos hormiga" value={<MoneyText amount={a.hormiga.totalBase} currency={base} />} sub={`${a.hormiga.pctDelPeriodo.toFixed(1)}% del mes · ${a.hormiga.habitos.length} hábitos`} />
-              <Kpi icon={AlertCircle} tone="expense" label="No cargados en la app" value={String(r.faltantes.length)} sub={r.faltantes.length ? 'revisar abajo' : 'todo cargado'} />
+              <Kpi icon={CreditCard} tone="expense" label="Cuotas del próximo resumen" value={<MoneyText amount={a.compromiso[0]?.totalBase ?? 0} currency={base} />}
+                sub={a.compromiso[0]?.cantidad != null ? `${a.compromiso[0].cantidad} cuotas · ya comprometido` : 'ya comprometido'} />
               <Kpi icon={Landmark} tone="neutral" label="Impuestos y cargos" value={<MoneyText amount={a.cargos.totalBase} currency={base} />} sub={`${a.cargos.items.length} renglones`} />
             </div>
           </Card>
@@ -167,14 +159,6 @@ export default function ResumenesPage() {
                     </div>
                   </>}
                 />
-              ))}
-            </Seccion>
-
-            <Seccion icon={AlertCircle} titulo="No cargados en la app" sub="Gastos del resumen sin un egreso equivalente (±1 %, ±7 días)" delay={0.08}>
-              {r.faltantes.length === 0 ? (
-                <Vacio texto="Todos los consumos del resumen están cargados." ok />
-              ) : r.faltantes.map((i, k) => (
-                <FilaNoCargado key={i.id ?? k} item={i} s={s} onCargar={() => r.cargar(i, categoriaPorDefecto(s))} />
               ))}
             </Seccion>
 
@@ -228,25 +212,11 @@ export default function ResumenesPage() {
                   <span>¿Una cuota que no figura en ningún resumen (préstamo, Mercado Pago…)?</span>
                   <Button size="sm" variant="secondary" onClick={() => setCuotaManual('nueva')}><Plus className="h-3.5 w-3.5" /> Agregar cuota</Button>
                 </div>
-                {a.compromiso.length > 0 && (
-                  <div className="mb-3 rounded-xl bg-surface-2 px-3 py-3">
-                    <div className="eyebrow !text-[10px] mb-2">Ya comprometido en los próximos resúmenes</div>
-                    <div className="flex items-end gap-1.5 h-24">
-                      {a.compromiso.slice(0, 12).map((m) => {
-                        const max = Math.max(...a.compromiso.slice(0, 12).map((x) => x.totalBase))
-                        return (
-                          <div key={m.mes} className="h-full flex-1 min-w-0 flex flex-col items-center justify-end gap-1" title={m.cantidad === null ? monthLabel(m.mes) : `${monthLabel(m.mes)}: ${m.cantidad} cuota${m.cantidad !== 1 ? 's' : ''}`}>
-                            <div className="w-full rounded-t-md bg-primary/70" style={{ height: `${Math.max((m.totalBase / max) * 100, 6)}%` }} />
-                            <span className="text-[10px] text-muted-2">{mesCorto(m.mes)}</span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                    <div className="mt-2 text-[11px] text-muted">
-                      Próximo resumen: <b className="text-foreground tnum"><MoneyText amount={a.compromiso[0].totalBase} currency={base} /></b>
-                      {a.compromiso[0].cantidad !== null ? <> en {a.compromiso[0].cantidad} cuota{a.compromiso[0].cantidad !== 1 ? 's' : ''}</> : ' según el banco'}
-                      {a.compromisoResto && <> · desde {monthLabel(a.compromisoResto.mes)}: <b className="text-foreground tnum"><MoneyText amount={a.compromisoResto.totalBase} currency={base} /></b> más</>}
-                    </div>
+                {a.compromiso.length > 0 && <CompromisoChart meses={a.compromiso} resto={a.compromisoResto} base={base} />}
+                {a.manualesDuplicadas.length > 0 && (
+                  <div className="mb-2 rounded-xl bg-surface-2 px-3 py-2 text-xs text-muted">
+                    {a.manualesDuplicadas.map((d) => d.manual.descripcion).join(', ')} también {a.manualesDuplicadas.length === 1 ? 'está cargada' : 'están cargadas'} a mano:
+                    se {a.manualesDuplicadas.length === 1 ? 'cuenta' : 'cuentan'} una sola vez, con el dato del resumen.
                   </div>
                 )}
                 {a.cuotas.map((c, k) => {
@@ -255,8 +225,9 @@ export default function ResumenesPage() {
                     <Fila key={k} titulo={c.comercio}
                       meta={<>
                         {c.manual && <span className="mr-1.5 rounded-full bg-primary/12 px-1.5 py-px font-semibold text-primary">manual</span>}
+                        {c.refinanciacion && <span className="mr-1.5 rounded-full bg-unassigned-soft px-1.5 py-px font-semibold text-unassigned">refinanciación</span>}
                         {c.emisor} · {c.actual === 0 ? `empieza en ${monthLabel(c.manual!.primerMes)}` : `cuota ${c.actual} de ${c.total}`}
-                        {!c.manual && <> · {cat?.nombre ?? 'sin categoría'}</>}
+                        {c.refinanciacion ? ' · incluye intereses' : !c.manual && <> · {cat?.nombre ?? 'sin categoría'}</>}
                       </>}
                       derecha={<>
                         <div className="font-semibold tnum"><MoneyText amount={c.montoCuota} currency={c.moneda} /></div>
@@ -272,21 +243,6 @@ export default function ResumenesPage() {
                 })}
                 {a.cuotas.length === 0 && <Vacio texto="No hay cuotas en curso en este período." ok />}
             </Seccion>
-
-            {a.financiaciones.length > 0 && (
-              <Seccion icon={RefreshCcw} titulo="Refinanciaciones" sub="Saldo pasado a cuotas (Plan V, financiación de saldo): cada cuota incluye intereses" delay={0.22}>
-                {a.financiaciones.map((c, k) => (
-                  <Fila key={k} titulo={c.comercio}
-                    meta={<>{c.emisor} · cuota {c.actual} de {c.total}</>}
-                    derecha={<>
-                      <div className="font-semibold tnum"><MoneyText amount={c.montoCuota} currency={c.moneda} /></div>
-                      <div className="text-[11px] text-muted tnum">
-                        {c.restantes === 0 ? 'última cuota' : <>termina {monthLabel(c.finMes)} · restan <MoneyText amount={c.restante} currency={c.moneda} /></>}
-                      </div>
-                    </>} />
-                ))}
-              </Seccion>
-            )}
 
             <Seccion icon={PieChart} titulo="Gasto por categoría" sub={a.porTitular.length > 0 ? 'Y por titular o adicional' : 'Consumos del período según la categoría sugerida'} delay={0.22}>
               {a.porCategoria.slice(0, 10).map((c) => {
@@ -479,7 +435,7 @@ function EstadoVacio({ onSubir, error }: { onSubir: () => void; error: string | 
       <h3 className="mt-4 text-lg font-semibold">Analice sus resúmenes</h3>
       <p className="mt-2 text-sm text-muted max-w-lg mx-auto">
         Suba el resumen de la tarjeta o de la cuenta (PDF, Excel .xlsx o CSV). La IA extrae cada renglón y la app detecta
-        suscripciones, gastos hormiga, cuotas, cargos bancarios y consumos que no están cargados.
+        suscripciones, gastos hormiga, cuotas y cargos bancarios.
       </p>
       <p className="mt-1 text-xs text-muted-2">Para detectar suscripciones con confianza conviene subir los últimos 3 meses.</p>
       {error && <p className="mt-3 text-xs text-expense">No se pudieron leer los resúmenes guardados: {error}</p>}
@@ -560,28 +516,83 @@ function Vacio({ texto, ok }: { texto: string; ok?: boolean }) {
   )
 }
 
-function FilaNoCargado({ item, s, onCargar }: { item: ResumenItem; s: Settings; onCargar: () => Promise<void> }) {
-  const cat = item.categoria ? getCatFromSettings(item.categoria, s) : undefined
+const COLOR_TIPO = {
+  compras: 'var(--primary)',
+  refinanciacion: '#f59e0b',
+  manual: 'color-mix(in srgb, var(--primary) 30%, #94a3b8)',
+} as const
+
+/** Barras apiladas de lo comprometido mes a mes; clic en una barra muestra su detalle */
+function CompromisoChart({ meses, resto, base }: { meses: CompromisoMes[]; resto: { mes: string; totalBase: number } | null; base: Currency }) {
+  const [sel, setSel] = useState(0)
+  const vis = meses.slice(0, 18)
+  const max = Math.max(...vis.map((m) => m.totalBase))
+  const m = vis[Math.min(sel, vis.length - 1)]
+  const hay = {
+    compras: vis.some((x) => x.comprasBase > 0),
+    refinanciacion: vis.some((x) => x.refinanciacionBase > 0),
+    manual: vis.some((x) => x.manualBase > 0),
+  }
+  const partes = [
+    { k: 'compras' as const, label: 'Compras', v: m.comprasBase },
+    { k: 'refinanciacion' as const, label: 'Refinanciación', v: m.refinanciacionBase },
+    { k: 'manual' as const, label: 'Cargadas a mano', v: m.manualBase },
+  ].filter((p) => p.v > 0)
+  // El banco solo informa sus cuotas: se compara sin las cargadas a mano
+  const delResumen = m.totalBase - m.manualBase
+  const difBanco = m.bancoBase !== null && m.cantidad !== null && Math.abs(m.bancoBase - delResumen) > delResumen * 0.02
   return (
-    <div className="flex items-center justify-between gap-3 py-2.5">
-      <div className="flex items-center gap-2.5 min-w-0">
-        <span className="h-8 w-8 rounded-lg inline-flex items-center justify-center shrink-0"
-          style={{ background: `${cat?.color ?? '#94a3b8'}22`, color: cat?.color ?? '#94a3b8' }}>
-          <CategoryIcon cat={cat ?? { id: item.categoria ?? 'otros' }} size={14} />
-        </span>
-        <div className="min-w-0">
-          <div className="truncate text-sm font-medium">{item.comercio}</div>
-          <div className="truncate text-[11.5px] text-muted-2">{fechaCorta(item.fecha)} · {cat?.nombre ?? 'sin categoría'}</div>
+    <div className="mb-3 rounded-xl bg-surface-2 px-3 py-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="eyebrow !text-[10px]">Cuotas de los próximos resúmenes</div>
+        <div className="flex gap-3 text-[10.5px] text-muted">
+          {hay.compras && (hay.refinanciacion || hay.manual) && <Leyenda color={COLOR_TIPO.compras} label="Compras" />}
+          {hay.refinanciacion && <Leyenda color={COLOR_TIPO.refinanciacion} label="Refinanciación" />}
+          {hay.manual && <Leyenda color={COLOR_TIPO.manual} label="Cargadas a mano" />}
         </div>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
-        <span className="text-sm font-semibold tnum text-expense"><MoneyText amount={item.monto} currency={item.moneda} /></span>
-        <Button size="sm" variant="secondary" onClick={onCargar} title="Crear el egreso en la app">
-          <Plus className="h-3.5 w-3.5" /> Cargar
-        </Button>
+      <div className="mt-2 flex items-end gap-1.5 h-36">
+        {vis.map((x, i) => {
+          const activo = i === sel
+          return (
+            <button key={x.mes} type="button" onClick={() => setSel(i)} title={`${monthLabel(x.mes)}: ${montoCorto(x.totalBase)}`}
+              className="group h-full flex-1 min-w-0 flex flex-col items-center justify-end gap-1">
+              <span className={cn('text-[10px] font-semibold tnum', activo ? 'text-foreground' : 'text-muted-2')}>{montoCorto(x.totalBase)}</span>
+              <div className={cn('w-full flex flex-col-reverse rounded-t-md overflow-hidden transition-opacity', activo ? '' : 'opacity-55 group-hover:opacity-80')}
+                style={{ height: `${Math.max((x.totalBase / max) * 78, 4)}%` }}>
+                {x.comprasBase > 0 && <div style={{ flexGrow: x.comprasBase, background: COLOR_TIPO.compras }} />}
+                {x.refinanciacionBase > 0 && <div style={{ flexGrow: x.refinanciacionBase, background: COLOR_TIPO.refinanciacion }} />}
+                {x.manualBase > 0 && <div style={{ flexGrow: x.manualBase, background: COLOR_TIPO.manual }} />}
+              </div>
+              <span className={cn('text-[10px]', activo ? 'font-semibold text-foreground' : 'text-muted-2')}>{mesCorto(x.mes)}</span>
+            </button>
+          )
+        })}
+      </div>
+      <div className="mt-3 border-t border-hairline pt-2.5 text-xs text-muted space-y-1">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-sm font-semibold text-foreground">
+            {mesLabel(m.mes)}{sel === 0 && <span className="ml-1.5 text-[11px] font-semibold text-primary">próximo resumen</span>}
+            {m.cantidad !== null && <span className="ml-1.5 text-[11px] font-normal text-muted">{m.cantidad} cuota{m.cantidad !== 1 ? 's' : ''}</span>}
+          </span>
+          <b className="text-sm text-foreground tnum"><MoneyText amount={m.totalBase} currency={base} /></b>
+        </div>
+        {partes.length > 1 && partes.map((p) => (
+          <div key={p.k} className="flex items-center justify-between">
+            <Leyenda color={COLOR_TIPO[p.k]} label={p.label} />
+            <span className="tnum"><MoneyText amount={p.v} currency={base} /></span>
+          </div>
+        ))}
+        {m.terminan.length > 0 && <div>Última cuota de <b className="text-foreground">{m.terminan.join(', ')}</b>: el mes siguiente baja.</div>}
+        {difBanco && <div className="text-unassigned">El banco informa <MoneyText amount={m.bancoBase!} currency={base} /> para este mes.</div>}
+        {resto && <div>Desde {monthLabel(resto.mes)}, según el banco: <MoneyText amount={resto.totalBase} currency={base} /> más.</div>}
       </div>
     </div>
   )
+}
+
+function Leyenda({ color, label }: { color: string; label: string }) {
+  return <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm" style={{ background: color }} />{label}</span>
 }
 
 function Revision({ resumen, reemplaza, s, grupos, onEditar }: {
