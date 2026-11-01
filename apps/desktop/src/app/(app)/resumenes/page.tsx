@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   Upload, FileText, Repeat, Bug, Store, CreditCard, Landmark, AlertCircle, Trash2,
-  Plus, Sparkles, TrendingUp, Loader2, CheckCircle2, CalendarClock, Megaphone, PieChart, Tags, Target, Percent, GitCompareArrows,
+  Plus, Sparkles, TrendingUp, Loader2, CheckCircle2, CalendarClock, Megaphone, PieChart, Tags, Target, Percent, GitCompareArrows, ListChecks,
 } from 'lucide-react'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
@@ -16,9 +16,10 @@ import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { addCompraCuotas, deleteCompraCuotas, restoreCompraCuotas, updateCompraCuotas } from '@finanzas/core/lib/cuotas'
 import { offerUndo } from '@finanzas/core/lib/undo'
 import { getCatFromSettings, monthLabel } from '@finanzas/core/lib/constants'
-import { CompraCuotas, Currency, Resumen, Settings } from '@finanzas/core/types'
+import { CompraCuotas, Currency, Resumen, ResumenItem, Settings, Tarjeta, Transaction } from '@finanzas/core/types'
 import { toBase } from '@finanzas/core/lib/currency'
 import { AnalisisFinanciacion, Comparativa, EstadoMeta, Variacion } from '@finanzas/core/lib/resumenExtras'
+import type { ConciliacionResumen } from '@finanzas/core/lib/useResumenes'
 import { CompromisoMes, ETIQUETA_CARGO, conciliacion, mesCorto, montoCorto } from '@finanzas/core/lib/resumenAnalisis'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -140,6 +141,14 @@ export default function ResumenesPage() {
           </Card>
 
           {a.resumenes.filter((res) => res.detalle).map((res) => <EstadoCuenta key={res.id} r={res} />)}
+
+          {r.conciliaciones.map((c) => (
+            <ConciliacionSeccion key={c.resumen.id} c={c} tarjetas={s.tarjetas ?? []} s={s}
+              onElegir={(id) => r.elegirTarjeta(c.resumen.emisor, id)}
+              onAgregar={(items, t) => r.agregarFaltantes(items, t)}
+              onCargos={(t) => r.agregarCargos(c.resumen, c.resultado!.cargos, t)}
+              onPasar={(txs, t) => r.pasarGastos(txs, t)} />
+          ))}
 
           {r.extras && (
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
@@ -528,6 +537,106 @@ function Vacio({ texto, ok }: { texto: string; ok?: boolean }) {
 
 const signo = (n: number) => (n > 0 ? '+' : '')
 const pctTxt = (n: number | null) => (n === null ? '—' : `${signo(n)}${n.toFixed(0)}%`)
+
+function ConciliacionSeccion({ c, tarjetas, s, onElegir, onAgregar, onCargos, onPasar }: {
+  c: ConciliacionResumen; tarjetas: Tarjeta[]; s: Settings
+  onElegir: (tarjetaId: string) => void
+  onAgregar: (items: ResumenItem[], t: Tarjeta) => Promise<void>
+  onCargos: (t: Tarjeta) => Promise<void>
+  onPasar: (txs: Transaction[], t: Tarjeta) => Promise<void>
+}) {
+  const [busy, setBusy] = useState(false)
+  const correr = async (fn: () => Promise<void>) => { setBusy(true); try { await fn() } finally { setBusy(false) } }
+  const res = c.resultado
+  const t = c.tarjeta
+  const cat = (id: string | null) => (id ? getCatFromSettings(id, s)?.nombre : undefined) ?? 'sin categoría'
+  const totalCargos = res?.cargos.reduce((a, x) => a + x.monto, 0) ?? 0
+  const sub = res ? <>Del {fechaCorta(res.desde)} al {fechaCorta(res.hasta)} · solo gastos con tarjeta de crédito (efectivo, débito y transferencias no figuran en el resumen)</> : 'Gastos registrados con la tarjeta contra los consumos del resumen'
+  return (
+    <Seccion icon={ListChecks} titulo={`Contraste con lo registrado · ${c.resumen.emisor}`} sub={sub} delay={0.025}>
+      {tarjetas.length === 0 ? (
+        <Vacio texto="Cree la tarjeta en Ajustes → Tarjetas de crédito para contrastar el resumen con sus gastos." />
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-3 py-2">
+            <label className="flex items-center gap-2 text-sm text-muted">
+              Tarjeta en la app
+              <Select value={t?.id ?? ''} onChange={(e) => onElegir(e.target.value)} className="!h-8 !w-auto">
+                {!t && <option value="">Elegir…</option>}
+                {tarjetas.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
+              </Select>
+            </label>
+            {res && (
+              <div className="flex gap-2 text-xs">
+                <span className="rounded-full bg-income-soft px-2 py-0.5 font-semibold text-income">{res.coinciden.length} coinciden</span>
+                <span className="rounded-full bg-expense-soft px-2 py-0.5 font-semibold text-expense">{res.faltan.length} sin registrar</span>
+                <span className="rounded-full bg-unassigned-soft px-2 py-0.5 font-semibold text-unassigned">{res.otroMedio.length} con otro medio</span>
+              </div>
+            )}
+          </div>
+          {t && !res && <div className="py-4 text-sm text-muted">Cargando movimientos…</div>}
+          {t && res && (
+            <>
+              {res.otroMedio.length > 0 && (
+                <div className="py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="eyebrow !text-[10px]">Registrados con otro medio · agregarlos los duplicaría</div>
+                    <Button size="sm" variant="secondary" disabled={busy} onClick={() => correr(() => onPasar(res.otroMedio.map((x) => x.tx), t))}>Pasar todos a {t.nombre}</Button>
+                  </div>
+                  {res.otroMedio.map(({ item, tx }) => (
+                    <Fila key={tx.id} titulo={tx.descripcion || item.comercio} meta={<>{fechaCorta(item.fecha)} · en el resumen: {item.comercio}</>}
+                      derecha={<span className="font-semibold tnum"><MoneyText amount={item.monto} currency={item.moneda} /></span>} />
+                  ))}
+                </div>
+              )}
+              {res.faltan.length > 0 && (
+                <div className="py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="eyebrow !text-[10px]">En el resumen, sin registrar</div>
+                    <Button size="sm" variant="secondary" disabled={busy} onClick={() => correr(() => onAgregar(res.faltan, t))}><Plus className="h-3.5 w-3.5" /> Agregar todos</Button>
+                  </div>
+                  {res.faltan.map((i, k) => (
+                    <Fila key={i.id ?? k} titulo={i.comercio} meta={<>{fechaCorta(i.fecha)} · {cat(i.categoria)}</>}
+                      derecha={<span className="flex items-center gap-2">
+                        <span className="font-semibold tnum"><MoneyText amount={i.monto} currency={i.moneda} /></span>
+                        <Button size="sm" variant="ghost" disabled={busy} onClick={() => correr(() => onAgregar([i], t))} title="Agregar como gasto con la tarjeta"><Plus className="h-3.5 w-3.5" /></Button>
+                      </span>} />
+                  ))}
+                </div>
+              )}
+              {res.cargos.length > 0 && (
+                <div className="my-2 flex items-center justify-between gap-3 rounded-xl bg-surface-2 px-3 py-2.5">
+                  <div className="text-sm">
+                    <span className="font-medium">Intereses, impuestos y comisiones</span>
+                    <span className="ml-2 text-xs text-muted">{res.cargos.length} renglones · <MoneyText amount={totalCargos} currency={c.resumen.moneda} /></span>
+                  </div>
+                  <Button size="sm" variant="secondary" disabled={busy} onClick={() => correr(() => onCargos(t))}>Agregar como gasto</Button>
+                </div>
+              )}
+              {res.sobran.length > 0 && (
+                <div className="py-2">
+                  <div className="eyebrow !text-[10px]">Registrados con {t.nombre} que no aparecen · revisar duplicados, otra tarjeta o imputación tardía</div>
+                  {res.sobran.map((tx) => (
+                    <Fila key={tx.id} titulo={tx.descripcion || 'Sin descripción'} meta={fechaCorta(tx.fecha.toDate().toISOString().slice(0, 10))}
+                      derecha={<span className="font-semibold tnum"><MoneyText amount={tx.monto} currency={tx.moneda} /></span>} />
+                  ))}
+                </div>
+              )}
+              {res.proximo.length > 0 && (
+                <div className="py-2 text-xs text-muted">
+                  {res.proximo.length} gasto{res.proximo.length !== 1 ? 's' : ''} con {t.nombre} posterior{res.proximo.length !== 1 ? 'es' : ''} al cierre: entra{res.proximo.length !== 1 ? 'n' : ''} en el próximo resumen.
+                </div>
+              )}
+              {res.faltan.length === 0 && res.otroMedio.length === 0 && res.sobran.length === 0 && (
+                <Vacio texto="Todo lo registrado con la tarjeta coincide con el resumen." ok />
+              )}
+            </>
+          )}
+        </>
+      )}
+    </Seccion>
+  )
+}
 
 function MetasSeccion({ metas, base }: { metas: EstadoMeta[]; base: Currency }) {
   return (

@@ -18,6 +18,7 @@ import { easeOut } from '@/components/ui/motion'
 import Collapse from '@/components/ui/Collapse'
 import { cuentaEnCaja } from '@finanzas/core/lib/tarjetas'
 import BudgetRings from '@/components/dashboard/BudgetRings'
+import MetasDelMes from '@/components/dashboard/MetasDelMes'
 
 type MainTab = 'movimientos' | 'asignacion'
 
@@ -136,6 +137,7 @@ export default function DashboardPage() {
       {/* Presupuestos del mes (solo si hay) */}
       <Collapse open={!compact} className="flex-shrink-0">
         <BudgetRings transactions={transactions} month={currentMonth} base={base} />
+        <MetasDelMes transactions={transactions} month={currentMonth} base={base} />
       </Collapse>
 
       {/* ── Contenedor glass: tabs + contenido ── */}
