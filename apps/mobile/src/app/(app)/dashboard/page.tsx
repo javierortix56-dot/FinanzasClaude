@@ -18,6 +18,7 @@ import { easeOut } from '@/components/ui/motion'
 import Collapse from '@/components/ui/Collapse'
 import { cuentaEnCaja } from '@finanzas/core/lib/tarjetas'
 import CuposDelMes from '@/components/consumos/CuposDelMes'
+import AvisoCierre from '@/components/consumos/AvisoCierre'
 
 type MainTab = 'movimientos' | 'asignacion'
 
@@ -135,6 +136,7 @@ export default function DashboardPage() {
 
       {/* Planificado vs real del mes */}
       <Collapse open={!compact} className="flex-shrink-0">
+        <AvisoCierre />
         <CuposDelMes transactions={transactions} month={currentMonth} base={base} />
       </Collapse>
 

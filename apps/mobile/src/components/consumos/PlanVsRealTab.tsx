@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Lightbulb } from 'lucide-react'
+import { Lightbulb, Lock } from 'lucide-react'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
@@ -13,6 +13,9 @@ import { mesCorto, montoCorto } from '@finanzas/core/lib/resumenAnalisis'
 import { Currency, Settings, Transaction } from '@finanzas/core/types'
 import Card from '@/components/ui/Card'
 import { Money } from '@/components/ui/AnimatedNumber'
+import CierreMesSheet from '@/components/consumos/CierreMesSheet'
+import { monthLabel } from '@finanzas/core/lib/constants'
+import { haptic } from '@/lib/haptics'
 
 const MESES = 6
 
@@ -24,6 +27,8 @@ export default function PlanVsRealTab() {
   const meses = useMemo(() => ultimosMeses(currentMonth, MESES), [currentMonth])
   const consumos = useConsumos(meses[0])
   const [historico, setHistorico] = useState<Record<string, Transaction[]> | null>(null)
+  const [cierreAbierto, setCierreAbierto] = useState(false)
+  const cerrado = (s.mesesCerrados ?? []).includes(currentMonth)
 
   useEffect(() => {
     let cancel = false
@@ -44,6 +49,16 @@ export default function PlanVsRealTab() {
 
   return (
     <div className="h-full overflow-y-auto overscroll-contain px-4 pt-1 pb-28 space-y-3 no-scrollbar">
+      <button type="button" onClick={() => { haptic(); setCierreAbierto(true) }}
+        className="w-full glass rounded-[22px] px-4 py-3 flex items-center gap-3 text-left">
+        <span className="h-9 w-9 rounded-xl bg-primary/12 text-primary inline-flex items-center justify-center shrink-0"><Lock size={16} /></span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[13.5px] font-bold text-gray-900">Cierre de {monthLabel(currentMonth).replace(/ de \d{4}$/, '')}</span>
+          <span className="block text-[11px] text-gray-500">{cerrado ? 'Cerrado · ver planificado contra real' : 'Planificado contra real y plan del mes siguiente'}</span>
+        </span>
+        <span className="text-[11px] font-bold text-primary shrink-0">Revisar</span>
+      </button>
+      <CierreMesSheet mes={currentMonth} open={cierreAbierto} onClose={() => setCierreAbierto(false)} />
       {desvios === null ? (
         <div className="space-y-3">{[0, 1].map((i) => <div key={i} className="skeleton h-32 rounded-[24px]" />)}</div>
       ) : desvios.length === 0 ? (
