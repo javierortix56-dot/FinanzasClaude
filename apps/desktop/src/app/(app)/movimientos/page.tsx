@@ -10,6 +10,8 @@ import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { Select } from '@/components/ui/input'
 import { MoneyText } from '@/components/MoneyText'
 import { TransactionModal } from '@/components/modals/TransactionModal'
+import { MarcarPagadoModal } from '@/components/modals/MarcarPagadoModal'
+import { desmarcarPagado, esCupo } from '@finanzas/core/lib/modoGasto'
 import { LedgerStats, LedgerTabs } from '@/components/ledger/LedgerHeader'
 import { Segmented } from '@/components/ui/segmented'
 import { CategoryIcon } from '@finanzas/core/lib/categoryIcons'
@@ -113,11 +115,23 @@ export default function MovimientosPage() {
     setOpen(true)
   }
 
+  // Ingresos y pagos de tarjeta: alternan. Gastos con cupo: se registran en
+  // la app móvil (llenan el cupo). Pagos únicos: se pide el monto real.
+  const [pagando, setPagando] = useState<Transaction | null>(null)
   async function toggleEjecutado(t: Transaction) {
     if (!t.id) return
     try {
-      await markEjecutado(t.id, !t.ejecutado)
-      showToast(t.ejecutado ? 'Marcado como pendiente' : 'Marcado como ejecutado')
+      if (t.tipo !== 'egreso' || t.pagoTarjeta) {
+        await markEjecutado(t.id, !t.ejecutado)
+        showToast(t.ejecutado ? 'Marcado como pendiente' : 'Marcado como cobrado')
+      } else if (t.ejecutado) {
+        await desmarcarPagado(t)
+        showToast('Vuelve a pendiente con lo planificado')
+      } else if (esCupo(t.categoria, settings)) {
+        showToast(`${getCatFromSettings(t.categoria, settings)?.nombre ?? 'Esta categoría'} tiene cupo: registre los gastos y se va llenando`)
+      } else {
+        setPagando(t)
+      }
     } catch {
       showToast('Error', 'error')
     }
@@ -233,7 +247,7 @@ export default function MovimientosPage() {
                   {' · '}{linkedIds.size - 1} {linkedIds.size - 1 === 1 ? 'partida vinculada' : 'partidas vinculadas'} · Esc para limpiar
                 </span>
               </span>
-            ) : 'Clic en un movimiento para ver su contrapartida · clic en el círculo para marcarlo ejecutado'
+            ) : 'Clic en un movimiento para ver su contrapartida · clic en el círculo para marcarlo pagado'
           }
         />
       </div>
@@ -244,6 +258,7 @@ export default function MovimientosPage() {
         editing={editing}
         initialType={initialType}
       />
+      <MarcarPagadoModal linea={pagando} settings={settings} onClose={() => setPagando(null)} />
     </main>
   )
 }

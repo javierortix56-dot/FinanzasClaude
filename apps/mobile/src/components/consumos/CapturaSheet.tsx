@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Sparkles } from 'lucide-react'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
@@ -9,7 +9,9 @@ import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { usuarioId } from '@finanzas/core/lib/resumenes'
 import { fetchReglas } from '@finanzas/core/lib/comercioReglas'
 import { GastoLeido, guardarGastosLeidos, leerComprobante } from '@finanzas/core/lib/comprobantes'
-import { Consumo, MedioPago, Settings } from '@finanzas/core/types'
+import { Destino, describirDestino, destinoGasto, fetchMovimientosDe } from '@finanzas/core/lib/modoGasto'
+import { getCatFromSettings } from '@finanzas/core/lib/constants'
+import { Consumo, MedioPago, Settings, Transaction } from '@finanzas/core/types'
 import CategoriaSelect from '@/components/consumos/CategoriaSelect'
 import Sheet from '@/components/ui/Sheet'
 import { Money } from '@/components/ui/AnimatedNumber'
@@ -24,7 +26,8 @@ const medioValor = (g: GastoLeido) => (g.tarjetaId ? `t:${g.tarjetaId}` : g.medi
  * Lee una captura de movimientos (o un ticket) con IA y muestra los consumos
  * para revisar: categoría (obligatoria; se puede crear una nueva), medio de
  * pago y cuáles guardar. Los que parecen ya registrados quedan destildados.
- * Se guardan como consumos reales: llenan el cupo de lo planificado.
+ * Cada uno va adonde corresponde: llena un cupo, paga lo planificado o queda
+ * como gasto no planificado (se muestra antes de guardar).
  */
 export default function CapturaSheet({ archivo, modo, existentes, onClose }: {
   archivo: File | null
@@ -41,6 +44,7 @@ export default function CapturaSheet({ archivo, modo, existentes, onClose }: {
   const [error, setError] = useState<string | null>(null)
   const [gastos, setGastos] = useState<GastoLeido[]>([])
   const [elegidos, setElegidos] = useState<Set<string>>(new Set())
+  const [movs, setMovs] = useState<Transaction[]>([])
 
   useEffect(() => {
     if (!archivo) return
@@ -50,7 +54,10 @@ export default function CapturaSheet({ archivo, modo, existentes, onClose }: {
       try {
         const reglas = await fetchReglas().catch(() => new Map())
         const leidos = await leerComprobante(archivo, modo, s, reglas, existentes)
+        const meses = [...new Set(leidos.map((g) => g.fecha.slice(0, 7)))]
+        const tx = await fetchMovimientosDe(meses).catch(() => [] as Transaction[])
         if (cancel) return
+        setMovs(tx)
         setGastos(leidos)
         setElegidos(new Set(leidos.filter((g) => !g.duplicado).map((g) => g.key)))
         setEstado('revisar')
@@ -75,13 +82,27 @@ export default function CapturaSheet({ archivo, modo, existentes, onClose }: {
 
   const seleccion = gastos.filter((g) => elegidos.has(g.key))
   const sinCategoria = seleccion.filter((g) => !g.categoria).length
+  // Adónde va cada uno (en orden: dos gastos no pagan la misma línea)
+  const destinos = useMemo(() => {
+    const usadas = new Set<string>()
+    const out = new Map<string, Destino>()
+    for (const g of gastos) {
+      if (!g.categoria || !elegidos.has(g.key)) continue
+      const d = destinoGasto({ categoria: g.categoria, fecha: g.fecha }, movs, s, usadas)
+      if (d.tipo === 'pago') usadas.add(d.linea.id!)
+      out.set(g.key, d)
+    }
+    return out
+  }, [gastos, elegidos, movs, s])
 
   async function guardar() {
     setEstado('guardando')
     try {
-      const n = await guardarGastosLeidos(seleccion, modo === 'ticket' ? 'ticket' : 'captura', usuarioId(user))
+      const r = await guardarGastosLeidos(seleccion, modo === 'ticket' ? 'ticket' : 'captura', usuarioId(user), s, movs)
+      const n = r.cupo + r.pagos + r.puntuales
       haptic('success')
-      showToast(`${n} consumo${n !== 1 ? 's' : ''} registrado${n !== 1 ? 's' : ''}`)
+      const partes = [r.cupo && `${r.cupo} a cupos`, r.pagos && `${r.pagos} pago${r.pagos !== 1 ? 's' : ''}`, r.puntuales && `${r.puntuales} no planificado${r.puntuales !== 1 ? 's' : ''}`].filter(Boolean)
+      showToast(`${n} gasto${n !== 1 ? 's' : ''} registrado${n !== 1 ? 's' : ''}: ${partes.join(' · ')}`)
       onClose(n)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -93,8 +114,8 @@ export default function CapturaSheet({ archivo, modo, existentes, onClose }: {
     <Sheet
       open={archivo !== null}
       onClose={() => onClose(0)}
-      title={modo === 'ticket' ? 'Consumo del ticket' : 'Consumos de la captura'}
-      subtitle={estado === 'revisar' ? 'Elija la categoría de cada uno: llena el cupo de lo planificado' : undefined}
+      title={modo === 'ticket' ? 'Gasto del ticket' : 'Gastos de la captura'}
+      subtitle={estado === 'revisar' ? 'Elija la categoría de cada uno' : undefined}
       zIndex={70}
       footer={estado === 'revisar' || estado === 'guardando' ? (
         <div className="grid grid-cols-2 gap-2 px-5 pb-5 pt-2">
@@ -157,13 +178,18 @@ export default function CapturaSheet({ archivo, modo, existentes, onClose }: {
                         <option value="transferencia">Transferencia</option>
                       </select>
                     </div>
+                    {destinos.get(g.key) && (
+                      <p className={`mt-1 text-[10.5px] font-medium ${destinos.get(g.key)!.tipo === 'puntual' ? 'text-amber-600' : 'text-primary'}`}>
+                        {describirDestino(destinos.get(g.key)!, getCatFromSettings(g.categoria!, s)?.nombre ?? 'la categoría')}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
             )
           })}
           <p className="pt-1 text-[10.5px] text-gray-400 leading-relaxed">
-            No suman como gasto nuevo: llenan el cupo planificado de su categoría. Los de tarjeta de crédito se contrastan con el resumen cuando lo suba.
+            Las categorías con cupo (Ajustes → Gastos con cupo) se van llenando; las demás marcan como pagado lo planificado o, si no estaba, quedan como no planificado. Los de tarjeta de crédito se contrastan con el resumen cuando lo suba.
           </p>
         </div>
       )}

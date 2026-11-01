@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ChevronRight, ChevronLeft, Plus, Pencil,
   Copy, RotateCcw, Lock, Trash2, Check, Download, Upload, LogOut,
   UserRound, Bell, ArrowLeftRight, Tags, Coins, Layers, PiggyBank, CalendarCog, DatabaseBackup,
-  Palette, Sparkles, RefreshCw, Bug, CreditCard,
+  Palette, Sparkles, RefreshCw, Bug, CreditCard, Wallet, Gauge,
 } from 'lucide-react'
 import { AnimatePresence, motion, type PanInfo } from 'motion/react'
 import PageHeader from '@/components/ui/PageHeader'
@@ -14,6 +14,8 @@ import Segmented from '@/components/ui/Segmented'
 import { springSoft } from '@/components/ui/motion'
 import CategoryTree from '@/components/ajustes/CategoryTree'
 import TarjetasAjustes from '@/components/ajustes/TarjetasAjustes'
+import CuposAjustes from '@/components/ajustes/CuposAjustes'
+import { categoriasCupo } from '@finanzas/core/lib/modoGasto'
 import { offerUndo } from '@/lib/undo'
 import { getThemePref, setThemePref, ThemePref } from '@/lib/theme'
 import { openOnboarding } from '@/lib/onboarding'
@@ -36,12 +38,13 @@ import {
 import { exportBackup, downloadBackup, importBackup, parseBackupFile } from '@finanzas/core/lib/backup'
 import { monthLabel, SHARED_USER_ID } from '@finanzas/core/lib/constants'
 import dynamic from 'next/dynamic'
+import Link from 'next/link'
 import { Category, CategoryGroup, AhorroLink, Currency, FuenteCambio, Settings } from '@finanzas/core/types'
 import { HORMIGA_DEFAULT } from '@finanzas/core/lib/resumenAnalisis'
 
 const CategoryModal = dynamic(() => import('@/components/ajustes/CategoryModal'), { ssr: false })
 
-type Section = 'cuenta' | 'apariencia' | 'notif' | 'cambio' | 'hormiga' | 'tarjetas' | 'categorias' | 'categorias_ing' | 'tipos' | 'ahorro_links' | 'mes' | 'datos' | null
+type Section = 'cuenta' | 'apariencia' | 'notif' | 'cambio' | 'hormiga' | 'tarjetas' | 'cupos' | 'categorias' | 'categorias_ing' | 'tipos' | 'ahorro_links' | 'mes' | 'datos' | null
 
 // ── Modal state types ─────────────────────────────────────────────────────────
 type GroupModalState = {
@@ -62,6 +65,13 @@ export default function AjustesPage() {
   const { assets } = useAssetStore()
   const { user, monedaBase, setMonedaBase } = useAuthStore()
   const [openSection, setOpenSection] = useState<Section>(null)
+  // /ajustes?seccion=cupos abre esa sección (enlace desde Plan)
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('seccion') === 'cupos') {
+      setOpenSection('cupos')
+      setTimeout(() => document.getElementById('seccion-cupos')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 300)
+    }
+  }, [])
 
   // Cuenta / sesión
   const [signingOut, setSigningOut] = useState(false)
@@ -514,6 +524,19 @@ export default function AjustesPage() {
 
           <SectionGroup title="General">
 
+          {/* ── Cuentas y patrimonio (antes en la barra inferior) ── */}
+          <Link href="/patrimonio" className="w-full flex items-center gap-3 px-3.5 py-3 text-left active:bg-gray-500/[0.05] transition-colors">
+            <span className="w-8 h-8 rounded-[10px] flex items-center justify-center flex-shrink-0 text-white shadow-sm"
+              style={{ background: 'linear-gradient(135deg, #3f6b5acc, #3f6b5a)' }}>
+              <Wallet size={15} />
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm font-semibold text-gray-900 leading-tight">Cuentas y patrimonio</span>
+              <span className="block text-[11px] text-gray-400 truncate mt-0.5">Activos, pasivos y evolución</span>
+            </span>
+            <ChevronRight size={17} className="text-gray-300" />
+          </Link>
+
           {/* ── Cuenta ── */}
           <Section
             label="Cuenta"
@@ -744,6 +767,20 @@ export default function AjustesPage() {
           >
             <TarjetasAjustes s={s} />
           </Section>
+
+          {/* ── Gastos con cupo ── */}
+          <div id="seccion-cupos">
+          <Section
+            label="Gastos con cupo"
+            icon={<Gauge size={15} />}
+            tint="#3f7fb8"
+            hint={(() => { const n = categoriasCupo(s).size; return n ? `${n} categoría${n !== 1 ? 's' : ''}` : 'Ninguna' })()}
+            open={openSection === 'cupos'}
+            onToggle={() => toggle('cupos')}
+          >
+            <CuposAjustes s={s} />
+          </Section>
+          </div>
 
           {/* ── Categorías de Gasto ── */}
           <Section

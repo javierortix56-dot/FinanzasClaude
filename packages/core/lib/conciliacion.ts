@@ -1,34 +1,68 @@
-// Contraste del resumen de una tarjeta de crédito con los consumos reales
-// registrados con esa tarjeta. Solo entran los consumos con tarjeta de
-// crédito: lo pagado en efectivo, débito o transferencia no aparece en el
-// resumen.
+// Contraste del resumen de una tarjeta de crédito con todo lo REAL pagado con
+// esa tarjeta: consumos de cupo (Mercado, Uber…), pagos únicos marcados como
+// pagados con la tarjeta y gastos no planificados. Lo planificado que todavía
+// no se pagó no cuenta. Lo pagado en efectivo, débito o transferencia no
+// aparece en el resumen.
 //
 // Emparejamiento uno a uno: misma moneda, monto dentro del 1 % y fecha a ±5
 // días (el banco suele imputar la compra unos días después). Las cuotas no se
 // concilian acá: se siguen desde Cuotas en curso.
-import { actualizarConsumo, agregarConsumos } from './consumos'
+import { actualizarConsumo } from './consumos'
+import { updateTransaction } from './transactions'
+import { programarSyncPagos } from './tarjetas'
+import { registrarGastosReales } from './modoGasto'
 import { offerUndo } from './undo'
 import { esGasto } from './resumenAnalisis'
-import { Consumo, Resumen, ResumenItem, Tarjeta } from '../types'
+import { Consumo, Currency, Resumen, ResumenItem, Settings, Tarjeta, Transaction } from '../types'
+
+/** Gasto real registrado, venga de un consumo de cupo o de un movimiento pagado */
+export interface GastoRegistrado {
+  id: string
+  fecha: string
+  monto: number
+  moneda: Currency
+  comercio: string
+  tarjetaId: string | null
+  origen: { tipo: 'consumo'; consumo: Consumo } | { tipo: 'movimiento'; tx: Transaction }
+}
+
+const isoTx = (t: Transaction) => {
+  const d = t.fecha.toDate()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/** Todo lo real: consumos y egresos pagados (o no planificados), sin los pagos de tarjeta */
+export function gastosRegistrados(consumos: Consumo[], txs: Transaction[]): GastoRegistrado[] {
+  return [
+    ...consumos.map((c): GastoRegistrado => ({
+      id: `c:${c.id}`, fecha: c.fecha, monto: c.monto, moneda: c.moneda, comercio: c.comercio,
+      tarjetaId: c.tarjetaId, origen: { tipo: 'consumo', consumo: c },
+    })),
+    ...txs.filter((t) => t.tipo === 'egreso' && !t.pagoTarjeta && (t.ejecutado || t.noPlanificado)).map((t): GastoRegistrado => ({
+      id: `m:${t.id}`, fecha: isoTx(t), monto: t.monto, moneda: t.moneda, comercio: t.descripcion,
+      tarjetaId: t.tarjetaId ?? null, origen: { tipo: 'movimiento', tx: t },
+    })),
+  ]
+}
 
 const DIA = 86400000
 const TOLERANCIA_DIAS = 5
 
 export interface ResultadoConciliacion {
   tarjeta: Tarjeta
-  /** Renglón del resumen y consumo registrado que coinciden */
-  coinciden: { item: ResumenItem; consumo: Consumo }[]
+  /** Renglón del resumen y gasto registrado que coinciden */
+  coinciden: { item: ResumenItem; consumo: GastoRegistrado }[]
   /** Consumos del resumen sin registrar */
   faltan: ResumenItem[]
   /**
    * Consumos del resumen registrados con otro medio de pago (o sin indicar):
    * agregarlos de nuevo los duplicaría; hay que pasarlos a esta tarjeta.
    */
-  otroMedio: { item: ResumenItem; consumo: Consumo }[]
+  otroMedio: { item: ResumenItem; consumo: GastoRegistrado }[]
   /** Consumos registrados con la tarjeta dentro del período que no aparecen en el resumen */
-  sobran: Consumo[]
+  sobran: GastoRegistrado[]
   /** Consumos con la tarjeta posteriores al cierre: entran en el próximo resumen */
-  proximo: Consumo[]
+  proximo: GastoRegistrado[]
   desde: string
   hasta: string
 }
@@ -56,7 +90,7 @@ export function periodoDelResumen(r: Resumen): { desde: string; hasta: string } 
 
 const ms = (fecha: string) => new Date(fecha + 'T12:00:00').getTime()
 
-export function conciliar(r: Resumen, tarjeta: Tarjeta, consumos: Consumo[]): ResultadoConciliacion | null {
+export function conciliar(r: Resumen, tarjeta: Tarjeta, consumos: GastoRegistrado[]): ResultadoConciliacion | null {
   const per = periodoDelResumen(r)
   if (!per) return null
   const desdeMs = ms(per.desde) - TOLERANCIA_DIAS * DIA
@@ -68,7 +102,7 @@ export function conciliar(r: Resumen, tarjeta: Tarjeta, consumos: Consumo[]): Re
 
   const consumosResumen = r.items.filter((i) => esGasto(i) && !((i.cuotaTotal ?? 0) > 1))
   const usados = new Set<string>()
-  const buscar = (i: ResumenItem, entre: Consumo[]) => {
+  const buscar = (i: ResumenItem, entre: GastoRegistrado[]) => {
     const f = ms(i.fecha)
     const tol = Math.max(1, i.monto * 0.01)
     return entre
@@ -100,20 +134,30 @@ export function conciliar(r: Resumen, tarjeta: Tarjeta, consumos: Consumo[]): Re
   }
 }
 
-/** Pasa a la tarjeta consumos que se habían registrado con otro medio */
-export async function pasarATarjeta(cs: Consumo[], tarjeta: Tarjeta): Promise<void> {
-  const previos = cs.map((c) => ({ id: c.id!, medio: c.medio, tarjetaId: c.tarjetaId }))
-  for (const c of cs) await actualizarConsumo(c.id!, { medio: 'credito', tarjetaId: tarjeta.id })
-  offerUndo(`${cs.length} consumo${cs.length !== 1 ? 's' : ''} pasado${cs.length !== 1 ? 's' : ''} a ${tarjeta.nombre}`, async () => {
-    for (const p of previos) await actualizarConsumo(p.id, { medio: p.medio, tarjetaId: p.tarjetaId })
+/** Pasa a la tarjeta gastos que se habían registrado con otro medio */
+export async function pasarATarjeta(gs: GastoRegistrado[], tarjeta: Tarjeta): Promise<void> {
+  const previos = gs.map((g) => ({ g, tarjetaId: g.tarjetaId }))
+  for (const g of gs) {
+    if (g.origen.tipo === 'consumo') await actualizarConsumo(g.origen.consumo.id!, { medio: 'credito', tarjetaId: tarjeta.id })
+    else await updateTransaction(g.origen.tx.id!, { tarjetaId: tarjeta.id, asignaciones: [] })
+  }
+  programarSyncPagos()
+  offerUndo(`${gs.length} gasto${gs.length !== 1 ? 's' : ''} pasado${gs.length !== 1 ? 's' : ''} a ${tarjeta.nombre}`, async () => {
+    for (const { g, tarjetaId } of previos) {
+      if (g.origen.tipo === 'consumo') await actualizarConsumo(g.origen.consumo.id!, { medio: g.origen.consumo.medio, tarjetaId })
+      else await updateTransaction(g.origen.tx.id!, { tarjetaId, asignaciones: g.origen.tx.asignaciones })
+    }
+    programarSyncPagos()
   })
 }
 
-/** Registra renglones del resumen como consumos con la tarjeta (con deshacer) */
-export async function registrarDesdeResumen(items: ResumenItem[], tarjeta: Tarjeta, categoriaFallback: string, creadoPor: string): Promise<number> {
-  return agregarConsumos(items.map((i) => ({
+/**
+ * Registra renglones del resumen como gastos reales con la tarjeta: cada uno
+ * va a su cupo, a la línea pendiente que paga o como no planificado.
+ */
+export async function registrarDesdeResumen(items: ResumenItem[], tarjeta: Tarjeta, categoriaFallback: string, creadoPor: string, s: Settings) {
+  return registrarGastosReales(items.map((i) => ({
     fecha: i.fecha, monto: i.monto, moneda: i.moneda, categoria: i.categoria ?? categoriaFallback,
     comercio: i.comercio, descripcion: i.descripcion, medio: 'credito' as const, tarjetaId: tarjeta.id,
-    fuente: 'resumen' as const, creadoPor,
-  })), `${items.length} consumo${items.length !== 1 ? 's' : ''} agregado${items.length !== 1 ? 's' : ''} desde el resumen`)
+  })), s, creadoPor, 'resumen')
 }

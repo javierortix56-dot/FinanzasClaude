@@ -5,7 +5,9 @@ import { useUIStore } from '../store/useUIStore'
 import { subscribeToCuotas } from './cuotas'
 import { analizarPeriodo } from './resumenAnalisis'
 import { analizarFinanciacion, compararConAnteriores } from './resumenExtras'
-import { ResultadoConciliacion, conciliar, pasarATarjeta, periodoDelResumen, registrarDesdeResumen, tarjetaDelResumen } from './conciliacion'
+import { GastoRegistrado, ResultadoConciliacion, conciliar, gastosRegistrados, pasarATarjeta, periodoDelResumen, registrarDesdeResumen, tarjetaDelResumen } from './conciliacion'
+import { fetchMovimientosDe } from './modoGasto'
+import { useTransactionStore } from '../store/useTransactionStore'
 import { categoriaPorDefecto } from './comprobantes'
 import { subscribeToConsumos } from './consumos'
 import { shiftMonth } from './constants'
@@ -14,7 +16,7 @@ import { borrarResumen, categoriasDeGasto, existeResumen, extraerResumen, fetchR
 import {
   Reglas, agruparComercios, aplicarReglas, editarGrupo, fetchReglas, guardarReglas, recategorizarComercio, reglasDe,
 } from './comercioReglas'
-import { CompraCuotas, Consumo, Currency, Resumen, ResumenItem, Settings, Tarjeta } from '../types'
+import { CompraCuotas, Consumo, Currency, Resumen, ResumenItem, Settings, Tarjeta, Transaction } from '../types'
 
 export type EstadoSubida =
   | { paso: 'inactivo' }
@@ -111,23 +113,42 @@ export function useResumenes(s: Settings, base: Currency, creadoPor: string) {
     if (!mesDesde) { setConsumos(null); return }
     return subscribeToConsumos(mesDesde, setConsumos)
   }, [mesDesde])
+  // Movimientos pagados del período (pagos únicos y gastos no planificados)
+  const storeTxs = useTransactionStore((st) => st.transactions)
+  const [movs, setMovs] = useState<Transaction[] | null>(null)
+  const [versionMovs, setVersionMovs] = useState(0)
+  useEffect(() => {
+    if (!mesDesde) { setMovs(null); return }
+    let cancel = false
+    const meses: string[] = []
+    const hoy = new Date()
+    const hasta = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`
+    for (let m = mesDesde; m <= hasta && meses.length < 6; m = shiftMonth(m, 1)) meses.push(m)
+    fetchMovimientosDe(meses).then((t) => { if (!cancel) setMovs(t) }).catch(() => { if (!cancel) setMovs([]) })
+    return () => { cancel = true }
+  }, [mesDesde, storeTxs, versionMovs])
+  const registrados = useMemo<GastoRegistrado[] | null>(
+    () => (consumos && movs ? gastosRegistrados(consumos, movs) : null),
+    [consumos, movs],
+  )
   const conciliaciones = useMemo<ConciliacionResumen[]>(
     () => tarjetasDelPeriodo.map(({ resumen, tarjeta }) => ({
-      resumen, tarjeta, resultado: tarjeta && consumos ? conciliar(resumen, tarjeta, consumos) : null,
+      resumen, tarjeta, resultado: tarjeta && registrados ? conciliar(resumen, tarjeta, registrados) : null,
     })),
-    [tarjetasDelPeriodo, consumos],
+    [tarjetasDelPeriodo, registrados],
   )
   async function conciliarAccion(fn: () => Promise<unknown>, ok: string) {
     try {
       await fn()
+      setVersionMovs((v) => v + 1)
       useUIStore.getState().showToast(ok)
     } catch (err) {
       useUIStore.getState().showToast(`No se pudo guardar: ${err instanceof Error ? err.message : String(err)}`, 'error')
     }
   }
   const agregarFaltantes = (items: ResumenItem[], tarjeta: Tarjeta) =>
-    conciliarAccion(() => registrarDesdeResumen(items, tarjeta, categoriaPorDefecto(s), creadoPor), 'Consumos agregados')
-  const pasarConsumos = (cs: Consumo[], tarjeta: Tarjeta) =>
+    conciliarAccion(() => registrarDesdeResumen(items, tarjeta, categoriaPorDefecto(s), creadoPor, s), 'Gastos registrados')
+  const pasarConsumos = (cs: GastoRegistrado[], tarjeta: Tarjeta) =>
     conciliarAccion(() => pasarATarjeta(cs, tarjeta), `Pasados a ${tarjeta.nombre}`)
 
   const itemsPeriodo = useMemo(() => analisis?.resumenes.flatMap((r) => r.items) ?? [], [analisis])

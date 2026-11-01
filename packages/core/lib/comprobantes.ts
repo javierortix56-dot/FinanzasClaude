@@ -2,13 +2,14 @@
 // del banco, Mercado Pago). La Edge Function `leer-comprobante` los extrae con
 // IA; acá se completan con lo que la app ya sabe (categoría aprendida de los
 // resúmenes, tarjeta) y se marcan los que ya están registrados. Se guardan
-// como consumos reales (no como movimientos).
+// como gastos reales (registrarGastosReales: cupo, pago planificado o no
+// planificado según la categoría).
 import { supabase } from './supabase'
 import { categoriasDeGasto } from './resumenes'
 import { Reglas, reglaParaNombre } from './comercioReglas'
-import { agregarConsumos } from './consumos'
+import { ResultadoRegistro, registrarGastosReales } from './modoGasto'
 import { toLocalDateString } from './constants'
-import { Consumo, Currency, MedioPago, Settings, Tarjeta } from '../types'
+import { Consumo, Currency, MedioPago, Settings, Tarjeta, Transaction } from '../types'
 
 export interface GastoLeido {
   /** id local para la lista de revisión */
@@ -128,13 +129,14 @@ export async function leerComprobante(
     })
 }
 
-/** Guarda los elegidos como consumos reales (con deshacer) */
-export async function guardarGastosLeidos(gastos: GastoLeido[], fuente: Consumo['fuente'], creadoPor: string): Promise<number> {
-  return agregarConsumos(gastos.map((g) => ({
+/** Guarda los elegidos como gastos reales (con deshacer) */
+export async function guardarGastosLeidos(
+  gastos: GastoLeido[], fuente: Consumo['fuente'], creadoPor: string, s: Settings, txs?: Transaction[],
+): Promise<ResultadoRegistro> {
+  return registrarGastosReales(gastos.map((g) => ({
     fecha: g.fecha, monto: g.monto, moneda: g.moneda, categoria: g.categoria!,
-    comercio: g.comercio, descripcion: g.descripcion, medio: g.medio,
-    tarjetaId: g.medio === 'credito' ? g.tarjetaId : null, fuente, creadoPor,
-  })))
+    comercio: g.comercio, descripcion: g.descripcion, medio: g.medio, tarjetaId: g.tarjetaId,
+  })), s, creadoPor, fuente, txs)
 }
 
 /** Categoría para un gasto sin sugerencia: la primera subcategoría de "Otros" */

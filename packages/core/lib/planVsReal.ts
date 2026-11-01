@@ -6,12 +6,12 @@
 // Un consumo cae en el cupo de su categoría; si la línea planificada está en
 // el grupo (Esenciales) y el consumo en una subcategoría, cuenta para el grupo.
 //
-// Solo se siguen las categorías donde se registran consumos: las cuentas fijas
-// (alquiler, expensas) o los pagos de tarjeta no tienen consumos y quedarían
-// siempre "sin usar".
+// Solo las categorías con cupo (Ajustes → Gastos con cupo): las demás son
+// pagos únicos y se siguen marcándolos como pagados.
 import { toBase, txToBase } from './currency'
 import { cuentaEnCategorias } from './tarjetas'
 import { getCatFromSettings, getParentGroup, shiftMonth } from './constants'
+import { categoriasCupo, esCupo } from './modoGasto'
 import { Consumo, Currency, Settings, Transaction } from '../types'
 
 /** No se avisa por proyección antes de este día del mes (pocos datos) */
@@ -45,8 +45,10 @@ const mesTx = (t: Transaction) => {
 export function planPorCategoria(txs: Transaction[], mes: string, base: Currency, s: Settings): Map<string, number> {
   const m = new Map<string, number>()
   for (const t of txs) {
-    if (t.tipo !== 'egreso' || !cuentaEnCategorias(t) || mesTx(t) !== mes) continue
-    m.set(t.categoria, (m.get(t.categoria) ?? 0) + txToBase(t, base, s))
+    if (t.tipo !== 'egreso' || !cuentaEnCategorias(t) || t.noPlanificado || mesTx(t) !== mes) continue
+    // Lo planificado (si la línea se pagó con otro monto, el monto original)
+    const monto = t.montoPlanificado ?? t.monto
+    m.set(t.categoria, (m.get(t.categoria) ?? 0) + txToBase({ ...t, monto }, base, s))
   }
   return m
 }
@@ -69,8 +71,11 @@ export function calcularCupos(
   const restantes = Math.max(diasMes - dia, 0)
 
   const plan = planPorCategoria(txs, mes, base, s)
-  const delMes = consumos.filter((c) => mesDe(c.fecha) === mes)
+  const delMes = consumos.filter((c) => mesDe(c.fecha) === mes && esCupo(c.categoria, s))
   const porCupo = new Map<string, Consumo[]>()
+  // Toda categoría con cupo y algo planificado aparece, aunque todavía no tenga consumos
+  for (const k of plan.keys()) if (esCupo(k, s)) porCupo.set(k, [])
+  for (const id of categoriasCupo(s)) if (plan.has(id) && !porCupo.has(id)) porCupo.set(id, [])
   for (const c of delMes) {
     const k = claveCupo(c.categoria, plan, s)
     porCupo.set(k, [...(porCupo.get(k) ?? []), c])
@@ -133,7 +138,7 @@ export function calcularDesvios(
     const plan = planPorCategoria(txsPorMes[mes] ?? [], mes, base, s)
     const real = new Map<string, number>()
     for (const c of consumos) {
-      if (mesDe(c.fecha) !== mes) continue
+      if (mesDe(c.fecha) !== mes || !esCupo(c.categoria, s)) continue
       const k = claveCupo(c.categoria, plan, s)
       real.set(k, (real.get(k) ?? 0) + toBase(c.monto, c.moneda, base, s, mes))
     }

@@ -36,9 +36,11 @@ const fmt = (n: number, moneda: string) =>
   `${moneda === "USD" ? "US$" : "$"}${new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 }).format(Math.round(n))}`;
 
 // ── Cupos (planificado vs real) ──────────────────────────────────────────────
-// Misma regla que packages/core/lib/planVsReal.ts: el cupo de una categoría es
-// lo planificado en el mes (egresos, sin pagos de tarjeta); lo real son los
-// consumos registrados (tabla consumos). Solo se evalúan categorías con
+// Misma regla que packages/core/lib/planVsReal.ts: solo categorías con cupo
+// (app_settings.categoriasCupo; sin configurar, las llamadas Mercado o
+// Supermercado). El cupo es lo planificado en el mes (egresos sin pagos de
+// tarjeta ni gastos no planificados, con el monto planificado); lo real son
+// los consumos registrados (tabla consumos). Solo se evalúan las que tienen
 // consumos. Aviso: en riesgo (80 % usado, o desde el día 7 la proyección
 // supera el plan) o excedido; una vez por nivel, categoría y mes.
 
@@ -71,6 +73,10 @@ async function payloadsCupos(): Promise<Payload[]> {
     nombreDe.set(g.id, g.nombre ?? g.id);
     for (const c of g.subcategorias ?? []) { grupoDe.set(c.id, g.id); nombreDe.set(c.id, c.nombre ?? c.id); }
   }
+  const norm = (t: string) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  const cupoIds = new Set<string>(Array.isArray(app.categoriasCupo) ? app.categoriasCupo
+    : grupos.flatMap((g) => (g.subcategorias ?? []).filter((c) => /^(mercado|supermercado)$/.test(norm(c.nombre ?? ""))).map((c) => c.id)));
+  const esCupo = (cat: string) => cupoIds.has(cat) || (grupoDe.has(cat) && cupoIds.has(grupoDe.get(cat)!));
 
   const { data: rows } = await supabase
     .from("movimientos")
@@ -81,13 +87,14 @@ async function payloadsCupos(): Promise<Payload[]> {
     .lte("date", hasta);
   const plan = new Map<string, number>();
   for (const r of rows ?? []) {
-    if (r.children?.pagoTarjeta) continue;
+    if (r.children?.pagoTarjeta || r.children?.noPlanificado || !esCupo(r.category)) continue;
     const pre = r.orig_amt != null && Math.abs(Number(r.orig_amt) - Number(r.amount)) > 0.01;
-    plan.set(r.category, (plan.get(r.category) ?? 0) + aBase(Number(r.amount), pre ? "ARS" : r.currency));
+    const monto = r.children?.montoPlanificado != null ? Number(r.children.montoPlanificado) : Number(r.amount);
+    plan.set(r.category, (plan.get(r.category) ?? 0) + aBase(monto, pre ? "ARS" : r.currency));
   }
   const clave = (cat: string) => (plan.has(cat) ? cat : grupoDe.has(cat) && plan.has(grupoDe.get(cat)!) ? grupoDe.get(cat)! : cat);
   const real = new Map<string, number>();
-  for (const c of consumos) real.set(clave(c.categoria), (real.get(clave(c.categoria)) ?? 0) + aBase(Number(c.monto), c.moneda));
+  for (const c of consumos.filter((x) => esCupo(x.categoria))) real.set(clave(c.categoria), (real.get(clave(c.categoria)) ?? 0) + aBase(Number(c.monto), c.moneda));
 
   const claves = [...real.keys()].map((k) => `cupo|${k}|${mes}`);
   const { data: enviadas } = await supabase.from("alertas_enviadas").select("clave, nivel").in("clave", claves);
@@ -110,7 +117,7 @@ async function payloadsCupos(): Promise<Payload[]> {
       ? `Superó lo planificado: lleva ${fmt(actual, base)} de ${fmt(tope, base)} (${fmt(actual - tope, base)} de más).`
       : `Lleva ${fmt(actual, base)} de ${fmt(tope, base)} planificado. A este ritmo cierra el mes en ${fmt(proyeccion, base)}.` +
         (porDia !== null ? ` Para no pasarse le quedan ${fmt(porDia, base)} por día.` : "");
-    out.push({ title: `${nivel === 2 ? "🔴" : "🟠"} ${nombre}`, body, url: "/dashboard", tag: `finanzas-cupo-${cat}` });
+    out.push({ title: `${nivel === 2 ? "🔴" : "🟠"} ${nombre}`, body, url: "/plan", tag: `finanzas-cupo-${cat}` });
     nuevos.push({ clave: k, nivel, enviado_at: new Date().toISOString() });
   }
   if (nuevos.length > 0) await supabase.from("alertas_enviadas").upsert(nuevos, { onConflict: "clave" });

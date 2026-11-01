@@ -20,7 +20,7 @@ import { haptic } from '@/lib/haptics'
 const MESES = 6
 
 /** Pestaña "Plan vs real" de Análisis: desvío mes a mes por categoría y metas sugeridas */
-export default function PlanVsRealTab() {
+export default function PlanVsRealTab({ encabezado }: { encabezado?: React.ReactNode } = {}) {
   const s = (useSettingsStore((st) => st.settings) ?? DEFAULT_SETTINGS) as Settings
   const base = useAuthStore((st) => st.monedaBase) as Currency
   const { transactions, currentMonth } = useTransactionStore()
@@ -49,6 +49,7 @@ export default function PlanVsRealTab() {
 
   return (
     <div className="h-full overflow-y-auto overscroll-contain px-4 pt-1 pb-28 space-y-3 no-scrollbar">
+      {encabezado}
       <button type="button" onClick={() => { haptic(); setCierreAbierto(true) }}
         className="w-full glass rounded-[22px] px-4 py-3 flex items-center gap-3 text-left">
         <span className="h-9 w-9 rounded-xl bg-primary/12 text-primary inline-flex items-center justify-center shrink-0"><Lock size={16} /></span>

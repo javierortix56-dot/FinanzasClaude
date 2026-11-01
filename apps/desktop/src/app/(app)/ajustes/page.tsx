@@ -22,6 +22,7 @@ import { HORMIGA_DEFAULT } from '@finanzas/core/lib/resumenAnalisis'
 import { cambiarFuenteCambio, syncCotizaciones, mensajeSync, haceCuanto, FUENTES_CAMBIO } from '@finanzas/core/lib/cotizaciones'
 import { PageScroll } from '@/components/shell/PageScroll'
 import { agregarTarjeta, renombrarTarjeta, eliminarTarjeta } from '@finanzas/core/lib/tarjetas'
+import { categoriasCupo, guardarCategoriasCupo } from '@finanzas/core/lib/modoGasto'
 
 const parseRate = (v: string) => parseFloat(v.replace(',', '.'))
 
@@ -190,6 +191,14 @@ export default function AjustesPage() {
         delay={0.05}
       >
         <TarjetasAjustes settings={settings} />
+      </Section>
+
+      <Section
+        title="Gastos con cupo"
+        sub="Con cupo, lo planificado es un tope que se llena con cada gasto registrado (Mercado, Uber, Salud…). Sin cupo es un pago único: al marcarlo pagado se pide el monto real. Un grupo marcado vale para todas sus subcategorías."
+        delay={0.055}
+      >
+        <CuposAjustes settings={settings} onGuardado={() => showToast('Gastos con cupo guardados')} onError={() => showToast('Error al guardar', 'error')} />
       </Section>
 
       <Section title="Gastos hormiga" sub="Criterio que usa el análisis de Resúmenes." delay={0.06}>
@@ -390,6 +399,42 @@ function HormigaAjustes({ settings, onGuardado, onError }: { settings: Settings;
         <Save className="h-4 w-4" /> {guardando ? 'Guardando…' : 'Guardar'}
       </Button>
     </form>
+  )
+}
+
+function CuposAjustes({ settings, onGuardado, onError }: { settings: Settings; onGuardado: () => void; onError: () => void }) {
+  const [sel, setSel] = useState<Set<string>>(() => categoriasCupo(settings))
+  const [guardando, setGuardando] = useState(false)
+  const alternar = (id: string) => setSel((st) => { const n = new Set(st); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  async function guardar() {
+    setGuardando(true)
+    try { await guardarCategoriasCupo([...sel]); onGuardado() } catch { onError() } finally { setGuardando(false) }
+  }
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {settings.categoriasGasto.filter((g) => g.activa).map((g) => {
+          const grupoOn = sel.has(g.id)
+          return (
+            <div key={g.id} className="rounded-xl bg-surface-2 p-3 space-y-1.5">
+              <label className="flex items-center gap-2 text-sm font-semibold text-foreground cursor-pointer">
+                <input type="checkbox" checked={grupoOn} onChange={() => alternar(g.id)} className="accent-[var(--primary)]" />
+                {g.nombre}
+              </label>
+              {(g.subcategorias ?? []).filter((c) => c.activa).map((c) => (
+                <label key={c.id} className={`flex items-center gap-2 pl-5 text-sm text-muted cursor-pointer ${grupoOn ? 'opacity-60' : ''}`}>
+                  <input type="checkbox" checked={grupoOn || sel.has(c.id)} disabled={grupoOn} onChange={() => alternar(c.id)} className="accent-[var(--primary)]" />
+                  {c.nombre}
+                </label>
+              ))}
+            </div>
+          )
+        })}
+      </div>
+      <div className="flex justify-end">
+        <Button onClick={guardar} disabled={guardando}><Save className="h-4 w-4" /> {guardando ? 'Guardando…' : `Guardar (${sel.size})`}</Button>
+      </div>
+    </div>
   )
 }
 

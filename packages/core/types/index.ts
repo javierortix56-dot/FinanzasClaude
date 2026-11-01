@@ -56,6 +56,10 @@ export interface Transaction {
   tarjetaId?: string | null
   /** Presente solo en el pago automático de una tarjeta (ver lib/tarjetas.ts) */
   pagoTarjeta?: PagoTarjeta | null
+  /** Pago único marcado como pagado con otro monto: lo que se había planificado */
+  montoPlanificado?: number | null
+  /** Gasto real que no estaba planificado (se registró al pagarlo) */
+  noPlanificado?: boolean
 }
 
 /** Tarjeta de crédito (se configura en Ajustes) */
@@ -176,6 +180,12 @@ export interface Settings {
   ahorroLinks?: AhorroLink[]
   /** Criterio de gastos hormiga en Resúmenes */
   hormiga?: { topeUsd: number; minCompras: number }
+  /**
+   * Categorías de gasto que se controlan con cupo: lo planificado es un tope
+   * que se llena con cada compra registrada (Mercado, Uber, Salud). El resto
+   * son pagos únicos: se marcan como pagados.
+   */
+  categoriasCupo?: string[]
   tarjetas?: Tarjeta[]
 }
 

@@ -4,7 +4,7 @@ import { useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   Upload, FileText, Repeat, Bug, Store, CreditCard, Landmark, AlertCircle, Trash2,
-  Plus, Sparkles, CheckCircle2, Loader2, Megaphone, Target,
+  Plus, Sparkles, CheckCircle2, Loader2, Megaphone,
 } from 'lucide-react'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
@@ -13,11 +13,12 @@ import { categoriasDeGasto, usuarioId } from '@finanzas/core/lib/resumenes'
 import { GrupoComercio } from '@finanzas/core/lib/comercioReglas'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { getCatFromSettings, monthLabel } from '@finanzas/core/lib/constants'
-import { CompraCuotas, Consumo, Currency, Resumen, ResumenItem, Settings, Tarjeta } from '@finanzas/core/types'
+import { CompraCuotas, Currency, Resumen, ResumenItem, Settings, Tarjeta } from '@finanzas/core/types'
 import { CompromisoMes, ETIQUETA_CARGO, conciliacion, mesCorto, montoCorto } from '@finanzas/core/lib/resumenAnalisis'
 import { toBase } from '@finanzas/core/lib/currency'
 import { AnalisisFinanciacion, Comparativa, Variacion } from '@finanzas/core/lib/resumenExtras'
 import type { ConciliacionResumen } from '@finanzas/core/lib/useResumenes'
+import type { GastoRegistrado } from '@finanzas/core/lib/conciliacion'
 import Card from '@/components/ui/Card'
 import CuotaModal from '@/components/cuotas/CuotaModal'
 import Sheet from '@/components/ui/Sheet'
@@ -410,7 +411,7 @@ function ConciliacionCard({ c, tarjetas, s, onElegir, onAgregar, onPasar }: {
   c: ConciliacionResumen; tarjetas: Tarjeta[]; s: Settings
   onElegir: (tarjetaId: string) => void
   onAgregar: (items: ResumenItem[], t: Tarjeta) => Promise<void>
-  onPasar: (cs: Consumo[], t: Tarjeta) => Promise<void>
+  onPasar: (cs: GastoRegistrado[], t: Tarjeta) => Promise<void>
 }) {
   const [busy, setBusy] = useState(false)
   const correr = async (fn: () => Promise<void>) => { setBusy(true); try { await fn() } finally { setBusy(false) } }
@@ -439,7 +440,7 @@ function ConciliacionCard({ c, tarjetas, s, onElegir, onAgregar, onPasar }: {
                 <Kpi icon={AlertCircle} label="Sin registrar" value={String(res.faltan.length)} />
                 <Kpi icon={Repeat} label="Otro medio" value={String(res.otroMedio.length)} />
               </div>
-              <p className="text-[11px] text-gray-400">Del {fecha(res.desde)} al {fecha(res.hasta)} · consumos registrados con tarjeta de crédito</p>
+              <p className="text-[11px] text-gray-400">Del {fecha(res.desde)} al {fecha(res.hasta)} · gastos registrados con tarjeta de crédito</p>
 
               {res.otroMedio.length > 0 && (
                 <>

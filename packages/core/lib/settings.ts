@@ -72,6 +72,9 @@ function rowToSettings(row: Record<string, any>): Settings {
     hormiga: appSettings.hormiga && appSettings.hormiga.topeUsd > 0 && appSettings.hormiga.minCompras > 1
       ? { topeUsd: Number(appSettings.hormiga.topeUsd), minCompras: Number(appSettings.hormiga.minCompras) }
       : undefined,
+    categoriasCupo: Array.isArray(appSettings.categoriasCupo)
+      ? appSettings.categoriasCupo.filter((c: unknown) => typeof c === 'string')
+      : undefined,
   }
 }
 
@@ -86,6 +89,7 @@ function settingsToRow(settings: Settings) {
       cambioActualizado: settings.cambioActualizado ?? null,
       ...(settings.hormiga ? { hormiga: settings.hormiga } : {}),
       tarjetas: settings.tarjetas ?? [],
+      ...(settings.categoriasCupo ? { categoriasCupo: settings.categoriasCupo } : {}),
     },
     monthly_rates:   settings.historialTipoCambio,
     transaction_cats: settings.categoriasGasto,

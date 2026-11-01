@@ -1,26 +1,27 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Camera, Images } from 'lucide-react'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { usuarioId } from '@finanzas/core/lib/resumenes'
-import { agregarConsumos } from '@finanzas/core/lib/consumos'
+import { describirDestino, destinoGasto, fetchMovimientosDe, registrarGastosReales } from '@finanzas/core/lib/modoGasto'
 import { fetchReglas, reglaParaNombre } from '@finanzas/core/lib/comercioReglas'
-import { toLocalDateString } from '@finanzas/core/lib/constants'
+import { getCatFromSettings, toLocalDateString } from '@finanzas/core/lib/constants'
 import { evalExpr } from '@finanzas/core/lib/calc'
-import { Consumo, Currency, MedioPago, Settings } from '@finanzas/core/types'
+import { Consumo, Currency, MedioPago, Settings, Transaction } from '@finanzas/core/types'
 import Sheet, { FieldLabel, fieldClass } from '@/components/ui/Sheet'
 import CategoriaSelect from '@/components/consumos/CategoriaSelect'
 import CapturaSheet from '@/components/consumos/CapturaSheet'
 import { haptic } from '@/lib/haptics'
 
 /**
- * Registrar un consumo real: a mano, con foto del ticket o con captura de los
- * movimientos del día. No es un gasto nuevo: llena el cupo planificado de su
- * categoría (Mercado, Nafta…).
+ * Registrar un gasto real: a mano, con foto del ticket o con captura de los
+ * movimientos del día. Según la categoría: llena su cupo (Mercado, Uber…),
+ * marca como pagado el pago único planificado (con el monto real) o queda
+ * como gasto no planificado.
  */
 export default function ConsumoSheet({ open, onClose, existentes, categoriaInicial }: {
   open: boolean
@@ -44,6 +45,21 @@ export default function ConsumoSheet({ open, onClose, existentes, categoriaInici
   const fotoRef = useRef<HTMLInputElement>(null)
   const capturaRef = useRef<HTMLInputElement>(null)
   const reglasRef = useRef<Awaited<ReturnType<typeof fetchReglas>> | null>(null)
+  // Movimientos del mes del gasto: para encontrar el pago planificado que corresponde
+  const [movs, setMovs] = useState<Transaction[]>([])
+  const mes = fecha.slice(0, 7)
+  useEffect(() => {
+    if (!open) return
+    let cancel = false
+    fetchMovimientosDe([mes]).then((t) => { if (!cancel) setMovs(t) }).catch(() => { if (!cancel) setMovs([]) })
+    return () => { cancel = true }
+  }, [open, mes])
+  const destino = useMemo(() => (categoria ? destinoGasto({ categoria, fecha }, movs, s) : null), [categoria, fecha, movs, s])
+  // Pago planificado: se propone su monto (se corrige si vino otro)
+  useEffect(() => {
+    if (destino?.tipo === 'pago' && !monto) setMonto(String(Math.round(destino.linea.montoPlanificado ?? destino.linea.monto)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [destino])
 
   useEffect(() => {
     if (!open) return
@@ -70,13 +86,12 @@ export default function ConsumoSheet({ open, onClose, existentes, categoriaInici
     setGuardando(true)
     try {
       const esTarjeta = medio.startsWith('t:')
-      await agregarConsumos([{
+      await registrarGastosReales([{
         fecha, monto: Math.round(valor * 100) / 100, moneda, categoria: categoria!,
         comercio: comercio.trim(), descripcion: comercio.trim(),
         medio: esTarjeta ? 'credito' : ((medio || null) as MedioPago | null),
         tarjetaId: esTarjeta ? medio.slice(2) : null,
-        fuente: 'manual', creadoPor: usuarioId(user),
-      }], 'Consumo registrado')
+      }], s, usuarioId(user), 'manual', movs)
       haptic('success')
       onClose()
     } catch (err) {
@@ -97,8 +112,8 @@ export default function ConsumoSheet({ open, onClose, existentes, categoriaInici
       <Sheet
         open={open}
         onClose={onClose}
-        title="Registrar consumo"
-        subtitle="Llena el cupo planificado de su categoría"
+        title="Registrar gasto"
+        subtitle="Llena un cupo, paga lo planificado o queda como no planificado"
         footer={
           <div className="grid grid-cols-2 gap-2 px-5 pb-5 pt-2">
             <button onClick={onClose} className="h-11 rounded-2xl glass text-sm font-semibold text-gray-700">Cancelar</button>
@@ -137,6 +152,11 @@ export default function ConsumoSheet({ open, onClose, existentes, categoriaInici
         <div>
           <FieldLabel>Categoría</FieldLabel>
           <CategoriaSelect value={categoria} onChange={setCategoria} s={s} className={fieldClass} />
+          {destino && categoria && (
+            <p className={`mt-1 text-[11px] font-medium ${destino.tipo === 'puntual' ? 'text-amber-600' : 'text-primary'}`}>
+              {describirDestino(destino, getCatFromSettings(categoria, s)?.nombre ?? 'la categoría')}
+            </p>
+          )}
         </div>
         <div>
           <FieldLabel>Comercio</FieldLabel>

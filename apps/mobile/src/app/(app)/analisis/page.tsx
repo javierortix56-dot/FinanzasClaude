@@ -5,17 +5,15 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import HistoricoTab from '@/components/analisis/HistoricoTab'
 import ResumenesTab from '@/components/resumenes/ResumenesTab'
-import PlanVsRealTab from '@/components/consumos/PlanVsRealTab'
 import PageHeader, { MonthSwitcher } from '@/components/ui/PageHeader'
 import Segmented from '@/components/ui/Segmented'
 
-type Tab = 'historico' | 'plan' | 'resumenes'
+type Tab = 'historico' | 'resumenes'
 
-const TABS: Tab[] = ['historico', 'plan', 'resumenes']
+const TABS: Tab[] = ['historico', 'resumenes']
 
 const TAB_LABELS: Record<Tab, string> = {
   historico: 'Histórico',
-  plan: 'Plan vs real',
   resumenes: 'Resúmenes',
 }
 
@@ -61,7 +59,7 @@ export default function AnalisisPage() {
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
             className="h-full"
           >
-            {tab === 'historico' ? <HistoricoTab /> : tab === 'plan' ? <PlanVsRealTab /> : <ResumenesTab />}
+            {tab === 'historico' ? <HistoricoTab /> : <ResumenesTab />}
           </motion.div>
         </AnimatePresence>
       </div>
