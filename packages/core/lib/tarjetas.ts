@@ -245,6 +245,7 @@ export function planificarPagos(s: Settings, d: DatosPagos, mesVisto?: string, h
 
     for (const moneda of monedas) {
       let saldoAnterior = 0
+      let interesArrastrado = 0
       for (let mes = desde; mes <= hasta; mes = shiftMonth(mes, 1)) {
         const previo = shiftMonth(mes, -1)
         const k = clave(t.id, mes, moneda)
@@ -258,6 +259,7 @@ export function planificarPagos(s: Settings, d: DatosPagos, mesVisto?: string, h
         if (cerrados.has(mes)) {
           // Mes cerrado: se respeta lo que hay; el saldo que pasa sale del pago existente
           saldoAnterior = auto?.pagoTarjeta ? r2(auto.pagoTarjeta.total - auto.monto) : 0
+          interesArrastrado = 0
           continue
         }
 
@@ -292,13 +294,24 @@ export function planificarPagos(s: Settings, d: DatosPagos, mesVisto?: string, h
         if (total <= 0) {
           if (auto && actual === auto) borrar.push(auto.id!)
           saldoAnterior = 0
+          interesArrastrado = 0
           continue
         }
 
-        const manual = !!actual?.pagoTarjeta?.abonoManual
+        // Lo planificado a mano es lo que se va a PAGAR (el abono), no el total:
+        // si el resumen trae más, la diferencia pasa al mes siguiente
+        const recienUnida = !!manualDelMes && actual === manualDelMes && !manualDelMes.pagoTarjeta
+        const manual = recienUnida || !!actual?.pagoTarjeta?.abonoManual
         const abono = manual ? Math.min(Math.max(actual!.monto, 0), total) : total
-        saldoAnterior = r2(total - abono)
-        const planificado = actual?.pagoTarjeta?.planificado ?? (actual === manualDelMes ? manualDelMes?.monto : undefined)
+        const pasa = r2(total - abono)
+        // Lo que pasa genera intereses: con la tasa del resumen (TEM + IVA), estimados
+        const temUltimo = [...misResumenes].sort((a, b) => b.periodo.localeCompare(a.periodo)).find((r) => r.detalle?.tem != null)?.detalle?.tem ?? null
+        const tem = resumen?.detalle?.tem ?? temUltimo
+        const intereses = pasa > 0 && tem ? r2(pasa * (tem / 100) * 1.21) : 0
+        const interesesDeEste = interesArrastrado
+        saldoAnterior = r2(pasa + intereses)
+        interesArrastrado = intereses
+        const planificado = actual?.pagoTarjeta?.planificado ?? (recienUnida ? manualDelMes?.monto : undefined)
 
         const pagoTarjeta: PagoTarjeta = {
           tarjetaId: t.id, mes, moneda,
@@ -307,7 +320,8 @@ export function planificarPagos(s: Settings, d: DatosPagos, mesVisto?: string, h
           total,
           abonoManual: manual && abono < total,
           ...(planificado !== undefined ? { planificado } : {}),
-          resumen: resumen ? { id: resumen.id, periodo: resumen.periodo, total: totalResumen! } : null,
+          resumen: resumen ? { id: resumen.id, periodo: resumen.periodo, total: totalResumen!, tem } : null,
+          ...(interesesDeEste > 0 && !resumen ? { interesesEstimados: interesesDeEste } : {}),
         }
         const deseado: Transaction = {
           ...(actual ?? {
@@ -565,20 +579,29 @@ const nombreMes = (mes: string) => MESES[Number(mes.slice(5, 7)) - 1] ?? mes
  * del banco; si no, es la estimación (lo usado con la tarjeta, cuotas y saldo
  * anterior). Con lo planificado a mano, el desvío.
  */
-export function presentarPago(p: PagoTarjeta) {
+export function presentarPago(p: PagoTarjeta, abono: number) {
   const previo = shiftMonth(p.mes, -1)
+  const siguiente = shiftMonth(p.mes, 1)
   const lineas = p.resumen
     ? [{ label: `Saldo del resumen de ${nombreMes(p.resumen.periodo)}`, monto: p.total }]
     : [
         { label: `Usado con la tarjeta en ${nombreMes(previo)}`, monto: p.consumos },
         { label: `Cuotas de ${nombreMes(p.mes)}`, monto: p.cuotas },
-        { label: `Saldo impago de ${nombreMes(previo)}`, monto: p.saldoAnterior },
+        {
+          label: p.interesesEstimados
+            ? `Lo que pasó de ${nombreMes(previo)} + intereses estimados`
+            : `Saldo impago de ${nombreMes(previo)}`,
+          monto: p.saldoAnterior,
+        },
       ]
   const estado = p.resumen
-    ? `Confirmado por el resumen de ${nombreMes(p.resumen.periodo)}`
-    : 'Estimado: se confirma al subir el resumen'
-  const desvio = p.planificado !== undefined && p.planificado > 0
-    ? { planificado: p.planificado, dif: r2(p.total - p.planificado), pct: ((p.total - p.planificado) / p.planificado) * 100 }
+    ? `Total confirmado por el resumen de ${nombreMes(p.resumen.periodo)}`
+    : 'Total estimado: se confirma al subir el resumen'
+  // Lo que no se paga pasa al mes siguiente y genera intereses
+  const pasa = r2(Math.max(p.total - abono, 0))
+  const tem = p.resumen?.tem ?? null
+  const saldoPasa = pasa > 0
+    ? { monto: pasa, mes: nombreMes(siguiente), intereses: tem ? r2(pasa * (tem / 100) * 1.21) : null, tem }
     : null
-  return { lineas, estado, confirmado: !!p.resumen, desvio }
+  return { lineas, estado, confirmado: !!p.resumen, saldoPasa, planificado: p.planificado ?? null }
 }

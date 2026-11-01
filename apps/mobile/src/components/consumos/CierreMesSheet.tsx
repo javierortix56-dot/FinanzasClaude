@@ -110,7 +110,7 @@ export default function CierreMesSheet({ mes, open, onClose }: { mes: string; op
             <div className="space-y-1.5">
               <p className="eyebrow">Pago de tarjeta</p>
               {cierre.pagos.map((p) => {
-                const pp = presentarPago(p.pagoTarjeta!)
+                const pp = presentarPago(p.pagoTarjeta!, p.monto)
                 return (
                   <div key={p.id} className="rounded-2xl bg-gray-500/[0.06] px-3 py-2.5">
                     <div className="flex items-center justify-between gap-2">
@@ -118,14 +118,13 @@ export default function CierreMesSheet({ mes, open, onClose }: { mes: string; op
                         <CreditCard size={13} className="text-primary shrink-0" />
                         <span className="truncate">{tarjetaDe(p.pagoTarjeta!.tarjetaId, s)?.nombre ?? 'Tarjeta'}{p.moneda !== 'ARS' ? ` · ${p.moneda}` : ''}</span>
                       </p>
-                      <span className="text-[13px] font-bold text-gray-900 shrink-0"><Money value={p.monto} currency={p.moneda} animated={false} /></span>
+                      <span className="text-[13px] font-bold text-gray-900 shrink-0">paga <Money value={p.monto} currency={p.moneda} animated={false} /></span>
                     </div>
                     <p className={`text-[10.5px] font-semibold ${pp.confirmado ? 'text-emerald-600' : 'text-gray-400'}`}>{pp.estado}</p>
-                    {pp.desvio && (
-                      <p className={`text-[10.5px] ${pp.desvio.dif > 0 ? 'text-rose-500' : 'text-emerald-600'}`}>
-                        Planificado {montoCorto(pp.desvio.planificado)} · desvío {pp.desvio.dif > 0 ? '+' : ''}{montoCorto(pp.desvio.dif)} ({Math.round(pp.desvio.pct)} %)
-                      </p>
-                    )}
+                    <p className="text-[10.5px] text-gray-500">
+                      Total <Money value={p.pagoTarjeta!.total} currency={p.moneda} animated={false} />
+                      {pp.saldoPasa && <> · pasan <b className="text-amber-600">{montoCorto(pp.saldoPasa.monto)}</b> a {pp.saldoPasa.mes}{pp.saldoPasa.intereses !== null && <> (+≈{montoCorto(pp.saldoPasa.intereses)} de intereses)</>}</>}
+                    </p>
                   </div>
                 )
               })}

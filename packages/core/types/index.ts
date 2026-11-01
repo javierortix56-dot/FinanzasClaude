@@ -93,7 +93,9 @@ export interface PagoTarjeta {
   /** Lo que se había planificado a mano para este pago (antes de unirlo al automático) */
   planificado?: number
   /** Resumen del banco que confirmó el total (el total es el saldo del resumen) */
-  resumen?: { id: string; periodo: string; total: number } | null
+  resumen?: { id: string; periodo: string; total: number; tem?: number | null } | null
+  /** Intereses estimados incluidos en saldoAnterior (por lo que pasó sin pagar el mes anterior) */
+  interesesEstimados?: number
 }
 
 export interface AssetSnapshot {

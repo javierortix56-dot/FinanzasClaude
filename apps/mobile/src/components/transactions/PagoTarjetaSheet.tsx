@@ -100,7 +100,7 @@ export default function PagoTarjetaSheet({ open, pago, onClose }: { open: boolea
     }
   }
 
-  const { lineas, estado, confirmado, desvio } = presentarPago(p)
+  const { lineas, estado, confirmado, saldoPasa, planificado } = presentarPago(p, abonoValido ? abonoNum : pago.monto)
 
   const footer = (
     <div className="flex gap-2">
@@ -139,10 +139,11 @@ export default function PagoTarjetaSheet({ open, pago, onClose }: { open: boolea
           <span className={`tabular-nums ${blur}`}>{formatAmount(p.total, p.moneda)}</span>
         </div>
         <p className={`text-[11px] font-semibold ${confirmado ? 'text-emerald-600' : 'text-gray-400'}`}>{estado}</p>
-        {desvio && (
-          <p className={`text-[11px] ${desvio.dif > 0 ? 'text-rose-500' : 'text-emerald-600'}`}>
-            Había planificado <span className={blur}>{formatAmount(desvio.planificado, p.moneda)}</span>: desvío{' '}
-            <b className={blur}>{desvio.dif > 0 ? '+' : ''}{formatAmount(desvio.dif, p.moneda)}</b> ({desvio.dif > 0 ? '+' : ''}{Math.round(desvio.pct)} %)
+        {planificado !== null && <p className="text-[11px] text-gray-500">Planificó pagar <span className={blur}>{formatAmount(planificado, p.moneda)}</span></p>}
+        {saldoPasa && (
+          <p className="text-[11px] text-amber-600 leading-snug">
+            Pasan <b className={blur}>{formatAmount(saldoPasa.monto, p.moneda)}</b> a {saldoPasa.mes}
+            {saldoPasa.intereses !== null && <> y generan ≈ <b className={blur}>{formatAmount(saldoPasa.intereses, p.moneda)}</b> de intereses con IVA ({saldoPasa.tem} % mensual)</>}.
           </p>
         )}
       </div>
