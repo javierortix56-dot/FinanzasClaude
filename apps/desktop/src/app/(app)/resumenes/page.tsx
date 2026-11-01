@@ -1,10 +1,11 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import Link from 'next/link'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   Upload, FileText, Repeat, Bug, Store, CreditCard, Landmark, AlertCircle, Trash2,
-  Plus, Sparkles, TrendingUp, Loader2, CheckCircle2, CalendarClock, Megaphone, PieChart, Tags,
+  Plus, Sparkles, TrendingUp, Loader2, CheckCircle2, CalendarClock, Megaphone, PieChart, Tags, Target, Percent, GitCompareArrows,
 } from 'lucide-react'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
@@ -17,6 +18,7 @@ import { offerUndo } from '@finanzas/core/lib/undo'
 import { getCatFromSettings, monthLabel } from '@finanzas/core/lib/constants'
 import { CompraCuotas, Currency, Resumen, Settings } from '@finanzas/core/types'
 import { toBase } from '@finanzas/core/lib/currency'
+import { AnalisisFinanciacion, Comparativa, EstadoMeta, Variacion } from '@finanzas/core/lib/resumenExtras'
 import { CompromisoMes, ETIQUETA_CARGO, conciliacion, mesCorto, montoCorto } from '@finanzas/core/lib/resumenAnalisis'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -138,6 +140,14 @@ export default function ResumenesPage() {
           </Card>
 
           {a.resumenes.filter((res) => res.detalle).map((res) => <EstadoCuenta key={res.id} r={res} />)}
+
+          {r.extras && (
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+              <MetasSeccion metas={r.extras.metas} base={base} />
+              <ComparativaSeccion c={r.extras.comparativa} base={base} />
+              <FinanciacionSeccion f={r.extras.financiacion} base={base} />
+            </div>
+          )}
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
             <Seccion icon={Repeat} titulo="Suscripciones y débitos" sub="Cobros que se repiten mes a mes" delay={0.04}>
@@ -513,6 +523,138 @@ function Vacio({ texto, ok }: { texto: string; ok?: boolean }) {
       {ok ? <CheckCircle2 className="h-4 w-4 text-income" /> : <TrendingUp className="h-4 w-4 text-muted-2" />}
       {texto}
     </div>
+  )
+}
+
+const signo = (n: number) => (n > 0 ? '+' : '')
+const pctTxt = (n: number | null) => (n === null ? '—' : `${signo(n)}${n.toFixed(0)}%`)
+
+function MetasSeccion({ metas, base }: { metas: EstadoMeta[]; base: Currency }) {
+  return (
+    <Seccion icon={Target} titulo="Metas" sub="Topes mensuales configurados en Ajustes → Metas de resúmenes" delay={0.02}>
+      {metas.length === 0 ? (
+        <div className="py-3 text-sm text-muted">
+          Todavía no hay metas. Configúrelas en <Link href="/ajustes" className="font-semibold text-primary">Ajustes → Metas de resúmenes</Link> (por ejemplo, delivery y Uber, o cero intereses).
+        </div>
+      ) : metas.map((m) => (
+        <div key={m.meta.id} className="py-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate text-sm font-medium">{m.meta.nombre}</span>
+            <span className={cn('shrink-0 rounded-full px-2 py-px text-[11px] font-semibold', m.cumple ? 'bg-income-soft text-income' : 'bg-expense-soft text-expense')}>
+              {m.cumple ? 'Cumplida' : 'Excedida'}
+            </span>
+          </div>
+          <div className="mt-0.5 text-xs text-muted tnum">
+            <b className="text-foreground"><MoneyText amount={m.actualBase} currency={base} /></b> de <MoneyText amount={m.topeBase} currency={base} />
+            {!m.cumple && <> · se pasó por <MoneyText amount={m.actualBase - m.topeBase} currency={base} /></>}
+          </div>
+          <ProgressBar value={m.topeBase > 0 ? m.pct : 100} className="mt-1.5" height={6} color={m.cumple ? 'var(--income)' : 'var(--expense)'} />
+          {m.historial.length > 1 && (
+            <div className="mt-2 flex gap-1">
+              {m.historial.map((h) => (
+                <span key={h.periodo} title={`${monthLabel(h.periodo)}: ${montoCorto(h.valorBase)}`}
+                  className={cn('flex-1 rounded-md py-0.5 text-center text-[10px] font-semibold', h.cumple ? 'bg-income-soft text-income' : 'bg-expense-soft text-expense')}>
+                  {mesCorto(h.periodo).split(' ')[0]}
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="mt-1.5 text-[11px] text-muted-2">
+            Cumplida {m.cumplidos} de {m.historial.length} {m.historial.length === 1 ? 'mes' : 'meses'}
+            {m.ahorroMensualBase !== null && m.ahorroMensualBase > 0 && <> · cumplirla libera ≈ <MoneyText amount={m.ahorroMensualBase} currency={base} />/mes contra su promedio</>}
+          </div>
+        </div>
+      ))}
+    </Seccion>
+  )
+}
+
+function ComparativaSeccion({ c, base }: { c: Comparativa | null; base: Currency }) {
+  if (!c) {
+    return (
+      <Seccion icon={GitCompareArrows} titulo="Contra meses anteriores" sub="Variación de consumos, categorías y comercios" delay={0.03}>
+        <Vacio texto="Suba el resumen del mes anterior de la misma tarjeta para comparar." />
+      </Seccion>
+    )
+  }
+  const t = c.total
+  const ref = c.previos.length === 1 ? monthLabel(c.previos[0]) : `promedio de ${c.previos.map((p) => mesCorto(p)).join(', ')}`
+  const lista = (titulo: string, xs: Variacion[]) => xs.length > 0 && (
+    <>
+      <div className="eyebrow !text-[10px] pt-3">{titulo}</div>
+      {xs.slice(0, 4).map((v) => (
+        <Fila key={v.clave ?? '-'} titulo={v.nombre} meta={<>antes {montoCorto(v.referenciaBase)} · ahora {montoCorto(v.actualBase)}{v.difPct !== null && <> · {pctTxt(v.difPct)}</>}</>}
+          derecha={<span className={cn('font-semibold tnum', v.difBase > 0 ? 'text-expense' : 'text-income')}>{signo(v.difBase)}<MoneyText amount={v.difBase} currency={base} /></span>} />
+      ))}
+    </>
+  )
+  return (
+    <Seccion icon={GitCompareArrows} titulo="Contra meses anteriores" sub={<>Consumos de {c.emisores.join(' y ')} contra {ref}</>} delay={0.03}>
+      <div className="py-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-xl font-semibold tnum"><MoneyText amount={t.actualBase} currency={base} /></span>
+          <span className={cn('rounded-full px-2 py-px text-xs font-semibold', (t.vsPromedioPct ?? 0) > 0 ? 'bg-expense-soft text-expense' : 'bg-income-soft text-income')}>{pctTxt(t.vsPromedioPct)}</span>
+        </div>
+        <div className="text-xs text-muted tnum">
+          antes <MoneyText amount={t.promedioBase} currency={base} />
+          {c.previos.length > 1 && <> · contra el mes anterior {pctTxt(t.vsAnteriorPct)}</>}
+          {base !== 'USD' && t.vsPromedioUsdPct !== null && <> · en dólares {pctTxt(t.vsPromedioUsdPct)}</>}
+        </div>
+      </div>
+      {lista('Categorías que más cambiaron', c.categorias)}
+      {lista('Comercios que más subieron', c.subas)}
+      {c.nuevos.length > 0 && (
+        <>
+          <div className="eyebrow !text-[10px] pt-3">Nuevos este mes</div>
+          {c.nuevos.slice(0, 4).map((n) => (
+            <Fila key={n.comercio} titulo={n.comercio} meta="no aparecía antes" derecha={<span className="font-semibold tnum"><MoneyText amount={n.totalBase} currency={base} /></span>} />
+          ))}
+        </>
+      )}
+    </Seccion>
+  )
+}
+
+function FinanciacionSeccion({ f, base }: { f: AnalisisFinanciacion; base: Currency }) {
+  const a = f.actual
+  const max = Math.max(...f.historial.map((h) => h.totalBase), 1)
+  const tasas = [f.tna !== null && `TNA ${pctFmt(f.tna)}`, f.cftea !== null && `CFTEA con IVA ${pctFmt(f.cftea)}`].filter(Boolean).join(' · ')
+  return (
+    <Seccion icon={Percent} titulo="Costo de financiarse" sub={tasas || 'Intereses, también los que vienen dentro de las refinanciaciones, más su IVA'} delay={0.035}>
+      {a.totalBase > 0 ? (
+        <>
+          <div className="py-2">
+            <div className="text-xl font-semibold tnum text-expense"><MoneyText amount={a.totalBase} currency={base} /></div>
+            <div className="text-xs text-muted">
+              en intereses e IVA este mes ({a.pctDelResumen.toFixed(1)}% de lo cobrado) · a este ritmo ≈ <MoneyText amount={a.totalBase * 12} currency={base} /> al año
+            </div>
+          </div>
+          {a.interesesBase > 0 && <Fila titulo="Intereses del saldo" meta="renglón del banco" derecha={<span className="font-semibold tnum"><MoneyText amount={a.interesesBase} currency={base} /></span>} />}
+          {a.interesEnCuotasBase > 0 && <Fila titulo="Intereses dentro de refinanciaciones" meta="estimado a partir del IVA del 21 %" derecha={<span className="font-semibold tnum"><MoneyText amount={a.interesEnCuotasBase} currency={base} /></span>} />}
+          {a.ivaBase > 0 && <Fila titulo="IVA sobre intereses" meta="21 %" derecha={<span className="font-semibold tnum"><MoneyText amount={a.ivaBase} currency={base} /></span>} />}
+        </>
+      ) : <Vacio texto="Este mes no pagó intereses." ok />}
+      {f.siPagaMinimo && (
+        <div className="my-2 rounded-xl bg-unassigned-tint px-3 py-2.5 text-sm">
+          Si paga solo el mínimo quedan <b><MoneyText amount={f.siPagaMinimo.financiadoBase} currency={base} /></b> financiados al {pctFmt(f.siPagaMinimo.tem)} mensual:
+          el mes que viene son ≈ <b><MoneyText amount={f.siPagaMinimo.interesBase} currency={base} /></b> de intereses con IVA. Pagar el total los evita.
+        </div>
+      )}
+      {f.historial.length > 1 && (
+        <div className="pt-3">
+          <div className="eyebrow !text-[10px] mb-1.5">Por mes</div>
+          <div className="flex items-end gap-1.5 h-20">
+            {f.historial.map((h) => (
+              <div key={h.periodo} className="h-full flex-1 min-w-0 flex flex-col items-center justify-end gap-0.5" title={monthLabel(h.periodo)}>
+                <span className="text-[10px] font-semibold text-muted tnum">{h.totalBase > 0 ? montoCorto(h.totalBase) : '0'}</span>
+                <div className={cn('w-full rounded-t-md', h.periodo === a.periodo ? 'bg-expense' : 'bg-expense/40')} style={{ height: `${Math.max((h.totalBase / max) * 70, 3)}%` }} />
+                <span className="text-[10px] text-muted-2">{mesCorto(h.periodo).split(' ')[0]}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </Seccion>
   )
 }
 

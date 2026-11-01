@@ -21,7 +21,7 @@ export function claveComercio(nombre: string): string {
     .trim() || nombre.toLowerCase()
 }
 
-const esGasto = (i: ResumenItem) => i.monto > 0 && (i.tipo === 'consumo' || i.tipo === 'debito_automatico')
+export const esGasto = (i: ResumenItem) => i.monto > 0 && (i.tipo === 'consumo' || i.tipo === 'debito_automatico')
 const esCuota = (i: ResumenItem) => (i.cuotaTotal ?? 0) > 1
 const enCuotas = (i: ResumenItem) =>
   esCuota(i) && i.monto > 0 && i.cuotaActual !== null && (i.tipo === 'consumo' || i.tipo === 'financiacion')

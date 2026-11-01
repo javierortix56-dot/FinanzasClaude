@@ -166,6 +166,27 @@ export interface Settings {
   /** Criterio de gastos hormiga en Resúmenes */
   hormiga?: { topeUsd: number; minCompras: number }
   tarjetas?: Tarjeta[]
+  /** Metas de gasto que sigue el análisis de Resúmenes */
+  metasResumen?: MetaResumen[]
+}
+
+/**
+ * Meta mensual que se controla con cada resumen subido:
+ * - comercios: lo gastado en los comercios que contienen alguna de las palabras
+ * - categoria: lo gastado en una categoría (o grupo con sus subcategorías)
+ * - financiacion: intereses + IVA sobre intereses
+ * - total: todos los consumos del resumen
+ */
+export type MetaResumenTipo = 'comercios' | 'categoria' | 'financiacion' | 'total'
+export interface MetaResumen {
+  id: string
+  nombre: string
+  tipo: MetaResumenTipo
+  palabras?: string[]
+  categoria?: string
+  /** Tope mensual (en USD no lo mueve la inflación) */
+  tope: number
+  moneda: Currency
 }
 
 /** Compra en cuotas con tarjeta de crédito */

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useUIStore } from '../store/useUIStore'
 import { subscribeToCuotas } from './cuotas'
 import { analizarPeriodo } from './resumenAnalisis'
+import { analizarFinanciacion, compararConAnteriores, evaluarMetas } from './resumenExtras'
 import { borrarResumen, categoriasDeGasto, existeResumen, extraerResumen, fetchResumenes, guardarResumen } from './resumenes'
 import {
   Reglas, agruparComercios, aplicarReglas, editarGrupo, fetchReglas, guardarReglas, recategorizarComercio, reglasDe,
@@ -58,6 +59,17 @@ export function useResumenes(s: Settings, base: Currency, creadoPor: string) {
     () => (resumenes && periodo ? analizarPeriodo(resumenes, periodo, base, s, compras) : null),
     [resumenes, periodo, base, s, compras],
   )
+
+  // Análisis que miran varios períodos: costo de financiarse, comparación con
+  // los resúmenes anteriores y metas de Ajustes
+  const extras = useMemo(() => {
+    if (!resumenes || !periodo) return null
+    return {
+      financiacion: analizarFinanciacion(resumenes, periodo, base, s),
+      comparativa: compararConAnteriores(resumenes, periodo, base, s),
+      metas: evaluarMetas(resumenes, periodo, base, s),
+    }
+  }, [resumenes, periodo, base, s])
 
   const itemsPeriodo = useMemo(() => analisis?.resumenes.flatMap((r) => r.items) ?? [], [analisis])
 
@@ -130,6 +142,7 @@ export function useResumenes(s: Settings, base: Currency, creadoPor: string) {
     periodo,
     setPeriodo,
     analisis,
+    extras,
     subida,
     subir,
     gruposRevision,

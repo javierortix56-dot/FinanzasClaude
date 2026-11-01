@@ -4,7 +4,7 @@ import { useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   Upload, FileText, Repeat, Bug, Store, CreditCard, Landmark, AlertCircle, Trash2,
-  Plus, Sparkles, CheckCircle2, Loader2, Megaphone,
+  Plus, Sparkles, CheckCircle2, Loader2, Megaphone, Target,
 } from 'lucide-react'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
@@ -16,6 +16,7 @@ import { getCatFromSettings, monthLabel } from '@finanzas/core/lib/constants'
 import { CompraCuotas, Currency, Resumen, Settings } from '@finanzas/core/types'
 import { CompromisoMes, ETIQUETA_CARGO, conciliacion, mesCorto, montoCorto } from '@finanzas/core/lib/resumenAnalisis'
 import { toBase } from '@finanzas/core/lib/currency'
+import { AnalisisFinanciacion, Comparativa, EstadoMeta, Variacion } from '@finanzas/core/lib/resumenExtras'
 import Card from '@/components/ui/Card'
 import CuotaModal from '@/components/cuotas/CuotaModal'
 import Sheet from '@/components/ui/Sheet'
@@ -128,7 +129,12 @@ export default function ResumenesTab() {
             </div>
           </Card>
 
+          {r.extras && <MetasCard metas={r.extras.metas} base={base} />}
+
           {a.resumenes.filter((res) => res.detalle).map((res) => <EstadoCuenta key={res.id} r={res} />)}
+
+          {r.extras && <ComparativaCard c={r.extras.comparativa} base={base} />}
+          {r.extras && <FinanciacionCard f={r.extras.financiacion} base={base} />}
 
           <Card title="Suscripciones y débitos" delay={0.04}>
             {a.suscripciones.length === 0 ? (
@@ -359,6 +365,145 @@ function Vacio({ texto, ok }: { texto: string; ok?: boolean }) {
     <p className="flex items-center gap-2 py-2 text-xs text-gray-500">
       {ok && <CheckCircle2 size={14} className="text-emerald-500" />}{texto}
     </p>
+  )
+}
+
+const signo = (n: number) => (n > 0 ? '+' : '')
+const pctTxt = (n: number | null) => (n === null ? '—' : `${signo(n)}${n.toFixed(0)}%`)
+
+function MetasCard({ metas, base }: { metas: EstadoMeta[]; base: Currency }) {
+  return (
+    <Card title="Metas" delay={0.02}>
+      {metas.length === 0 ? (
+        <p className="flex items-start gap-2 py-1 text-xs text-gray-500 leading-relaxed">
+          <Target size={14} className="shrink-0 mt-px text-primary" />
+          Fije topes mensuales en Ajustes → Metas de resúmenes (por ejemplo, delivery y Uber, o cero intereses) y cada resumen le dirá si los cumplió.
+        </p>
+      ) : metas.map((m) => (
+        <div key={m.meta.id} className="py-2.5 border-b border-hairline last:border-0">
+          <div className="flex items-center justify-between gap-2">
+            <p className="truncate text-[13px] font-semibold text-gray-900">{m.meta.nombre}</p>
+            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${m.cumple ? 'bg-emerald-500/12 text-emerald-600' : 'bg-rose-500/12 text-rose-500'}`}>
+              {m.cumple ? 'Cumplida' : 'Excedida'}
+            </span>
+          </div>
+          <p className="mt-0.5 text-[11px] text-gray-500">
+            <b className="text-gray-900"><Money value={m.actualBase} currency={base} animated={false} /></b> de <Money value={m.topeBase} currency={base} animated={false} />
+            {!m.cumple && <> · se pasó por <Money value={m.actualBase - m.topeBase} currency={base} animated={false} /></>}
+          </p>
+          <ProgressBar value={m.topeBase > 0 ? m.pct : 100} className="mt-1.5" height={6} color={m.cumple ? '#10b981' : '#f43f5e'} />
+          {m.historial.length > 1 && (
+            <div className="mt-2 flex items-center gap-1">
+              {m.historial.map((h) => (
+                <span key={h.periodo} title={mesCorto(h.periodo)}
+                  className={`flex-1 rounded-md py-0.5 text-center text-[9px] font-semibold ${h.cumple ? 'bg-emerald-500/12 text-emerald-600' : 'bg-rose-500/12 text-rose-500'}`}>
+                  {mesCorto(h.periodo).split(' ')[0]}
+                </span>
+              ))}
+            </div>
+          )}
+          <p className="mt-1.5 text-[10.5px] text-gray-400">
+            Cumplida {m.cumplidos} de {m.historial.length} {m.historial.length === 1 ? 'mes' : 'meses'}
+            {m.ahorroMensualBase !== null && m.ahorroMensualBase > 0 && <> · cumplirla libera ≈ <Money value={m.ahorroMensualBase} currency={base} animated={false} />/mes contra su promedio</>}
+          </p>
+        </div>
+      ))}
+    </Card>
+  )
+}
+
+function ComparativaCard({ c, base }: { c: Comparativa | null; base: Currency }) {
+  if (!c) {
+    return (
+      <Card title="Contra meses anteriores" delay={0.03}>
+        <Vacio texto="Suba el resumen del mes anterior de la misma tarjeta para comparar." />
+      </Card>
+    )
+  }
+  const t = c.total
+  const ref = c.previos.length === 1 ? `${mesCorto(c.previos[0])}` : `promedio de ${c.previos.map((p) => mesCorto(p).split(' ')[0]).join(', ')}`
+  const sube = (t.vsPromedioPct ?? 0) > 0
+  const lista = (titulo: string, xs: Variacion[]) => xs.length > 0 && (
+    <>
+      <p className="eyebrow mt-3">{titulo}</p>
+      {xs.slice(0, 4).map((v) => (
+        <Fila key={v.clave ?? '-'} titulo={v.nombre} meta={`antes ${montoCorto(v.referenciaBase)} · ahora ${montoCorto(v.actualBase)}`}
+          derecha={<p className={`text-[13px] font-bold ${v.difBase > 0 ? 'text-rose-500' : 'text-emerald-600'}`}>{signo(v.difBase)}<Money value={v.difBase} currency={base} animated={false} /></p>} />
+      ))}
+    </>
+  )
+  return (
+    <Card title="Contra meses anteriores" delay={0.03}>
+      <p className="text-xs text-gray-500">Consumos de {c.emisores.join(' y ')} contra {ref}</p>
+      <div className="mt-1.5 flex items-baseline justify-between gap-2">
+        <p className="text-[20px] font-bold text-gray-900"><Money value={t.actualBase} currency={base} /></p>
+        <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${sube ? 'bg-rose-500/12 text-rose-500' : 'bg-emerald-500/12 text-emerald-600'}`}>{pctTxt(t.vsPromedioPct)}</span>
+      </div>
+      <p className="text-[11px] text-gray-400">
+        Antes <Money value={t.promedioBase} currency={base} animated={false} />
+        {base !== 'USD' && t.vsPromedioUsdPct !== null && <> · en dólares {pctTxt(t.vsPromedioUsdPct)}</>}
+      </p>
+      {lista('Categorías que más cambiaron', c.categorias)}
+      {lista('Comercios que más subieron', c.subas)}
+      {c.nuevos.length > 0 && (
+        <>
+          <p className="eyebrow mt-3">Nuevos este mes</p>
+          {c.nuevos.slice(0, 4).map((n) => (
+            <Fila key={n.comercio} titulo={n.comercio} meta="no aparecía antes"
+              derecha={<p className="text-[13px] font-bold text-gray-900"><Money value={n.totalBase} currency={base} animated={false} /></p>} />
+          ))}
+        </>
+      )}
+    </Card>
+  )
+}
+
+function FinanciacionCard({ f, base }: { f: AnalisisFinanciacion; base: Currency }) {
+  const a = f.actual
+  if (a.totalBase === 0 && !f.siPagaMinimo) return null
+  const max = Math.max(...f.historial.map((h) => h.totalBase), 1)
+  return (
+    <Card title="Costo de financiarse" delay={0.035}>
+      {a.totalBase > 0 ? (
+        <>
+          <p className="text-[20px] font-bold text-rose-500"><Money value={a.totalBase} currency={base} /></p>
+          <p className="text-[11px] text-gray-500">
+            en intereses e IVA este mes ({a.pctDelResumen.toFixed(1)}% de lo cobrado) · a este ritmo ≈ <Money value={a.totalBase * 12} currency={base} animated={false} /> al año
+          </p>
+          <div className="mt-2">
+            {a.interesesBase > 0 && <Fila titulo="Intereses del saldo" meta="renglón del banco" derecha={<p className="text-[13px] font-bold text-gray-900"><Money value={a.interesesBase} currency={base} animated={false} /></p>} />}
+            {a.interesEnCuotasBase > 0 && <Fila titulo="Intereses dentro de refinanciaciones" meta="estimado a partir del IVA" derecha={<p className="text-[13px] font-bold text-gray-900"><Money value={a.interesEnCuotasBase} currency={base} animated={false} /></p>} />}
+            {a.ivaBase > 0 && <Fila titulo="IVA sobre intereses" meta="21 %" derecha={<p className="text-[13px] font-bold text-gray-900"><Money value={a.ivaBase} currency={base} animated={false} /></p>} />}
+          </div>
+        </>
+      ) : <Vacio texto="Este mes no pagó intereses." ok />}
+      {f.siPagaMinimo && (
+        <p className="mt-2 rounded-2xl bg-amber-500/10 px-3 py-2.5 text-xs text-gray-700 leading-relaxed">
+          Si paga solo el mínimo quedan <b><Money value={f.siPagaMinimo.financiadoBase} currency={base} animated={false} /></b> financiados
+          al {pctFmt(f.siPagaMinimo.tem)} mensual: el mes que viene son ≈ <b><Money value={f.siPagaMinimo.interesBase} currency={base} animated={false} /></b> de intereses con IVA.
+          Pagar el total los evita.
+        </p>
+      )}
+      {f.historial.length > 1 && (
+        <div className="mt-3">
+          <p className="eyebrow mb-1.5">Por mes</p>
+          <div className="flex items-end gap-1 h-16">
+            {f.historial.map((h) => (
+              <div key={h.periodo} className="h-full flex-1 min-w-0 flex flex-col items-center justify-end gap-0.5">
+                <span className="text-[9px] font-semibold text-gray-500 tnum">{h.totalBase > 0 ? montoCorto(h.totalBase) : '0'}</span>
+                <div className={`w-full rounded-t-md ${h.periodo === a.periodo ? 'bg-rose-500/80' : 'bg-rose-500/35'}`} style={{ height: `${Math.max((h.totalBase / max) * 70, 3)}%` }} />
+                <span className="text-[9px] text-gray-400">{mesCorto(h.periodo).split(' ')[0]}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {(f.tna !== null || f.cftea !== null) && (
+        <p className="mt-2 text-[10.5px] text-gray-400">
+          {f.tna !== null && <>TNA {pctFmt(f.tna)}</>}{f.tna !== null && f.cftea !== null && ' · '}{f.cftea !== null && <>CFTEA con IVA {pctFmt(f.cftea)}</>}
+        </p>
+      )}
+    </Card>
   )
 }
 

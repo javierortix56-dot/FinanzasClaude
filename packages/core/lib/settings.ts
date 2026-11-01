@@ -1,5 +1,5 @@
 import { supabase, SHARED_UUID } from './supabase'
-import { Settings, CategoryGroup, Category, Tarjeta } from '../types'
+import { Settings, CategoryGroup, Category, MetaResumen, Tarjeta } from '../types'
 import { DEFAULT_GASTO_CATEGORY_GROUPS, DEFAULT_INGRESO_CATEGORY_GROUPS } from './constants'
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -72,6 +72,9 @@ function rowToSettings(row: Record<string, any>): Settings {
     hormiga: appSettings.hormiga && appSettings.hormiga.topeUsd > 0 && appSettings.hormiga.minCompras > 1
       ? { topeUsd: Number(appSettings.hormiga.topeUsd), minCompras: Number(appSettings.hormiga.minCompras) }
       : undefined,
+    metasResumen: Array.isArray(appSettings.metasResumen)
+      ? appSettings.metasResumen.filter((m: MetaResumen) => m && typeof m.id === 'string' && typeof m.tope === 'number')
+      : [],
   }
 }
 
@@ -86,6 +89,7 @@ function settingsToRow(settings: Settings) {
       cambioActualizado: settings.cambioActualizado ?? null,
       ...(settings.hormiga ? { hormiga: settings.hormiga } : {}),
       tarjetas: settings.tarjetas ?? [],
+      metasResumen: settings.metasResumen ?? [],
     },
     monthly_rates:   settings.historialTipoCambio,
     transaction_cats: settings.categoriasGasto,
