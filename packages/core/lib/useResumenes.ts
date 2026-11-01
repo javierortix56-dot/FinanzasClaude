@@ -4,11 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useUIStore } from '../store/useUIStore'
 import { subscribeToCuotas } from './cuotas'
 import { analizarPeriodo } from './resumenAnalisis'
-import { analizarFinanciacion, compararConAnteriores, evaluarMetas } from './resumenExtras'
+import { analizarFinanciacion, compararConAnteriores } from './resumenExtras'
 import { ResultadoConciliacion, conciliar, pasarATarjeta, periodoDelResumen, registrarDesdeResumen, tarjetaDelResumen } from './conciliacion'
 import { categoriaPorDefecto } from './comprobantes'
 import { subscribeToConsumos } from './consumos'
 import { shiftMonth } from './constants'
+import { programarSyncPagos } from './tarjetas'
 import { borrarResumen, categoriasDeGasto, existeResumen, extraerResumen, fetchResumenes, guardarResumen } from './resumenes'
 import {
   Reglas, agruparComercios, aplicarReglas, editarGrupo, fetchReglas, guardarReglas, recategorizarComercio, reglasDe,
@@ -82,7 +83,6 @@ export function useResumenes(s: Settings, base: Currency, creadoPor: string) {
     return {
       financiacion: analizarFinanciacion(resumenes, periodo, base, s),
       comparativa: compararConAnteriores(resumenes, periodo, base, s),
-      metas: evaluarMetas(resumenes, periodo, base, s),
     }
   }, [resumenes, periodo, base, s])
 
@@ -153,6 +153,8 @@ export function useResumenes(s: Settings, base: Currency, creadoPor: string) {
       // Lo revisado queda como regla para los próximos resúmenes
       await guardarReglas(reglasDe(resumen.items))
       await guardarResumen(resumen)
+      // El resumen confirma el pago de la tarjeta del mes en que vence
+      programarSyncPagos()
       setReglas(await fetchReglas())
       await recargar()
       setPeriodo(resumen.periodo)
@@ -190,6 +192,7 @@ export function useResumenes(s: Settings, base: Currency, creadoPor: string) {
 
   async function borrar(r: Resumen) {
     await borrarResumen(r)
+    programarSyncPagos()
     await recargar()
   }
 

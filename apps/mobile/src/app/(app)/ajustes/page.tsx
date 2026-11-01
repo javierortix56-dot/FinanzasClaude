@@ -6,7 +6,7 @@ import {
   ChevronRight, ChevronLeft, Plus, Pencil,
   Copy, RotateCcw, Lock, Trash2, Check, Download, Upload, LogOut,
   UserRound, Bell, ArrowLeftRight, Tags, Coins, Layers, PiggyBank, CalendarCog, DatabaseBackup,
-  Palette, Sparkles, RefreshCw, Bug, CreditCard, Target,
+  Palette, Sparkles, RefreshCw, Bug, CreditCard,
 } from 'lucide-react'
 import { AnimatePresence, motion, type PanInfo } from 'motion/react'
 import PageHeader from '@/components/ui/PageHeader'
@@ -14,7 +14,6 @@ import Segmented from '@/components/ui/Segmented'
 import { springSoft } from '@/components/ui/motion'
 import CategoryTree from '@/components/ajustes/CategoryTree'
 import TarjetasAjustes from '@/components/ajustes/TarjetasAjustes'
-import MetasAjustes from '@/components/ajustes/MetasAjustes'
 import { offerUndo } from '@/lib/undo'
 import { getThemePref, setThemePref, ThemePref } from '@/lib/theme'
 import { openOnboarding } from '@/lib/onboarding'
@@ -42,7 +41,7 @@ import { HORMIGA_DEFAULT } from '@finanzas/core/lib/resumenAnalisis'
 
 const CategoryModal = dynamic(() => import('@/components/ajustes/CategoryModal'), { ssr: false })
 
-type Section = 'cuenta' | 'apariencia' | 'notif' | 'cambio' | 'hormiga' | 'metas' | 'tarjetas' | 'categorias' | 'categorias_ing' | 'tipos' | 'ahorro_links' | 'mes' | 'datos' | null
+type Section = 'cuenta' | 'apariencia' | 'notif' | 'cambio' | 'hormiga' | 'tarjetas' | 'categorias' | 'categorias_ing' | 'tipos' | 'ahorro_links' | 'mes' | 'datos' | null
 
 // ── Modal state types ─────────────────────────────────────────────────────────
 type GroupModalState = {
@@ -730,17 +729,6 @@ export default function AjustesPage() {
             }} />
           </Section>
 
-          {/* ── Metas de resúmenes ── */}
-          <Section
-            label="Metas de resúmenes"
-            icon={<Target size={15} />}
-            tint="#3f6b5a"
-            hint={(s.metasResumen ?? []).length ? (s.metasResumen ?? []).map((m) => m.nombre).join(', ') : 'Sin metas'}
-            open={openSection === 'metas'}
-            onToggle={() => toggle('metas')}
-          >
-            <MetasAjustes s={s} />
-          </Section>
 
           </SectionGroup>
 

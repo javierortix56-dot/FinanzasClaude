@@ -9,6 +9,11 @@ import { SHARED_USER_ID, shiftMonth } from './constants'
 import { useSettingsStore } from '../store/useSettingsStore'
 import { Category, Consumo, Settings } from '../types'
 
+/** Lo real con tarjeta cambia el pago estimado de la tarjeta: recalcularlo */
+function recalcularPagos() {
+  import('./tarjetas').then((m) => m.programarSyncPagos()).catch(() => { /* no bloqueante */ })
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function rowToConsumo(r: Record<string, any>): Consumo {
   return {
@@ -52,8 +57,10 @@ export async function agregarConsumos(cs: Omit<Consumo, 'id'>[], mensaje?: strin
   const { data, error } = await supabase.from('consumos').insert(cs.map(consumoToRow)).select('id')
   if (error) throw error
   const ids = (data ?? []).map((r) => r.id as string)
+  recalcularPagos()
   offerUndo(mensaje ?? `${ids.length} consumo${ids.length !== 1 ? 's' : ''} registrado${ids.length !== 1 ? 's' : ''}`, async () => {
     await supabase.from('consumos').delete().in('id', ids)
+    recalcularPagos()
   })
   return ids.length
 }
@@ -70,14 +77,17 @@ export async function actualizarConsumo(id: string, cambios: Partial<Omit<Consum
   if (cambios.tarjetaId !== undefined) row.tarjeta_id = cambios.tarjetaId
   const { error } = await supabase.from('consumos').update(row).eq('id', id)
   if (error) throw error
+  recalcularPagos()
 }
 
 export async function borrarConsumo(c: Consumo) {
   const { error } = await supabase.from('consumos').delete().eq('id', c.id!)
   if (error) throw error
+  recalcularPagos()
   offerUndo(`"${c.comercio || 'Consumo'}" eliminado`, async () => {
     const { id: _id, ...resto } = c
     await supabase.from('consumos').insert({ id: c.id, ...consumoToRow(resto) })
+    recalcularPagos()
   })
 }
 

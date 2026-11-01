@@ -65,6 +65,11 @@ export interface Tarjeta {
   color: string
   /** Primer mes (YYYY-MM) cuyo pago incluye las cuotas de la tarjeta */
   desde: string
+  /**
+   * Categoría con la que se planifica el pago (p. ej. "BBVA Visa" en Deudas).
+   * Sin indicar: la categoría que se llama igual que la tarjeta.
+   */
+  categoriaPago?: string
 }
 
 /**
@@ -85,6 +90,10 @@ export interface PagoTarjeta {
   total: number
   /** true si el abono se fijó a mano (menor al total) */
   abonoManual: boolean
+  /** Lo que se había planificado a mano para este pago (antes de unirlo al automático) */
+  planificado?: number
+  /** Resumen del banco que confirmó el total (el total es el saldo del resumen) */
+  resumen?: { id: string; periodo: string; total: number } | null
 }
 
 export interface AssetSnapshot {
@@ -166,27 +175,6 @@ export interface Settings {
   /** Criterio de gastos hormiga en Resúmenes */
   hormiga?: { topeUsd: number; minCompras: number }
   tarjetas?: Tarjeta[]
-  /** Metas de gasto que sigue el análisis de Resúmenes */
-  metasResumen?: MetaResumen[]
-}
-
-/**
- * Meta mensual que se controla con cada resumen subido:
- * - comercios: lo gastado en los comercios que contienen alguna de las palabras
- * - categoria: lo gastado en una categoría (o grupo con sus subcategorías)
- * - financiacion: intereses + IVA sobre intereses
- * - total: todos los consumos del resumen
- */
-export type MetaResumenTipo = 'comercios' | 'categoria' | 'financiacion' | 'total'
-export interface MetaResumen {
-  id: string
-  nombre: string
-  tipo: MetaResumenTipo
-  palabras?: string[]
-  categoria?: string
-  /** Tope mensual (en USD no lo mueve la inflación) */
-  tope: number
-  moneda: Currency
 }
 
 /**

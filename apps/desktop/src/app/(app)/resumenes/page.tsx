@@ -18,7 +18,7 @@ import { offerUndo } from '@finanzas/core/lib/undo'
 import { getCatFromSettings, monthLabel } from '@finanzas/core/lib/constants'
 import { CompraCuotas, Consumo, Currency, Resumen, ResumenItem, Settings, Tarjeta } from '@finanzas/core/types'
 import { toBase } from '@finanzas/core/lib/currency'
-import { AnalisisFinanciacion, Comparativa, EstadoMeta, Variacion } from '@finanzas/core/lib/resumenExtras'
+import { AnalisisFinanciacion, Comparativa, Variacion } from '@finanzas/core/lib/resumenExtras'
 import type { ConciliacionResumen } from '@finanzas/core/lib/useResumenes'
 import { CompromisoMes, ETIQUETA_CARGO, conciliacion, mesCorto, montoCorto } from '@finanzas/core/lib/resumenAnalisis'
 import { Card } from '@/components/ui/card'
@@ -150,8 +150,7 @@ export default function ResumenesPage() {
           ))}
 
           {r.extras && (
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-              <MetasSeccion metas={r.extras.metas} base={base} />
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
               <ComparativaSeccion c={r.extras.comparativa} base={base} />
               <FinanciacionSeccion f={r.extras.financiacion} base={base} />
             </div>
@@ -622,46 +621,6 @@ function ConciliacionSeccion({ c, tarjetas, s, onElegir, onAgregar, onPasar }: {
           )}
         </>
       )}
-    </Seccion>
-  )
-}
-
-function MetasSeccion({ metas, base }: { metas: EstadoMeta[]; base: Currency }) {
-  return (
-    <Seccion icon={Target} titulo="Metas" sub="Topes mensuales configurados en Ajustes → Metas de resúmenes" delay={0.02}>
-      {metas.length === 0 ? (
-        <div className="py-3 text-sm text-muted">
-          Todavía no hay metas. Configúrelas en <Link href="/ajustes" className="font-semibold text-primary">Ajustes → Metas de resúmenes</Link> (por ejemplo, delivery y Uber, o cero intereses).
-        </div>
-      ) : metas.map((m) => (
-        <div key={m.meta.id} className="py-3">
-          <div className="flex items-center justify-between gap-2">
-            <span className="truncate text-sm font-medium">{m.meta.nombre}</span>
-            <span className={cn('shrink-0 rounded-full px-2 py-px text-[11px] font-semibold', m.cumple ? 'bg-income-soft text-income' : 'bg-expense-soft text-expense')}>
-              {m.cumple ? 'Cumplida' : 'Excedida'}
-            </span>
-          </div>
-          <div className="mt-0.5 text-xs text-muted tnum">
-            <b className="text-foreground"><MoneyText amount={m.actualBase} currency={base} /></b> de <MoneyText amount={m.topeBase} currency={base} />
-            {!m.cumple && <> · se pasó por <MoneyText amount={m.actualBase - m.topeBase} currency={base} /></>}
-          </div>
-          <ProgressBar value={m.topeBase > 0 ? m.pct : 100} className="mt-1.5" height={6} color={m.cumple ? 'var(--income)' : 'var(--expense)'} />
-          {m.historial.length > 1 && (
-            <div className="mt-2 flex gap-1">
-              {m.historial.map((h) => (
-                <span key={h.periodo} title={`${monthLabel(h.periodo)}: ${montoCorto(h.valorBase)}`}
-                  className={cn('flex-1 rounded-md py-0.5 text-center text-[10px] font-semibold', h.cumple ? 'bg-income-soft text-income' : 'bg-expense-soft text-expense')}>
-                  {mesCorto(h.periodo).split(' ')[0]}
-                </span>
-              ))}
-            </div>
-          )}
-          <div className="mt-1.5 text-[11px] text-muted-2">
-            Cumplida {m.cumplidos} de {m.historial.length} {m.historial.length === 1 ? 'mes' : 'meses'}
-            {m.ahorroMensualBase !== null && m.ahorroMensualBase > 0 && <> · cumplirla libera ≈ <MoneyText amount={m.ahorroMensualBase} currency={base} />/mes contra su promedio</>}
-          </div>
-        </div>
-      ))}
     </Seccion>
   )
 }

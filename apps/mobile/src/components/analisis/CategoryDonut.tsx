@@ -2,19 +2,16 @@
 
 import { useState, useMemo } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Transaction, Settings, Currency, CategoryGroup } from '@finanzas/core/types'
 import {
   getCatFromSettings, formatAmount,
   DEFAULT_GASTO_CATEGORY_GROUPS, DEFAULT_INGRESO_CATEGORY_GROUPS,
 } from '@finanzas/core/lib/constants'
-import { toBase, toUSD, txToBase } from '@finanzas/core/lib/currency'
-import { useBudgetStore } from '@finanzas/core/store/useBudgetStore'
+import { txToBase } from '@finanzas/core/lib/currency'
 import DonutChart, { DonutSlice } from './DonutChart'
-import BudgetModal from './BudgetModal'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import Segmented from '@/components/ui/Segmented'
-import ProgressBar from '@/components/ui/ProgressBar'
 import { Money } from '@/components/ui/AnimatedNumber'
 import { cuentaEnCategorias } from '@finanzas/core/lib/tarjetas'
 import { CategoryIcon } from '@/lib/categoryIcons'
@@ -49,15 +46,12 @@ interface Props {
 type TipoTab = 'egreso' | 'ingreso'
 type Slice = DonutSlice & { nombre: string; amount: number; percent: number }
 
-export default function CategoryDonut({ transactions, settings, monedaBase, mes }: Props) {
-  const { getBudget } = useBudgetStore()
+export default function CategoryDonut({ transactions, settings, monedaBase }: Props) {
   const hideAmounts = useSettingsStore((st) => st.hideAmounts)
   const blur = hideAmounts ? 'blur-[4px] select-none' : ''
   const [tipoTab,        setTipoTab]        = useState<TipoTab>('egreso')
   const [selectedGroup,  setSelectedGroup]  = useState<string | null>(null)
   const [selectedSub,    setSelectedSub]    = useState<string | null>(null)
-  const [budgetCat,      setBudgetCat]      = useState<string | null>(null)
-  const [budgetOpen,     setBudgetOpen]     = useState(false)
 
   // Los pagos de tarjeta no son una categoría de gasto: sus consumos ya cuentan
   const filtered = transactions.filter((t) => t.tipo === tipoTab && cuentaEnCategorias(t))
@@ -268,16 +262,6 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
                 </p>
               ) : (
                 slices.map((slice, i) => {
-                  const budget = getBudget(slice.id)
-                  let budgetPct = 0
-                  let spentInBudgetMoneda = 0
-                  if (budget) {
-                    const spentUSD   = toUSD(slice.amount, monedaBase, settings, budget.mes)
-                    const limiteUSD  = toUSD(budget.limite, budget.moneda as Currency, settings, budget.mes)
-                    budgetPct        = limiteUSD > 0 ? Math.min((spentUSD / limiteUSD) * 100, 100) : 0
-                    spentInBudgetMoneda = toBase(spentUSD, 'USD', budget.moneda as Currency, settings, budget.mes)
-                  }
-                  const budgetColor = budgetPct >= 100 ? '#b4533f' : budgetPct >= 80 ? '#b8873b' : '#4e7d5b'
 
                   return (
                     <motion.div
@@ -316,30 +300,9 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
                         <span className={`text-xs font-bold text-gray-800 tabular-nums w-12 text-right ${blur}`}>
                           {fmtShort(slice.amount)}
                         </span>
-                        {tipoTab === 'egreso' && !budget ? (
-                          <button
-                            className="w-6 h-6 flex items-center justify-center rounded-full text-gray-300 hover:text-primary hover:bg-primary/10 transition-colors"
-                            onClick={(e) => { e.stopPropagation(); setBudgetCat(slice.id); setBudgetOpen(true) }}
-                            title="Agregar presupuesto"
-                            aria-label="Agregar presupuesto"
-                          >
-                            <SlidersHorizontal size={12} />
-                          </button>
-                        ) : (
-                          <ChevronRight size={14} className="text-gray-300 w-6" />
-                        )}
+                        <ChevronRight size={14} className="text-gray-300 w-6" />
                       </div>
 
-                      {/* Budget bar (only when budget exists) */}
-                      {budget && (
-                        <div className="pl-6 pr-2 pb-2">
-                          <ProgressBar value={budgetPct} color={budgetColor} height={4} />
-                          <div className="flex justify-between text-[10px] text-gray-400 mt-1">
-                            <span className={blur}>{budget.moneda} {fmtShort(spentInBudgetMoneda)} / {fmtShort(budget.limite)}</span>
-                            <span className="font-bold" style={{ color: budgetColor }}>{Math.round(budgetPct)}%</span>
-                          </div>
-                        </div>
-                      )}
                     </motion.div>
                   )
                 })
@@ -349,13 +312,6 @@ export default function CategoryDonut({ transactions, settings, monedaBase, mes 
         </motion.div>
       </AnimatePresence>
 
-      {/* Budget modal */}
-      <BudgetModal
-        open={budgetOpen}
-        onClose={() => setBudgetOpen(false)}
-        categoria={budgetCat ?? ''}
-        mes={mes}
-      />
     </div>
   )
 }

@@ -16,7 +16,7 @@ import { getCatFromSettings, monthLabel } from '@finanzas/core/lib/constants'
 import { CompraCuotas, Consumo, Currency, Resumen, ResumenItem, Settings, Tarjeta } from '@finanzas/core/types'
 import { CompromisoMes, ETIQUETA_CARGO, conciliacion, mesCorto, montoCorto } from '@finanzas/core/lib/resumenAnalisis'
 import { toBase } from '@finanzas/core/lib/currency'
-import { AnalisisFinanciacion, Comparativa, EstadoMeta, Variacion } from '@finanzas/core/lib/resumenExtras'
+import { AnalisisFinanciacion, Comparativa, Variacion } from '@finanzas/core/lib/resumenExtras'
 import type { ConciliacionResumen } from '@finanzas/core/lib/useResumenes'
 import Card from '@/components/ui/Card'
 import CuotaModal from '@/components/cuotas/CuotaModal'
@@ -130,20 +130,23 @@ export default function ResumenesTab() {
             </div>
           </Card>
 
-          {r.extras && <MetasCard metas={r.extras.metas} base={base} />}
+          <IndiceResumen />
 
-          {a.resumenes.filter((res) => res.detalle).map((res) => <EstadoCuenta key={res.id} r={res} />)}
+          <div id="r-estado" className="scroll-mt-2 space-y-3">{a.resumenes.filter((res) => res.detalle).map((res) => <EstadoCuenta key={res.id} r={res} />)}</div>
 
-          {r.conciliaciones.map((c) => (
+          <div id="r-contraste" className="scroll-mt-2 space-y-3">{r.conciliaciones.map((c) => (
             <ConciliacionCard key={c.resumen.id} c={c} tarjetas={s.tarjetas ?? []} s={s}
               onElegir={(id) => r.elegirTarjeta(c.resumen.emisor, id)}
               onAgregar={(items, t) => { haptic('success'); return r.agregarFaltantes(items, t) }}
               onPasar={(cs, t) => { haptic('success'); return r.pasarConsumos(cs, t) }} />
-          ))}
+          ))}</div>
 
-          {r.extras && <ComparativaCard c={r.extras.comparativa} base={base} />}
-          {r.extras && <FinanciacionCard f={r.extras.financiacion} base={base} />}
+          <div id="r-comparar" className="scroll-mt-2 space-y-3">
+            {r.extras && <ComparativaCard c={r.extras.comparativa} base={base} />}
+            {r.extras && <FinanciacionCard f={r.extras.financiacion} base={base} />}
+          </div>
 
+          <div id="r-suscripciones" className="scroll-mt-2" />
           <Card title="Suscripciones y débitos" delay={0.04}>
             {a.suscripciones.length === 0 ? (
               <Vacio texto={r.periodos.length < 3 ? 'Con 3 meses de resúmenes se detectan con confianza.' : 'No se detectaron cobros recurrentes.'} />
@@ -164,6 +167,7 @@ export default function ResumenesTab() {
             ))}
           </Card>
 
+          <div id="r-hormiga" className="scroll-mt-2" />
           <Card title="Gastos hormiga" delay={0.12}>
             {a.hormiga.totalBase === 0 ? <Vacio texto="Sin hábitos ni compras chicas este mes." ok /> : (
               <>
@@ -209,6 +213,7 @@ export default function ResumenesTab() {
             ))}
           </Card>
 
+          <div id="r-cuotas" className="scroll-mt-2" />
           <Card title="Cuotas en curso" delay={0.2}
               action={
                 <button onClick={() => { haptic(); setCuotaManual('nueva') }} className="text-[11px] font-bold text-primary inline-flex items-center gap-1">
@@ -248,6 +253,7 @@ export default function ResumenesTab() {
               {a.cuotas.length === 0 && <Vacio texto="No hay cuotas en curso en este período." ok />}
           </Card>
 
+          <div id="r-categorias" className="scroll-mt-2" />
           <Card title="Gasto por categoría" delay={0.22}>
             {a.porCategoria.slice(0, 8).map((c) => {
               const cat = c.clave ? getCatFromSettings(c.clave, s) : undefined
@@ -281,6 +287,7 @@ export default function ResumenesTab() {
             ))}
           </Card>
 
+          <div id="r-cargos" className="scroll-mt-2" />
           {a.cargos.items.length > 0 && (
             <Card title="Impuestos, intereses y comisiones" delay={0.24}>
               <p className="mb-2 text-xs text-gray-500 leading-relaxed">
@@ -331,6 +338,26 @@ export default function ResumenesTab() {
       </Sheet>
 
       <CuotaModal open={cuotaManual !== null} editing={cuotaManual === 'nueva' ? null : cuotaManual} onClose={() => setCuotaManual(null)} />
+    </div>
+  )
+}
+
+const SECCIONES: [string, string][] = [
+  ['r-estado', 'Estado'], ['r-contraste', 'Contraste'], ['r-cuotas', 'Cuotas'], ['r-comparar', 'Comparar'],
+  ['r-suscripciones', 'Suscripciones'], ['r-hormiga', 'Hormiga'], ['r-categorias', 'Categorías'], ['r-cargos', 'Cargos'],
+]
+
+/** Índice para saltar a cada sección del resumen (la pestaña es larga) */
+function IndiceResumen() {
+  return (
+    <div className="sticky top-0 z-10 -mx-4 px-4 py-1.5 flex gap-1.5 overflow-x-auto no-scrollbar bg-[var(--background)]/85 backdrop-blur">
+      {SECCIONES.map(([id, label]) => (
+        <button key={id} type="button"
+          onClick={() => { haptic('light'); document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}
+          className="shrink-0 h-7 px-3 rounded-full glass text-[11px] font-semibold text-gray-600">
+          {label}
+        </button>
+      ))}
     </div>
   )
 }
@@ -473,47 +500,6 @@ function ConciliacionCard({ c, tarjetas, s, onElegir, onAgregar, onPasar }: {
           )}
         </>
       )}
-    </Card>
-  )
-}
-
-function MetasCard({ metas, base }: { metas: EstadoMeta[]; base: Currency }) {
-  return (
-    <Card title="Metas" delay={0.02}>
-      {metas.length === 0 ? (
-        <p className="flex items-start gap-2 py-1 text-xs text-gray-500 leading-relaxed">
-          <Target size={14} className="shrink-0 mt-px text-primary" />
-          Fije topes mensuales en Ajustes → Metas de resúmenes (por ejemplo, delivery y Uber, o cero intereses) y cada resumen le dirá si los cumplió.
-        </p>
-      ) : metas.map((m) => (
-        <div key={m.meta.id} className="py-2.5 border-b border-hairline last:border-0">
-          <div className="flex items-center justify-between gap-2">
-            <p className="truncate text-[13px] font-semibold text-gray-900">{m.meta.nombre}</p>
-            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${m.cumple ? 'bg-emerald-500/12 text-emerald-600' : 'bg-rose-500/12 text-rose-500'}`}>
-              {m.cumple ? 'Cumplida' : 'Excedida'}
-            </span>
-          </div>
-          <p className="mt-0.5 text-[11px] text-gray-500">
-            <b className="text-gray-900"><Money value={m.actualBase} currency={base} animated={false} /></b> de <Money value={m.topeBase} currency={base} animated={false} />
-            {!m.cumple && <> · se pasó por <Money value={m.actualBase - m.topeBase} currency={base} animated={false} /></>}
-          </p>
-          <ProgressBar value={m.topeBase > 0 ? m.pct : 100} className="mt-1.5" height={6} color={m.cumple ? '#10b981' : '#f43f5e'} />
-          {m.historial.length > 1 && (
-            <div className="mt-2 flex items-center gap-1">
-              {m.historial.map((h) => (
-                <span key={h.periodo} title={mesCorto(h.periodo)}
-                  className={`flex-1 rounded-md py-0.5 text-center text-[9px] font-semibold ${h.cumple ? 'bg-emerald-500/12 text-emerald-600' : 'bg-rose-500/12 text-rose-500'}`}>
-                  {mesCorto(h.periodo).split(' ')[0]}
-                </span>
-              ))}
-            </div>
-          )}
-          <p className="mt-1.5 text-[10.5px] text-gray-400">
-            Cumplida {m.cumplidos} de {m.historial.length} {m.historial.length === 1 ? 'mes' : 'meses'}
-            {m.ahorroMensualBase !== null && m.ahorroMensualBase > 0 && <> · cumplirla libera ≈ <Money value={m.ahorroMensualBase} currency={base} animated={false} />/mes contra su promedio</>}
-          </p>
-        </div>
-      ))}
     </Card>
   )
 }

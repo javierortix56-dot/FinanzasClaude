@@ -17,7 +17,6 @@ import { MonthSwitcher, PrivacyToggle } from '@/components/ui/PageHeader'
 import { easeOut } from '@/components/ui/motion'
 import Collapse from '@/components/ui/Collapse'
 import { cuentaEnCaja } from '@finanzas/core/lib/tarjetas'
-import BudgetRings from '@/components/dashboard/BudgetRings'
 import CuposDelMes from '@/components/consumos/CuposDelMes'
 
 type MainTab = 'movimientos' | 'asignacion'
@@ -134,9 +133,8 @@ export default function DashboardPage() {
         </Collapse>
       </motion.section>
 
-      {/* Presupuestos del mes (solo si hay) */}
+      {/* Planificado vs real del mes */}
       <Collapse open={!compact} className="flex-shrink-0">
-        <BudgetRings transactions={transactions} month={currentMonth} base={base} />
         <CuposDelMes transactions={transactions} month={currentMonth} base={base} />
       </Collapse>
 

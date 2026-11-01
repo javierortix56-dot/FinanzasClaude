@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { motion } from 'motion/react'
@@ -11,6 +11,7 @@ import { subscribeToTransactions } from '@finanzas/core/lib/transactions'
 import { programarSyncPagos } from '@finanzas/core/lib/tarjetas'
 import { subscribeToAssets } from '@finanzas/core/lib/assets'
 import TransactionModal from '@/components/transactions/TransactionModal'
+import AgregarSheet from '@/components/consumos/AgregarSheet'
 import Toast from '@/components/ui/Toast'
 import Onboarding from '@/components/Onboarding'
 import { spring, springPop } from '@/components/ui/motion'
@@ -52,7 +53,8 @@ function NavItem({ href, icon: Icon, label, active }: { href: string; icon: Luci
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const { openAddModal, isTransactionModalOpen } = useUIStore()
+  const { isTransactionModalOpen } = useUIStore()
+  const [agregar, setAgregar] = useState(false)
   const pathname = usePathname()
   const { currentMonth, setMonthTransactions } = useTransactionStore()
   const { setAssets } = useAssetStore()
@@ -89,15 +91,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {/* FAB */}
           <div className="w-[72px] flex items-center justify-center flex-shrink-0">
             <motion.button
-              onClick={openAddModal}
+              onClick={() => setAgregar(true)}
               whileTap={{ scale: 0.9 }}
               whileHover={{ scale: 1.04 }}
               transition={springPop}
               className="relative -mt-6 w-[54px] h-[54px] rounded-[18px] bg-brand flex items-center justify-center shadow-[0_10px_24px_-8px_rgba(38,54,63,0.6)] ring-4 ring-[var(--background)]"
-              aria-label="Agregar movimiento"
+              aria-label="Agregar"
             >
               <motion.span
-                animate={{ rotate: isTransactionModalOpen ? 45 : 0 }}
+                animate={{ rotate: isTransactionModalOpen || agregar ? 45 : 0 }}
                 transition={springPop}
                 className="inline-flex"
               >
@@ -114,6 +116,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Global modal — mounted once, always available */}
       <TransactionModal />
+      <AgregarSheet open={agregar} onClose={() => setAgregar(false)} />
       <Toast />
       <Onboarding />
     </div>

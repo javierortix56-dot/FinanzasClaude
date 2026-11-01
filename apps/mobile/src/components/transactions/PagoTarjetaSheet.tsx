@@ -8,7 +8,7 @@ import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { updateTransaction } from '@finanzas/core/lib/transactions'
-import { registrarAbono, detallePago, tarjetaDe, type DetallePago } from '@finanzas/core/lib/tarjetas'
+import { registrarAbono, detallePago, presentarPago, tarjetaDe, type DetallePago } from '@finanzas/core/lib/tarjetas'
 import { formatAmount, getCatFromSettings, monthLabel, shiftMonth } from '@finanzas/core/lib/constants'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { toBase, txToBase, txMonth } from '@finanzas/core/lib/currency'
@@ -100,11 +100,7 @@ export default function PagoTarjetaSheet({ open, pago, onClose }: { open: boolea
     }
   }
 
-  const lineas = [
-    { label: `Consumos de ${monthLabel(previo)}`, monto: p.consumos },
-    { label: `Cuotas de ${monthLabel(p.mes)}`, monto: p.cuotas },
-    { label: `Saldo impago de ${monthLabel(previo)}`, monto: p.saldoAnterior },
-  ]
+  const { lineas, estado, confirmado, desvio } = presentarPago(p)
 
   const footer = (
     <div className="flex gap-2">
@@ -142,6 +138,13 @@ export default function PagoTarjetaSheet({ open, pago, onClose }: { open: boolea
           <span>Total a pagar</span>
           <span className={`tabular-nums ${blur}`}>{formatAmount(p.total, p.moneda)}</span>
         </div>
+        <p className={`text-[11px] font-semibold ${confirmado ? 'text-emerald-600' : 'text-gray-400'}`}>{estado}</p>
+        {desvio && (
+          <p className={`text-[11px] ${desvio.dif > 0 ? 'text-rose-500' : 'text-emerald-600'}`}>
+            Había planificado <span className={blur}>{formatAmount(desvio.planificado, p.moneda)}</span>: desvío{' '}
+            <b className={blur}>{desvio.dif > 0 ? '+' : ''}{formatAmount(desvio.dif, p.moneda)}</b> ({desvio.dif > 0 ? '+' : ''}{Math.round(desvio.pct)} %)
+          </p>
+        )}
       </div>
 
       <div>
