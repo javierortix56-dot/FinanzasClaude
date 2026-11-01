@@ -25,6 +25,7 @@ import { getCatFromSettings, getParentGroup, monthLabel, shiftMonth } from '@fin
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { fetchLastNMonths } from '@finanzas/core/lib/analytics'
 import { computeInsights } from '@finanzas/core/lib/insights'
+import { MetaEnVivo, evaluarMetasEnVivo } from '@finanzas/core/lib/metasVivo'
 import { cuentaEnCaja, cuentaEnCategorias, esConsumoTarjeta, necesitaRespaldo, saldoQuePasa } from '@finanzas/core/lib/tarjetas'
 import { CategoryIcon } from '@finanzas/core/lib/categoryIcons'
 import { Currency, Transaction, Settings } from '@finanzas/core/types'
@@ -333,6 +334,8 @@ export default function DashboardPage() {
         </div>
       )}
 
+      <MetasDelMes metas={evaluarMetasEnVivo(transactions, currentMonth, base, s)} base={base} />
+
       {/* ── Recientes + categorías ── */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
         <Card delay={0.26} className="xl:col-span-2 overflow-hidden">
@@ -475,5 +478,41 @@ function RecentRow({ t, settings, index, onClick }: { t: Transaction; settings: 
         {ingreso ? '+' : '−'}<MoneyText amount={t.monto} currency={t.moneda} />
       </span>
     </motion.button>
+  )
+}
+
+const COLOR_NIVEL = { ok: 'var(--income)', atento: 'var(--unassigned)', excedida: 'var(--expense)' } as const
+
+/** Metas de Ajustes seguidas con lo registrado en el mes: avance, proyección y margen diario */
+function MetasDelMes({ metas, base }: { metas: MetaEnVivo[]; base: Currency }) {
+  if (metas.length === 0) return null
+  return (
+    <Card delay={0.24} className="p-5">
+      <div className="eyebrow mb-4 flex items-center justify-between gap-2">
+        <span>Metas del mes</span>
+        <Link href="/ajustes" className="normal-case tracking-normal text-[11px] font-semibold text-primary">Editar metas</Link>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-4">
+        {metas.map((m) => (
+          <div key={m.meta.id}>
+            <div className="flex items-center justify-between text-sm mb-1.5">
+              <span className="truncate font-medium">{m.meta.nombre}</span>
+              <span className="text-xs font-semibold tnum" style={{ color: COLOR_NIVEL[m.nivel] }}>{Number.isFinite(m.pct) ? `${Math.round(m.pct)}%` : '—'}</span>
+            </div>
+            <ProgressBar value={m.topeBase > 0 ? m.pct : 100} color={COLOR_NIVEL[m.nivel]} height={6} />
+            <div className="text-[11px] text-muted mt-1 tnum">
+              <MoneyText amount={m.actualBase} currency={base} /> de <MoneyText amount={m.topeBase} currency={base} />
+              {' '}· proyección <MoneyText amount={m.proyeccionBase} currency={base} />
+              {m.porDiaBase !== null && <> · le quedan <MoneyText amount={m.porDiaBase} currency={base} />/día</>}
+            </div>
+            {m.nivel !== 'ok' && (
+              <div className="text-[11px] font-semibold mt-0.5" style={{ color: COLOR_NIVEL[m.nivel] }}>
+                {m.nivel === 'excedida' ? <>Se pasó por <MoneyText amount={m.actualBase - m.topeBase} currency={base} /></> : m.motivo}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </Card>
   )
 }

@@ -32,6 +32,25 @@ function buscar(i: ResumenItem, reglas: Reglas): ReglaComercio | undefined {
   return undefined
 }
 
+/**
+ * Regla para un nombre suelto (ticket, captura): primero exacta; si no, la
+ * regla cuya clave contiene el nombre o está contenida en él ("palermo market"
+ * ↔ "sm palermo market"), la más larga.
+ */
+export function reglaParaNombre(nombre: string, reglas: Reglas): ReglaComercio | undefined {
+  const k = claveComercio(nombre)
+  if (k.length < 3) return undefined
+  const exacta = reglas.get(k)
+  if (exacta) return exacta
+  if (k.length < 5) return undefined
+  let mejor: ReglaComercio | undefined
+  for (const [clave, r] of reglas) {
+    if (clave.length < 5 || !(clave.includes(k) || k.includes(clave))) continue
+    if (!mejor || clave.length > mejor.clave.length) mejor = r
+  }
+  return mejor
+}
+
 export async function fetchReglas(): Promise<Reglas> {
   const { data, error } = await supabase.from('comercio_reglas').select('clave, nombre, categoria')
   if (error) throw error
