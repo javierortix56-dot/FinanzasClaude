@@ -189,6 +189,26 @@ export interface MetaResumen {
   moneda: Currency
 }
 
+/**
+ * Consumo real (lo que se va gastando): llena el cupo de lo planificado en su
+ * categoría. No es un movimiento: no suma a caja, asignaciones ni pagos.
+ */
+export type MedioPago = 'credito' | 'debito' | 'efectivo' | 'transferencia' | 'otro'
+export interface Consumo {
+  id?: string
+  /** YYYY-MM-DD */
+  fecha: string
+  monto: number
+  moneda: Currency
+  categoria: string
+  comercio: string
+  descripcion: string
+  medio: MedioPago | null
+  tarjetaId: string | null
+  fuente: 'manual' | 'ticket' | 'captura' | 'resumen'
+  creadoPor: string
+}
+
 /** Compra en cuotas con tarjeta de crédito */
 export interface CompraCuotas {
   id?: string

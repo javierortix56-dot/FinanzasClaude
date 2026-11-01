@@ -2,13 +2,8 @@
 // Invocada por pg_cron:
 //   ?tipo=diario  → 00:00 UTC (21:00 ART): si hoy no cargaron movimientos
 //   ?tipo=cuotas  → día 1 de cada mes: resumen de cuotas que vencen
-//   ?tipo=metas   → 23:30 UTC (20:30 ART): metas de gasto del mes en riesgo o superadas
-//
-// Las metas se configuran en la app (Ajustes → Metas de resúmenes) y se
-// evalúan con lo registrado en el mes, con la misma regla que la app
-// (packages/core/lib/metasVivo.ts): lo recurrente no se extrapola, lo
-// variable sigue el ritmo diario, y no se avisa por proyección antes del día 7.
-// Cada meta avisa una vez por nivel y por mes (tabla alertas_enviadas).
+//   ?tipo=metas (o cupos) → 23:30 UTC (20:30 ART): categorías cuyo consumo real
+//                  va a superar (o ya superó) lo planificado en el mes
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
@@ -40,87 +35,83 @@ function monthIndex(mes: string): number {
 const fmt = (n: number, moneda: string) =>
   `${moneda === "USD" ? "US$" : "$"}${new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 }).format(Math.round(n))}`;
 
-// ── Metas ────────────────────────────────────────────────────────────────────
+// ── Cupos (planificado vs real) ──────────────────────────────────────────────
+// Misma regla que packages/core/lib/planVsReal.ts: el cupo de una categoría es
+// lo planificado en el mes (egresos, sin pagos de tarjeta); lo real son los
+// consumos registrados (tabla consumos). Solo se evalúan categorías con
+// consumos. Aviso: en riesgo (80 % usado, o desde el día 7 la proyección
+// supera el plan) o excedido; una vez por nivel, categoría y mes.
 
 const DIA_MIN_PROYECCION = 7;
-const normalizar = (t: string) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-interface Meta { id: string; nombre: string; tipo: string; palabras?: string[]; categoria?: string; tope: number; moneda: string }
-interface Grupo { id: string; subcategorias?: { id: string }[] }
+interface Grupo { id: string; nombre?: string; subcategorias?: { id: string; nombre?: string }[] }
 
-async function payloadsMetas(): Promise<Payload[]> {
-  const { data: conf } = await supabase.from("configuracion").select("app_settings, transaction_cats").limit(1).maybeSingle();
-  const app = conf?.app_settings ?? {};
-  const metas: Meta[] = (Array.isArray(app.metasResumen) ? app.metasResumen : []).filter((m: Meta) => m.tipo !== "financiacion");
-  if (metas.length === 0) return [];
-  const base: string = ["ARS", "COP", "USD"].includes(app.monedaBase) ? app.monedaBase : "ARS";
-  const tc = app.tipoCambio ?? {};
-  const porUsd: Record<string, number> = { USD: 1, ARS: Number(tc.ARS_USD) || 1, COP: Number(tc.COP_USD) || 1 };
-  const aBase = (monto: number, moneda: string) => (monto / (porUsd[moneda] ?? 1)) * porUsd[base];
-  const grupos: Grupo[] = Array.isArray(conf?.transaction_cats) ? conf!.transaction_cats : [];
-
+async function payloadsCupos(): Promise<Payload[]> {
   const mes = mesART();
   const [y, m] = mes.split("-").map(Number);
   const diasMes = new Date(Date.UTC(y, m, 0)).getUTCDate();
   const dia = ahoraART().getUTCDate();
   const diasRestantes = Math.max(diasMes - dia, 0);
+  const desde = `${mes}-01`;
+  const hasta = `${mes}-${String(diasMes).padStart(2, "0")}`;
+
+  const { data: consumos } = await supabase.from("consumos").select("monto, moneda, categoria").gte("fecha", desde).lte("fecha", hasta);
+  if (!consumos || consumos.length === 0) return [];
+
+  const { data: conf } = await supabase.from("configuracion").select("app_settings, transaction_cats").limit(1).maybeSingle();
+  const app = conf?.app_settings ?? {};
+  const base: string = ["ARS", "COP", "USD"].includes(app.monedaBase) ? app.monedaBase : "ARS";
+  const tc = app.tipoCambio ?? {};
+  const porUsd: Record<string, number> = { USD: 1, ARS: Number(tc.ARS_USD) || 1, COP: Number(tc.COP_USD) || 1 };
+  const aBase = (monto: number, moneda: string) => (monto / (porUsd[moneda] ?? 1)) * porUsd[base];
+  const grupos: Grupo[] = Array.isArray(conf?.transaction_cats) ? conf!.transaction_cats : [];
+  const grupoDe = new Map<string, string>();
+  const nombreDe = new Map<string, string>();
+  for (const g of grupos) {
+    nombreDe.set(g.id, g.nombre ?? g.id);
+    for (const c of g.subcategorias ?? []) { grupoDe.set(c.id, g.id); nombreDe.set(c.id, c.nombre ?? c.id); }
+  }
 
   const { data: rows } = await supabase
     .from("movimientos")
-    .select("amount, orig_amt, currency, category, description, children, type")
+    .select("amount, orig_amt, currency, category, children")
     .is("deleted_at", null)
     .in("type", ["egreso", "exp"])
-    .gte("date", `${mes}-01`)
-    .lte("date", `${mes}-${String(diasMes).padStart(2, "0")}`);
-  const egresos = (rows ?? [])
-    .filter((r) => !r.children?.pagoTarjeta) // los pagos de tarjeta no son gasto por categoría
-    .map((r) => {
-      const pre = r.orig_amt != null && Math.abs(Number(r.orig_amt) - Number(r.amount)) > 0.01;
-      return {
-        monto: aBase(Number(r.amount), pre ? "ARS" : r.currency),
-        categoria: r.category as string,
-        texto: normalizar(`${r.description ?? ""} ${r.children?.nota ?? ""}`),
-        recurrente: !!r.children?.recurrente,
-      };
-    });
+    .gte("date", desde)
+    .lte("date", hasta);
+  const plan = new Map<string, number>();
+  for (const r of rows ?? []) {
+    if (r.children?.pagoTarjeta) continue;
+    const pre = r.orig_amt != null && Math.abs(Number(r.orig_amt) - Number(r.amount)) > 0.01;
+    plan.set(r.category, (plan.get(r.category) ?? 0) + aBase(Number(r.amount), pre ? "ARS" : r.currency));
+  }
+  const clave = (cat: string) => (plan.has(cat) ? cat : grupoDe.has(cat) && plan.has(grupoDe.get(cat)!) ? grupoDe.get(cat)! : cat);
+  const real = new Map<string, number>();
+  for (const c of consumos) real.set(clave(c.categoria), (real.get(clave(c.categoria)) ?? 0) + aBase(Number(c.monto), c.moneda));
 
-  // Nivel ya avisado por meta en este mes
-  const claves = metas.map((x) => `${x.id}|${mes}`);
+  const claves = [...real.keys()].map((k) => `cupo|${k}|${mes}`);
   const { data: enviadas } = await supabase.from("alertas_enviadas").select("clave, nivel").in("clave", claves);
   const yaEnviado = new Map((enviadas ?? []).map((e) => [e.clave as string, Number(e.nivel)]));
 
   const out: Payload[] = [];
   const nuevos: { clave: string; nivel: number; enviado_at: string }[] = [];
-  for (const meta of metas) {
-    let incluye: (e: (typeof egresos)[number]) => boolean = () => true;
-    if (meta.tipo === "comercios") {
-      const palabras = (meta.palabras ?? []).map(normalizar).filter(Boolean);
-      incluye = (e) => palabras.some((w) => e.texto.includes(w));
-    } else if (meta.tipo === "categoria") {
-      const g = grupos.find((x) => x.id === meta.categoria);
-      const ids = new Set(g ? [g.id, ...(g.subcategorias ?? []).map((c) => c.id)] : [meta.categoria ?? ""]);
-      incluye = (e) => ids.has(e.categoria);
-    }
-    const xs = egresos.filter(incluye);
-    const fijo = xs.filter((e) => e.recurrente).reduce((a, e) => a + e.monto, 0);
-    const variable = xs.filter((e) => !e.recurrente).reduce((a, e) => a + e.monto, 0);
-    const actual = fijo + variable;
-    const proyeccion = fijo + (variable / Math.max(dia, 1)) * diasMes;
-    const tope = aBase(meta.tope, meta.moneda);
-
+  for (const [cat, actual] of real) {
+    const tope = plan.get(cat) ?? 0;
+    if (tope <= 0) continue; // sin planificar: se ve en la app, no se avisa
+    const proyeccion = (actual / Math.max(dia, 1)) * diasMes;
     let nivel = 0;
     if (actual > tope) nivel = 2;
-    else if ((dia >= DIA_MIN_PROYECCION && proyeccion > tope) || (tope > 0 && actual >= tope * 0.8)) nivel = 1;
-    const clave = `${meta.id}|${mes}`;
-    if (nivel === 0 || nivel <= (yaEnviado.get(clave) ?? 0)) continue;
-
+    else if ((dia >= DIA_MIN_PROYECCION && proyeccion > tope) || actual >= tope * 0.8) nivel = 1;
+    const k = `cupo|${cat}|${mes}`;
+    if (nivel === 0 || nivel <= (yaEnviado.get(k) ?? 0)) continue;
+    const nombre = nombreDe.get(cat) ?? cat;
     const porDia = diasRestantes > 0 && tope > actual ? (tope - actual) / diasRestantes : null;
     const body = nivel === 2
-      ? `Superó el tope: lleva ${fmt(actual, base)} de ${fmt(tope, base)} (${fmt(actual - tope, base)} de más).`
-      : `Lleva ${fmt(actual, base)} de ${fmt(tope, base)}. A este ritmo cierra el mes en ${fmt(proyeccion, base)}.` +
-        (porDia !== null ? ` Para cumplir le quedan ${fmt(porDia, base)} por día.` : "");
-    out.push({ title: `${nivel === 2 ? "🔴" : "🟠"} ${meta.nombre}`, body, url: "/dashboard", tag: `finanzas-meta-${meta.id}` });
-    nuevos.push({ clave, nivel, enviado_at: new Date().toISOString() });
+      ? `Superó lo planificado: lleva ${fmt(actual, base)} de ${fmt(tope, base)} (${fmt(actual - tope, base)} de más).`
+      : `Lleva ${fmt(actual, base)} de ${fmt(tope, base)} planificado. A este ritmo cierra el mes en ${fmt(proyeccion, base)}.` +
+        (porDia !== null ? ` Para no pasarse le quedan ${fmt(porDia, base)} por día.` : "");
+    out.push({ title: `${nivel === 2 ? "🔴" : "🟠"} ${nombre}`, body, url: "/dashboard", tag: `finanzas-cupo-${cat}` });
+    nuevos.push({ clave: k, nivel, enviado_at: new Date().toISOString() });
   }
   if (nuevos.length > 0) await supabase.from("alertas_enviadas").upsert(nuevos, { onConflict: "clave" });
   return out;
@@ -129,7 +120,8 @@ async function payloadsMetas(): Promise<Payload[]> {
 // ── Recordatorios ────────────────────────────────────────────────────────────
 
 async function armarPayloads(tipo: string): Promise<Payload[]> {
-  if (tipo === "metas") return await payloadsMetas();
+  // "metas" es el nombre con el que quedó programado el cron
+  if (tipo === "cupos" || tipo === "metas") return await payloadsCupos();
 
   if (tipo === "cuotas") {
     const { data } = await supabase.from("compras_cuotas").select("*");
@@ -153,13 +145,17 @@ async function armarPayloads(tipo: string): Promise<Payload[]> {
     }];
   }
 
-  // tipo=diario: solo si hoy no se cargó ningún movimiento
+  // tipo=diario: solo si hoy no se cargó ningún movimiento ni consumo
   const { count } = await supabase
     .from("movimientos")
     .select("id", { count: "exact", head: true })
     .is("deleted_at", null)
     .gte("created_at", inicioDelDiaARTenUTC());
-  if ((count ?? 0) > 0) return [];
+  const { count: consumosHoy } = await supabase
+    .from("consumos")
+    .select("id", { count: "exact", head: true })
+    .gte("created_at", inicioDelDiaARTenUTC());
+  if ((count ?? 0) + (consumosHoy ?? 0) > 0) return [];
   return [{
     title: "📝 Finanzas J&M",
     body: "Hoy no cargaron ningún movimiento. ¿Se les escapó algún gasto?",

@@ -13,7 +13,7 @@ import { categoriasDeGasto, usuarioId } from '@finanzas/core/lib/resumenes'
 import { GrupoComercio } from '@finanzas/core/lib/comercioReglas'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { getCatFromSettings, monthLabel } from '@finanzas/core/lib/constants'
-import { CompraCuotas, Currency, Resumen, ResumenItem, Settings, Tarjeta, Transaction } from '@finanzas/core/types'
+import { CompraCuotas, Consumo, Currency, Resumen, ResumenItem, Settings, Tarjeta } from '@finanzas/core/types'
 import { CompromisoMes, ETIQUETA_CARGO, conciliacion, mesCorto, montoCorto } from '@finanzas/core/lib/resumenAnalisis'
 import { toBase } from '@finanzas/core/lib/currency'
 import { AnalisisFinanciacion, Comparativa, EstadoMeta, Variacion } from '@finanzas/core/lib/resumenExtras'
@@ -138,8 +138,7 @@ export default function ResumenesTab() {
             <ConciliacionCard key={c.resumen.id} c={c} tarjetas={s.tarjetas ?? []} s={s}
               onElegir={(id) => r.elegirTarjeta(c.resumen.emisor, id)}
               onAgregar={(items, t) => { haptic('success'); return r.agregarFaltantes(items, t) }}
-              onCargos={(t) => { haptic('success'); return r.agregarCargos(c.resumen, c.resultado!.cargos, t) }}
-              onPasar={(txs, t) => { haptic('success'); return r.pasarGastos(txs, t) }} />
+              onPasar={(cs, t) => { haptic('success'); return r.pasarConsumos(cs, t) }} />
           ))}
 
           {r.extras && <ComparativaCard c={r.extras.comparativa} base={base} />}
@@ -380,12 +379,11 @@ function Vacio({ texto, ok }: { texto: string; ok?: boolean }) {
 const signo = (n: number) => (n > 0 ? '+' : '')
 const pctTxt = (n: number | null) => (n === null ? '—' : `${signo(n)}${n.toFixed(0)}%`)
 
-function ConciliacionCard({ c, tarjetas, s, onElegir, onAgregar, onCargos, onPasar }: {
+function ConciliacionCard({ c, tarjetas, s, onElegir, onAgregar, onPasar }: {
   c: ConciliacionResumen; tarjetas: Tarjeta[]; s: Settings
   onElegir: (tarjetaId: string) => void
   onAgregar: (items: ResumenItem[], t: Tarjeta) => Promise<void>
-  onCargos: (t: Tarjeta) => Promise<void>
-  onPasar: (txs: Transaction[], t: Tarjeta) => Promise<void>
+  onPasar: (cs: Consumo[], t: Tarjeta) => Promise<void>
 }) {
   const [busy, setBusy] = useState(false)
   const correr = async (fn: () => Promise<void>) => { setBusy(true); try { await fn() } finally { setBusy(false) } }
@@ -393,7 +391,6 @@ function ConciliacionCard({ c, tarjetas, s, onElegir, onAgregar, onCargos, onPas
   const t = c.tarjeta
   const fecha = (iso: string) => fechaCorta(iso)
   const cat = (id: string | null) => (id ? getCatFromSettings(id, s)?.nombre : undefined) ?? 'sin categoría'
-  const totalCargos = res?.cargos.reduce((a, x) => a + x.monto, 0) ?? 0
   return (
     <Card title={`Contraste con lo registrado · ${c.resumen.emisor}`} delay={0.025}>
       {tarjetas.length === 0 ? (
@@ -415,17 +412,17 @@ function ConciliacionCard({ c, tarjetas, s, onElegir, onAgregar, onCargos, onPas
                 <Kpi icon={AlertCircle} label="Sin registrar" value={String(res.faltan.length)} />
                 <Kpi icon={Repeat} label="Otro medio" value={String(res.otroMedio.length)} />
               </div>
-              <p className="text-[11px] text-gray-400">Del {fecha(res.desde)} al {fecha(res.hasta)} · solo gastos con tarjeta de crédito</p>
+              <p className="text-[11px] text-gray-400">Del {fecha(res.desde)} al {fecha(res.hasta)} · consumos registrados con tarjeta de crédito</p>
 
               {res.otroMedio.length > 0 && (
                 <>
                   <div className="mt-3 flex items-center justify-between gap-2">
                     <p className="eyebrow">Registrados con otro medio</p>
-                    <button disabled={busy} onClick={() => correr(() => onPasar(res.otroMedio.map((x) => x.tx), t))} className="text-[11px] font-bold text-primary disabled:opacity-50">Pasar todos a {t.nombre}</button>
+                    <button disabled={busy} onClick={() => correr(() => onPasar(res.otroMedio.map((x) => x.consumo), t))} className="text-[11px] font-bold text-primary disabled:opacity-50">Pasar todos a {t.nombre}</button>
                   </div>
-                  <p className="text-[11px] text-gray-500">Figuran en el resumen pero los cargó sin esta tarjeta. Agregarlos los duplicaría.</p>
-                  {res.otroMedio.map(({ item, tx }) => (
-                    <Fila key={tx.id} titulo={tx.descripcion || item.comercio} meta={`${fecha(item.fecha)} · en el resumen: ${item.comercio}`}
+                  <p className="text-[11px] text-gray-500">Figuran en el resumen pero los registró con otro medio. Agregarlos los duplicaría.</p>
+                  {res.otroMedio.map(({ item, consumo }) => (
+                    <Fila key={consumo.id} titulo={consumo.comercio || item.comercio} meta={`${fecha(item.fecha)} · en el resumen: ${item.comercio}`}
                       derecha={<p className="text-[13px] font-bold text-gray-900"><Money value={item.monto} currency={item.moneda} animated={false} /></p>} />
                   ))}
                 </>
@@ -434,7 +431,7 @@ function ConciliacionCard({ c, tarjetas, s, onElegir, onAgregar, onCargos, onPas
               {res.faltan.length > 0 && (
                 <>
                   <div className="mt-3 flex items-center justify-between gap-2">
-                    <p className="eyebrow">En el resumen, sin registrar</p>
+                    <p className="eyebrow">En el resumen, sin registrar como consumo</p>
                     <button disabled={busy} onClick={() => correr(() => onAgregar(res.faltan, t))} className="text-[11px] font-bold text-primary disabled:opacity-50">Agregar todos</button>
                   </div>
                   {res.faltan.map((i, k) => (
@@ -453,23 +450,13 @@ function ConciliacionCard({ c, tarjetas, s, onElegir, onAgregar, onCargos, onPas
                 </>
               )}
 
-              {res.cargos.length > 0 && (
-                <div className="mt-3 flex items-center justify-between gap-2 rounded-2xl bg-gray-500/[0.06] px-3 py-2.5">
-                  <div className="min-w-0">
-                    <p className="text-[12.5px] font-semibold text-gray-900">Intereses, impuestos y comisiones</p>
-                    <p className="text-[11px] text-gray-500">{res.cargos.length} renglones · <Money value={totalCargos} currency={c.resumen.moneda} animated={false} /></p>
-                  </div>
-                  <button disabled={busy} onClick={() => correr(() => onCargos(t))} className="shrink-0 h-8 px-2.5 rounded-xl glass text-[11px] font-bold text-primary disabled:opacity-50">Agregar como gasto</button>
-                </div>
-              )}
-
               {res.sobran.length > 0 && (
                 <>
                   <p className="eyebrow mt-3">Registrados con {t.nombre} que no aparecen</p>
                   <p className="text-[11px] text-gray-500">Revise si están duplicados, si eran de otra tarjeta o si el comercio los imputó tarde.</p>
-                  {res.sobran.map((tx) => (
-                    <Fila key={tx.id} titulo={tx.descripcion || 'Sin descripción'} meta={fecha(tx.fecha.toDate().toISOString().slice(0, 10))}
-                      derecha={<p className="text-[13px] font-bold text-gray-900"><Money value={tx.monto} currency={tx.moneda} animated={false} /></p>} />
+                  {res.sobran.map((x) => (
+                    <Fila key={x.id} titulo={x.comercio || 'Sin comercio'} meta={fecha(x.fecha)}
+                      derecha={<p className="text-[13px] font-bold text-gray-900"><Money value={x.monto} currency={x.moneda} animated={false} /></p>} />
                   ))}
                 </>
               )}

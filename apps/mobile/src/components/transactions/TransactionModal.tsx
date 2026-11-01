@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { X, Trash2, Copy, ArrowRight, Check, Camera, ScanLine, Calculator, ChevronDown, Images } from 'lucide-react'
+import { X, Trash2, Copy, ArrowRight, Check, Camera, ScanLine, Calculator, ChevronDown } from 'lucide-react'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
@@ -19,7 +19,6 @@ import { parseTicket } from '@finanzas/core/lib/ticket'
 import { ocrImagen } from '@/lib/ocr'
 import { leerComprobante } from '@finanzas/core/lib/comprobantes'
 import { fetchReglas } from '@finanzas/core/lib/comercioReglas'
-import CapturaSheet from '@/components/transactions/CapturaSheet'
 import { deleteTransactionsWithUndo } from '@/lib/undo'
 import { evalExpr, isExpression } from '@finanzas/core/lib/calc'
 import { CategoryIcon } from '@/lib/categoryIcons'
@@ -119,8 +118,7 @@ export default function TransactionModal() {
   const [cloneMonth, setCloneMonth] = useState('')
   const [cloneAction, setCloneAction] = useState<'clone' | 'move' | null>(null)
   const scanInputRef = useRef<HTMLInputElement>(null)
-  const capturaInputRef = useRef<HTMLInputElement>(null)
-  const [captura, setCaptura] = useState<File | null>(null)
+
   const montoRef = useRef<HTMLInputElement>(null)
   // Posición del cursor a restaurar tras insertar un operador. Se aplica en
   // el mismo commit (layout effect) para no pisar lo que se tipee después.
@@ -331,7 +329,7 @@ export default function TransactionModal() {
     setSaveError(null)
     try {
       const reglas = await fetchReglas().catch(() => new Map())
-      const [g] = await leerComprobante(file, 'ticket', s, reglas, transactions)
+      const [g] = await leerComprobante(file, 'ticket', s, reglas, [])
       if (!g) throw new Error('sin datos')
       setMonto(String(g.monto))
       setMoneda(g.moneda)
@@ -343,7 +341,7 @@ export default function TransactionModal() {
         else { setSelectedGroup(g.categoria); setSelectedSub('') }
       }
       if (g.tarjetaId) { setPayTab('tarjeta'); setTarjetaId(g.tarjetaId) }
-      showToast(g.duplicado ? 'Ticket leído — ojo: parece ya cargado' : 'Ticket leído — revise los datos')
+      showToast('Ticket leído — revise los datos')
     } catch (errIA) {
       console.warn('[scan] IA no disponible, lectura local:', errIA)
       try {
@@ -625,15 +623,7 @@ export default function TransactionModal() {
               {scanning ? (scanPct > 0 ? `Leyendo… ${scanPct}%` : 'Leyendo…') : 'Ticket'}
             </button>
           )}
-          {tipo === 'egreso' && !editingTransaction && (
-            <button
-              type="button"
-              onClick={() => capturaInputRef.current?.click()}
-              className="h-8 px-3 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 text-gray-400"
-            >
-              <Images size={13} /> Captura
-            </button>
-          )}
+
         </div>
         <input
           ref={scanInputRef}
@@ -643,14 +633,7 @@ export default function TransactionModal() {
           className="hidden"
           onChange={handleScanTicket}
         />
-        <input
-          ref={capturaInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) setCaptura(f); e.target.value = '' }}
-        />
-        <CapturaSheet archivo={captura} modo="movimientos" onClose={(n) => { setCaptura(null); if (n > 0) closeTransactionModal() }} />
+
         <Collapse open={calcOpen || montoEsCuenta}>
           <div className="pt-2 flex items-center justify-center gap-1.5">
             {['+', '−', '×', '÷'].map((op) => (

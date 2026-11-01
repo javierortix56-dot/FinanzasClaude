@@ -5,17 +5,15 @@ import { useUIStore } from '../store/useUIStore'
 import { subscribeToCuotas } from './cuotas'
 import { analizarPeriodo } from './resumenAnalisis'
 import { analizarFinanciacion, compararConAnteriores, evaluarMetas } from './resumenExtras'
-import {
-  ResultadoConciliacion, cargosComoGasto, conciliar, fetchEgresosDesde, pasarATarjeta, periodoDelResumen,
-  registrarDesdeResumen, tarjetaDelResumen,
-} from './conciliacion'
+import { ResultadoConciliacion, conciliar, pasarATarjeta, periodoDelResumen, registrarDesdeResumen, tarjetaDelResumen } from './conciliacion'
 import { categoriaPorDefecto } from './comprobantes'
-import { useTransactionStore } from '../store/useTransactionStore'
+import { subscribeToConsumos } from './consumos'
+import { shiftMonth } from './constants'
 import { borrarResumen, categoriasDeGasto, existeResumen, extraerResumen, fetchResumenes, guardarResumen } from './resumenes'
 import {
   Reglas, agruparComercios, aplicarReglas, editarGrupo, fetchReglas, guardarReglas, recategorizarComercio, reglasDe,
 } from './comercioReglas'
-import { CompraCuotas, Currency, Resumen, ResumenItem, Settings, Tarjeta, Transaction } from '../types'
+import { CompraCuotas, Consumo, Currency, Resumen, ResumenItem, Settings, Tarjeta } from '../types'
 
 export type EstadoSubida =
   | { paso: 'inactivo' }
@@ -103,40 +101,34 @@ export function useResumenes(s: Settings, base: Currency, creadoPor: string) {
       tarjeta: tarjetas.find((t) => t.id === elegidas[r.emisor]) ?? tarjetaDelResumen(r, tarjetas) ?? null,
     }))
   }, [analisis, s.tarjetas, elegidas])
-  const storeTxs = useTransactionStore((st) => st.transactions)
-  const [egresos, setEgresos] = useState<Transaction[] | null>(null)
-  const desdeConciliacion = useMemo(() => {
+  // Consumos desde el mes anterior al primer consumo del resumen (con cambios en vivo)
+  const [consumos, setConsumos] = useState<Consumo[] | null>(null)
+  const mesDesde = useMemo(() => {
     const desdes = tarjetasDelPeriodo.map((x) => periodoDelResumen(x.resumen)?.desde).filter((d): d is string => !!d).sort()
-    return desdes[0] ?? null
+    return desdes[0] ? shiftMonth(desdes[0].slice(0, 7), -1) : null
   }, [tarjetasDelPeriodo])
-  const [versionEgresos, setVersionEgresos] = useState(0)
   useEffect(() => {
-    if (!desdeConciliacion) { setEgresos(null); return }
-    let cancel = false
-    fetchEgresosDesde(desdeConciliacion).then((t) => { if (!cancel) setEgresos(t) }).catch(() => { if (!cancel) setEgresos([]) })
-    return () => { cancel = true }
-  }, [desdeConciliacion, storeTxs, versionEgresos])
+    if (!mesDesde) { setConsumos(null); return }
+    return subscribeToConsumos(mesDesde, setConsumos)
+  }, [mesDesde])
   const conciliaciones = useMemo<ConciliacionResumen[]>(
     () => tarjetasDelPeriodo.map(({ resumen, tarjeta }) => ({
-      resumen, tarjeta, resultado: tarjeta && egresos ? conciliar(resumen, tarjeta, egresos) : null,
+      resumen, tarjeta, resultado: tarjeta && consumos ? conciliar(resumen, tarjeta, consumos) : null,
     })),
-    [tarjetasDelPeriodo, egresos],
+    [tarjetasDelPeriodo, consumos],
   )
   async function conciliarAccion(fn: () => Promise<unknown>, ok: string) {
     try {
       await fn()
-      setVersionEgresos((v) => v + 1)
       useUIStore.getState().showToast(ok)
     } catch (err) {
       useUIStore.getState().showToast(`No se pudo guardar: ${err instanceof Error ? err.message : String(err)}`, 'error')
     }
   }
   const agregarFaltantes = (items: ResumenItem[], tarjeta: Tarjeta) =>
-    conciliarAccion(() => registrarDesdeResumen(items, tarjeta, categoriaPorDefecto(s), creadoPor), 'Gastos agregados')
-  const agregarCargos = (r: Resumen, cargos: ResumenItem[], tarjeta: Tarjeta) =>
-    conciliarAccion(() => registrarDesdeResumen(cargosComoGasto(r, cargos), tarjeta, categoriaPorDefecto(s), creadoPor), 'Cargos agregados')
-  const pasarGastos = (txs: Transaction[], tarjeta: Tarjeta) =>
-    conciliarAccion(() => pasarATarjeta(txs, tarjeta), `Pasados a ${tarjeta.nombre}`)
+    conciliarAccion(() => registrarDesdeResumen(items, tarjeta, categoriaPorDefecto(s), creadoPor), 'Consumos agregados')
+  const pasarConsumos = (cs: Consumo[], tarjeta: Tarjeta) =>
+    conciliarAccion(() => pasarATarjeta(cs, tarjeta), `Pasados a ${tarjeta.nombre}`)
 
   const itemsPeriodo = useMemo(() => analisis?.resumenes.flatMap((r) => r.items) ?? [], [analisis])
 
@@ -213,8 +205,7 @@ export function useResumenes(s: Settings, base: Currency, creadoPor: string) {
     conciliaciones,
     elegirTarjeta,
     agregarFaltantes,
-    agregarCargos,
-    pasarGastos,
+    pasarConsumos,
     subida,
     subir,
     gruposRevision,

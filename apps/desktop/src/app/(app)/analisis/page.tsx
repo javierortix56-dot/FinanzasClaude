@@ -22,6 +22,7 @@ import { computeInsights } from '@finanzas/core/lib/insights'
 import { CategoryIcon } from '@finanzas/core/lib/categoryIcons'
 import { Currency, Transaction } from '@finanzas/core/types'
 import { PageScroll } from '@/components/shell/PageScroll'
+import { PlanVsRealSeccion } from '@/components/consumos/PlanVsRealSeccion'
 import { easeOut } from '@/components/ui/motion'
 
 type TabCat = 'gastos' | 'ingresos'
@@ -188,6 +189,7 @@ export default function AnalisisPage() {
               </Card>
             </div>
           </motion.div>
+      <PlanVsRealSeccion base={base} />
     </PageScroll>
   )
 }

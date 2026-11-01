@@ -25,7 +25,8 @@ import { getCatFromSettings, getParentGroup, monthLabel, shiftMonth } from '@fin
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { fetchLastNMonths } from '@finanzas/core/lib/analytics'
 import { computeInsights } from '@finanzas/core/lib/insights'
-import { MetaEnVivo, evaluarMetasEnVivo } from '@finanzas/core/lib/metasVivo'
+import { calcularCupos, Cupo } from '@finanzas/core/lib/planVsReal'
+import { useConsumos } from '@finanzas/core/lib/useConsumos'
 import { cuentaEnCaja, cuentaEnCategorias, esConsumoTarjeta, necesitaRespaldo, saldoQuePasa } from '@finanzas/core/lib/tarjetas'
 import { CategoryIcon } from '@finanzas/core/lib/categoryIcons'
 import { Currency, Transaction, Settings } from '@finanzas/core/types'
@@ -334,7 +335,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <MetasDelMes metas={evaluarMetasEnVivo(transactions, currentMonth, base, s)} base={base} />
+      <CuposDelMes transactions={transactions} month={currentMonth} base={base} s={s} />
 
       {/* ── Recientes + categorías ── */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
@@ -481,33 +482,36 @@ function RecentRow({ t, settings, index, onClick }: { t: Transaction; settings: 
   )
 }
 
-const COLOR_NIVEL = { ok: 'var(--income)', atento: 'var(--unassigned)', excedida: 'var(--expense)' } as const
+const COLOR_NIVEL = { ok: 'var(--income)', atento: 'var(--unassigned)', excedido: 'var(--expense)', sin_plan: 'var(--muted-2)' } as const
 
-/** Metas de Ajustes seguidas con lo registrado en el mes: avance, proyección y margen diario */
-function MetasDelMes({ metas, base }: { metas: MetaEnVivo[]; base: Currency }) {
-  if (metas.length === 0) return null
+/**
+ * Planificado contra real del mes: los consumos registrados (desde la app
+ * mobile: a mano, foto o captura) llenan el cupo planificado de su categoría.
+ */
+function CuposDelMes({ transactions, month, base, s }: { transactions: Transaction[]; month: string; base: Currency; s: Settings }) {
+  const consumos = useConsumos(month)
+  const cupos: Cupo[] = useMemo(() => calcularCupos(transactions, consumos ?? [], month, base, s), [transactions, consumos, month, base, s])
+  if (cupos.length === 0) return null
   return (
     <Card delay={0.24} className="p-5">
-      <div className="eyebrow mb-4 flex items-center justify-between gap-2">
-        <span>Metas del mes</span>
-        <Link href="/ajustes" className="normal-case tracking-normal text-[11px] font-semibold text-primary">Editar metas</Link>
-      </div>
+      <div className="eyebrow mb-4">Planificado vs real del mes</div>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-4">
-        {metas.map((m) => (
-          <div key={m.meta.id}>
+        {cupos.map((c) => (
+          <div key={c.categoria}>
             <div className="flex items-center justify-between text-sm mb-1.5">
-              <span className="truncate font-medium">{m.meta.nombre}</span>
-              <span className="text-xs font-semibold tnum" style={{ color: COLOR_NIVEL[m.nivel] }}>{Number.isFinite(m.pct) ? `${Math.round(m.pct)}%` : '—'}</span>
+              <span className="truncate font-medium">{c.nombre}<span className="ml-2 text-xs text-muted-2">{c.consumos.length} consumos</span></span>
+              <span className="text-xs font-semibold tnum" style={{ color: COLOR_NIVEL[c.nivel] }}>{Number.isFinite(c.pct) ? `${Math.round(c.pct)}%` : 'sin plan'}</span>
             </div>
-            <ProgressBar value={m.topeBase > 0 ? m.pct : 100} color={COLOR_NIVEL[m.nivel]} height={6} />
+            <ProgressBar value={c.planBase > 0 ? c.pct : 100} color={COLOR_NIVEL[c.nivel]} height={6} />
             <div className="text-[11px] text-muted mt-1 tnum">
-              <MoneyText amount={m.actualBase} currency={base} /> de <MoneyText amount={m.topeBase} currency={base} />
-              {' '}· proyección <MoneyText amount={m.proyeccionBase} currency={base} />
-              {m.porDiaBase !== null && <> · le quedan <MoneyText amount={m.porDiaBase} currency={base} />/día</>}
+              <MoneyText amount={c.realBase} currency={base} />{c.planBase > 0 && <> de <MoneyText amount={c.planBase} currency={base} /></>}
+              {c.planBase > c.realBase && <> · quedan <MoneyText amount={c.planBase - c.realBase} currency={base} /></>}
+              {c.porDiaBase !== null && <> · <MoneyText amount={c.porDiaBase} currency={base} />/día</>}
             </div>
-            {m.nivel !== 'ok' && (
-              <div className="text-[11px] font-semibold mt-0.5" style={{ color: COLOR_NIVEL[m.nivel] }}>
-                {m.nivel === 'excedida' ? <>Se pasó por <MoneyText amount={m.actualBase - m.topeBase} currency={base} /></> : m.motivo}
+            {c.nivel !== 'ok' && (
+              <div className="text-[11px] font-semibold mt-0.5" style={{ color: COLOR_NIVEL[c.nivel] }}>
+                {c.nivel === 'excedido' ? <>Se pasó por <MoneyText amount={c.realBase - c.planBase} currency={base} /></>
+                  : c.nivel === 'atento' ? <>{c.motivo} · proyección <MoneyText amount={c.proyeccionBase} currency={base} /></> : c.motivo}
               </div>
             )}
           </div>
