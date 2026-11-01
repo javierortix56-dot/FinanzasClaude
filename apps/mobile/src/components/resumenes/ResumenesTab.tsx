@@ -13,10 +13,10 @@ import { categoriasDeGasto, usuarioId } from '@finanzas/core/lib/resumenes'
 import { GrupoComercio } from '@finanzas/core/lib/comercioReglas'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { getCatFromSettings, monthLabel } from '@finanzas/core/lib/constants'
-import { CompraCuotas, Currency, Resumen, ResumenItem, Settings, Tarjeta, Transaction } from '@finanzas/core/types'
+import { CompraCuotas, Consumo, Currency, Resumen, ResumenItem, Settings, Tarjeta } from '@finanzas/core/types'
 import { CompromisoMes, ETIQUETA_CARGO, conciliacion, mesCorto, montoCorto } from '@finanzas/core/lib/resumenAnalisis'
 import { toBase } from '@finanzas/core/lib/currency'
-import { AnalisisFinanciacion, Comparativa, EstadoMeta, Variacion } from '@finanzas/core/lib/resumenExtras'
+import { AnalisisFinanciacion, Comparativa, Variacion } from '@finanzas/core/lib/resumenExtras'
 import type { ConciliacionResumen } from '@finanzas/core/lib/useResumenes'
 import Card from '@/components/ui/Card'
 import CuotaModal from '@/components/cuotas/CuotaModal'
@@ -130,21 +130,23 @@ export default function ResumenesTab() {
             </div>
           </Card>
 
-          {r.extras && <MetasCard metas={r.extras.metas} base={base} />}
+          <IndiceResumen />
 
-          {a.resumenes.filter((res) => res.detalle).map((res) => <EstadoCuenta key={res.id} r={res} />)}
+          <div id="r-estado" className="scroll-mt-2 space-y-3">{a.resumenes.filter((res) => res.detalle).map((res) => <EstadoCuenta key={res.id} r={res} />)}</div>
 
-          {r.conciliaciones.map((c) => (
+          <div id="r-contraste" className="scroll-mt-2 space-y-3">{r.conciliaciones.map((c) => (
             <ConciliacionCard key={c.resumen.id} c={c} tarjetas={s.tarjetas ?? []} s={s}
               onElegir={(id) => r.elegirTarjeta(c.resumen.emisor, id)}
               onAgregar={(items, t) => { haptic('success'); return r.agregarFaltantes(items, t) }}
-              onCargos={(t) => { haptic('success'); return r.agregarCargos(c.resumen, c.resultado!.cargos, t) }}
-              onPasar={(txs, t) => { haptic('success'); return r.pasarGastos(txs, t) }} />
-          ))}
+              onPasar={(cs, t) => { haptic('success'); return r.pasarConsumos(cs, t) }} />
+          ))}</div>
 
-          {r.extras && <ComparativaCard c={r.extras.comparativa} base={base} />}
-          {r.extras && <FinanciacionCard f={r.extras.financiacion} base={base} />}
+          <div id="r-comparar" className="scroll-mt-2 space-y-3">
+            {r.extras && <ComparativaCard c={r.extras.comparativa} base={base} />}
+            {r.extras && <FinanciacionCard f={r.extras.financiacion} base={base} />}
+          </div>
 
+          <div id="r-suscripciones" className="scroll-mt-2" />
           <Card title="Suscripciones y débitos" delay={0.04}>
             {a.suscripciones.length === 0 ? (
               <Vacio texto={r.periodos.length < 3 ? 'Con 3 meses de resúmenes se detectan con confianza.' : 'No se detectaron cobros recurrentes.'} />
@@ -165,6 +167,7 @@ export default function ResumenesTab() {
             ))}
           </Card>
 
+          <div id="r-hormiga" className="scroll-mt-2" />
           <Card title="Gastos hormiga" delay={0.12}>
             {a.hormiga.totalBase === 0 ? <Vacio texto="Sin hábitos ni compras chicas este mes." ok /> : (
               <>
@@ -210,6 +213,7 @@ export default function ResumenesTab() {
             ))}
           </Card>
 
+          <div id="r-cuotas" className="scroll-mt-2" />
           <Card title="Cuotas en curso" delay={0.2}
               action={
                 <button onClick={() => { haptic(); setCuotaManual('nueva') }} className="text-[11px] font-bold text-primary inline-flex items-center gap-1">
@@ -249,6 +253,7 @@ export default function ResumenesTab() {
               {a.cuotas.length === 0 && <Vacio texto="No hay cuotas en curso en este período." ok />}
           </Card>
 
+          <div id="r-categorias" className="scroll-mt-2" />
           <Card title="Gasto por categoría" delay={0.22}>
             {a.porCategoria.slice(0, 8).map((c) => {
               const cat = c.clave ? getCatFromSettings(c.clave, s) : undefined
@@ -282,6 +287,7 @@ export default function ResumenesTab() {
             ))}
           </Card>
 
+          <div id="r-cargos" className="scroll-mt-2" />
           {a.cargos.items.length > 0 && (
             <Card title="Impuestos, intereses y comisiones" delay={0.24}>
               <p className="mb-2 text-xs text-gray-500 leading-relaxed">
@@ -336,6 +342,26 @@ export default function ResumenesTab() {
   )
 }
 
+const SECCIONES: [string, string][] = [
+  ['r-estado', 'Estado'], ['r-contraste', 'Contraste'], ['r-cuotas', 'Cuotas'], ['r-comparar', 'Comparar'],
+  ['r-suscripciones', 'Suscripciones'], ['r-hormiga', 'Hormiga'], ['r-categorias', 'Categorías'], ['r-cargos', 'Cargos'],
+]
+
+/** Índice para saltar a cada sección del resumen (la pestaña es larga) */
+function IndiceResumen() {
+  return (
+    <div className="sticky top-0 z-10 -mx-4 px-4 py-1.5 flex gap-1.5 overflow-x-auto no-scrollbar bg-[var(--background)]/85 backdrop-blur">
+      {SECCIONES.map(([id, label]) => (
+        <button key={id} type="button"
+          onClick={() => { haptic('light'); document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}
+          className="shrink-0 h-7 px-3 rounded-full glass text-[11px] font-semibold text-gray-600">
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function ResumenChip({ r, onBorrar }: { r: Resumen; onBorrar: () => void }) {
   return (
     <span className="inline-flex items-center gap-1.5 rounded-xl bg-gray-500/[0.08] pl-2.5 pr-1 py-1 text-[11px]">
@@ -380,12 +406,11 @@ function Vacio({ texto, ok }: { texto: string; ok?: boolean }) {
 const signo = (n: number) => (n > 0 ? '+' : '')
 const pctTxt = (n: number | null) => (n === null ? '—' : `${signo(n)}${n.toFixed(0)}%`)
 
-function ConciliacionCard({ c, tarjetas, s, onElegir, onAgregar, onCargos, onPasar }: {
+function ConciliacionCard({ c, tarjetas, s, onElegir, onAgregar, onPasar }: {
   c: ConciliacionResumen; tarjetas: Tarjeta[]; s: Settings
   onElegir: (tarjetaId: string) => void
   onAgregar: (items: ResumenItem[], t: Tarjeta) => Promise<void>
-  onCargos: (t: Tarjeta) => Promise<void>
-  onPasar: (txs: Transaction[], t: Tarjeta) => Promise<void>
+  onPasar: (cs: Consumo[], t: Tarjeta) => Promise<void>
 }) {
   const [busy, setBusy] = useState(false)
   const correr = async (fn: () => Promise<void>) => { setBusy(true); try { await fn() } finally { setBusy(false) } }
@@ -393,7 +418,6 @@ function ConciliacionCard({ c, tarjetas, s, onElegir, onAgregar, onCargos, onPas
   const t = c.tarjeta
   const fecha = (iso: string) => fechaCorta(iso)
   const cat = (id: string | null) => (id ? getCatFromSettings(id, s)?.nombre : undefined) ?? 'sin categoría'
-  const totalCargos = res?.cargos.reduce((a, x) => a + x.monto, 0) ?? 0
   return (
     <Card title={`Contraste con lo registrado · ${c.resumen.emisor}`} delay={0.025}>
       {tarjetas.length === 0 ? (
@@ -415,17 +439,17 @@ function ConciliacionCard({ c, tarjetas, s, onElegir, onAgregar, onCargos, onPas
                 <Kpi icon={AlertCircle} label="Sin registrar" value={String(res.faltan.length)} />
                 <Kpi icon={Repeat} label="Otro medio" value={String(res.otroMedio.length)} />
               </div>
-              <p className="text-[11px] text-gray-400">Del {fecha(res.desde)} al {fecha(res.hasta)} · solo gastos con tarjeta de crédito</p>
+              <p className="text-[11px] text-gray-400">Del {fecha(res.desde)} al {fecha(res.hasta)} · consumos registrados con tarjeta de crédito</p>
 
               {res.otroMedio.length > 0 && (
                 <>
                   <div className="mt-3 flex items-center justify-between gap-2">
                     <p className="eyebrow">Registrados con otro medio</p>
-                    <button disabled={busy} onClick={() => correr(() => onPasar(res.otroMedio.map((x) => x.tx), t))} className="text-[11px] font-bold text-primary disabled:opacity-50">Pasar todos a {t.nombre}</button>
+                    <button disabled={busy} onClick={() => correr(() => onPasar(res.otroMedio.map((x) => x.consumo), t))} className="text-[11px] font-bold text-primary disabled:opacity-50">Pasar todos a {t.nombre}</button>
                   </div>
-                  <p className="text-[11px] text-gray-500">Figuran en el resumen pero los cargó sin esta tarjeta. Agregarlos los duplicaría.</p>
-                  {res.otroMedio.map(({ item, tx }) => (
-                    <Fila key={tx.id} titulo={tx.descripcion || item.comercio} meta={`${fecha(item.fecha)} · en el resumen: ${item.comercio}`}
+                  <p className="text-[11px] text-gray-500">Figuran en el resumen pero los registró con otro medio. Agregarlos los duplicaría.</p>
+                  {res.otroMedio.map(({ item, consumo }) => (
+                    <Fila key={consumo.id} titulo={consumo.comercio || item.comercio} meta={`${fecha(item.fecha)} · en el resumen: ${item.comercio}`}
                       derecha={<p className="text-[13px] font-bold text-gray-900"><Money value={item.monto} currency={item.moneda} animated={false} /></p>} />
                   ))}
                 </>
@@ -434,7 +458,7 @@ function ConciliacionCard({ c, tarjetas, s, onElegir, onAgregar, onCargos, onPas
               {res.faltan.length > 0 && (
                 <>
                   <div className="mt-3 flex items-center justify-between gap-2">
-                    <p className="eyebrow">En el resumen, sin registrar</p>
+                    <p className="eyebrow">En el resumen, sin registrar como consumo</p>
                     <button disabled={busy} onClick={() => correr(() => onAgregar(res.faltan, t))} className="text-[11px] font-bold text-primary disabled:opacity-50">Agregar todos</button>
                   </div>
                   {res.faltan.map((i, k) => (
@@ -453,23 +477,13 @@ function ConciliacionCard({ c, tarjetas, s, onElegir, onAgregar, onCargos, onPas
                 </>
               )}
 
-              {res.cargos.length > 0 && (
-                <div className="mt-3 flex items-center justify-between gap-2 rounded-2xl bg-gray-500/[0.06] px-3 py-2.5">
-                  <div className="min-w-0">
-                    <p className="text-[12.5px] font-semibold text-gray-900">Intereses, impuestos y comisiones</p>
-                    <p className="text-[11px] text-gray-500">{res.cargos.length} renglones · <Money value={totalCargos} currency={c.resumen.moneda} animated={false} /></p>
-                  </div>
-                  <button disabled={busy} onClick={() => correr(() => onCargos(t))} className="shrink-0 h-8 px-2.5 rounded-xl glass text-[11px] font-bold text-primary disabled:opacity-50">Agregar como gasto</button>
-                </div>
-              )}
-
               {res.sobran.length > 0 && (
                 <>
                   <p className="eyebrow mt-3">Registrados con {t.nombre} que no aparecen</p>
                   <p className="text-[11px] text-gray-500">Revise si están duplicados, si eran de otra tarjeta o si el comercio los imputó tarde.</p>
-                  {res.sobran.map((tx) => (
-                    <Fila key={tx.id} titulo={tx.descripcion || 'Sin descripción'} meta={fecha(tx.fecha.toDate().toISOString().slice(0, 10))}
-                      derecha={<p className="text-[13px] font-bold text-gray-900"><Money value={tx.monto} currency={tx.moneda} animated={false} /></p>} />
+                  {res.sobran.map((x) => (
+                    <Fila key={x.id} titulo={x.comercio || 'Sin comercio'} meta={fecha(x.fecha)}
+                      derecha={<p className="text-[13px] font-bold text-gray-900"><Money value={x.monto} currency={x.moneda} animated={false} /></p>} />
                   ))}
                 </>
               )}
@@ -486,47 +500,6 @@ function ConciliacionCard({ c, tarjetas, s, onElegir, onAgregar, onCargos, onPas
           )}
         </>
       )}
-    </Card>
-  )
-}
-
-function MetasCard({ metas, base }: { metas: EstadoMeta[]; base: Currency }) {
-  return (
-    <Card title="Metas" delay={0.02}>
-      {metas.length === 0 ? (
-        <p className="flex items-start gap-2 py-1 text-xs text-gray-500 leading-relaxed">
-          <Target size={14} className="shrink-0 mt-px text-primary" />
-          Fije topes mensuales en Ajustes → Metas de resúmenes (por ejemplo, delivery y Uber, o cero intereses) y cada resumen le dirá si los cumplió.
-        </p>
-      ) : metas.map((m) => (
-        <div key={m.meta.id} className="py-2.5 border-b border-hairline last:border-0">
-          <div className="flex items-center justify-between gap-2">
-            <p className="truncate text-[13px] font-semibold text-gray-900">{m.meta.nombre}</p>
-            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${m.cumple ? 'bg-emerald-500/12 text-emerald-600' : 'bg-rose-500/12 text-rose-500'}`}>
-              {m.cumple ? 'Cumplida' : 'Excedida'}
-            </span>
-          </div>
-          <p className="mt-0.5 text-[11px] text-gray-500">
-            <b className="text-gray-900"><Money value={m.actualBase} currency={base} animated={false} /></b> de <Money value={m.topeBase} currency={base} animated={false} />
-            {!m.cumple && <> · se pasó por <Money value={m.actualBase - m.topeBase} currency={base} animated={false} /></>}
-          </p>
-          <ProgressBar value={m.topeBase > 0 ? m.pct : 100} className="mt-1.5" height={6} color={m.cumple ? '#10b981' : '#f43f5e'} />
-          {m.historial.length > 1 && (
-            <div className="mt-2 flex items-center gap-1">
-              {m.historial.map((h) => (
-                <span key={h.periodo} title={mesCorto(h.periodo)}
-                  className={`flex-1 rounded-md py-0.5 text-center text-[9px] font-semibold ${h.cumple ? 'bg-emerald-500/12 text-emerald-600' : 'bg-rose-500/12 text-rose-500'}`}>
-                  {mesCorto(h.periodo).split(' ')[0]}
-                </span>
-              ))}
-            </div>
-          )}
-          <p className="mt-1.5 text-[10.5px] text-gray-400">
-            Cumplida {m.cumplidos} de {m.historial.length} {m.historial.length === 1 ? 'mes' : 'meses'}
-            {m.ahorroMensualBase !== null && m.ahorroMensualBase > 0 && <> · cumplirla libera ≈ <Money value={m.ahorroMensualBase} currency={base} animated={false} />/mes contra su promedio</>}
-          </p>
-        </div>
-      ))}
     </Card>
   )
 }

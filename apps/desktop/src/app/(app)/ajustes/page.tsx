@@ -21,7 +21,6 @@ import { CategoryGroup, FuenteCambio, Settings, Tarjeta } from '@finanzas/core/t
 import { HORMIGA_DEFAULT } from '@finanzas/core/lib/resumenAnalisis'
 import { cambiarFuenteCambio, syncCotizaciones, mensajeSync, haceCuanto, FUENTES_CAMBIO } from '@finanzas/core/lib/cotizaciones'
 import { PageScroll } from '@/components/shell/PageScroll'
-import { MetasAjustes } from '@/components/ajustes/MetasAjustes'
 import { agregarTarjeta, renombrarTarjeta, eliminarTarjeta } from '@finanzas/core/lib/tarjetas'
 
 const parseRate = (v: string) => parseFloat(v.replace(',', '.'))
@@ -195,10 +194,6 @@ export default function AjustesPage() {
 
       <Section title="Gastos hormiga" sub="Criterio que usa el análisis de Resúmenes." delay={0.06}>
         <HormigaAjustes settings={settings} onGuardado={() => showToast('Criterio de gastos hormiga guardado')} onError={() => showToast('Error al guardar', 'error')} />
-      </Section>
-
-      <Section title="Metas de resúmenes" sub="Topes mensuales que se controlan con cada resumen subido. Un tope en USD no lo mueve la inflación." delay={0.07}>
-        <MetasAjustes settings={settings} />
       </Section>
 
       <Section title="Operaciones del mes" sub={`Sobre ${monthLabel(currentMonth)}.`} delay={0.08}>

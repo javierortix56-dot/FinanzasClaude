@@ -1,13 +1,9 @@
-// Análisis de Resúmenes que miran más de un período: costo de financiarse,
-// comparación con los resúmenes anteriores y metas de gasto (configuradas en
-// Ajustes). Compartido por mobile y desktop.
+// Análisis de Resúmenes que miran más de un período: costo de financiarse y
+// comparación con los resúmenes anteriores. Compartido por mobile y desktop.
 import { toBase } from './currency'
-import { updateSettings } from './settings'
-import { SHARED_USER_ID } from './constants'
-import { useSettingsStore } from '../store/useSettingsStore'
 import { categoriasDeGasto } from './resumenes'
 import { claveComercio, esGasto } from './resumenAnalisis'
-import { Currency, MetaResumen, Resumen, ResumenItem, Settings } from '../types'
+import { Currency, Resumen, ResumenItem, Settings } from '../types'
 
 const IVA = 0.21
 const esIva = (i: ResumenItem) => i.tipo === 'impuesto' && /\biva\b/i.test(i.descripcion)
@@ -180,112 +176,3 @@ export function compararConAnteriores(todos: Resumen[], periodo: string, base: C
     nuevos,
   }
 }
-
-// ── Metas de gasto ───────────────────────────────────────────────────────────
-
-const normalizar = (t: string) => t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
-
-/** Ids de categoría que cubre la meta (un grupo incluye sus subcategorías) */
-function categoriasDeMeta(id: string, s: Settings): Set<string> {
-  const g = s.categoriasGasto.find((x) => x.id === id)
-  return new Set(g ? [g.id, ...g.subcategorias.map((c) => c.id)] : [id])
-}
-
-/** Valor de la meta en un período, en moneda base */
-export function valorMeta(meta: MetaResumen, resumenes: Resumen[], periodo: string, base: Currency, s: Settings): number {
-  if (meta.tipo === 'financiacion') return costoDe(resumenes, periodo, base, s).totalBase
-  const gastos = resumenes.flatMap((r) => r.items).filter(esGasto)
-  let incluye: (i: ResumenItem) => boolean = () => true
-  if (meta.tipo === 'comercios') {
-    const palabras = (meta.palabras ?? []).map(normalizar).filter(Boolean)
-    incluye = (i) => {
-      const texto = normalizar(`${i.comercio} ${i.descripcion}`)
-      return palabras.some((w) => texto.includes(w))
-    }
-  } else if (meta.tipo === 'categoria') {
-    const ids = categoriasDeMeta(meta.categoria ?? '', s)
-    incluye = (i) => i.categoria !== null && ids.has(i.categoria)
-  }
-  return gastos.filter(incluye).reduce((a, i) => a + toBase(i.monto, i.moneda, base, s, periodo), 0)
-}
-
-export interface EstadoMeta {
-  meta: MetaResumen
-  actualBase: number
-  topeBase: number
-  /** actual / tope × 100 */
-  pct: number
-  cumple: boolean
-  /** Hasta 6 períodos, del más viejo al actual */
-  historial: { periodo: string; valorBase: number; topeBase: number; cumple: boolean }[]
-  cumplidos: number
-  /** Promedio de los períodos anteriores (null si no hay) */
-  promedioPrevioBase: number | null
-  /** Lo que se libera por mes si se cumple, contra ese promedio */
-  ahorroMensualBase: number | null
-}
-
-export function evaluarMetas(todos: Resumen[], periodo: string, base: Currency, s: Settings): EstadoMeta[] {
-  const periodos = [...new Set(todos.map((r) => r.periodo))].filter((p) => p <= periodo).sort().slice(-6)
-  return (s.metasResumen ?? []).map((meta) => {
-    const historial = periodos.map((p) => {
-      const valorBase = valorMeta(meta, todos.filter((r) => r.periodo === p), p, base, s)
-      const topeBase = toBase(meta.tope, meta.moneda, base, s, p)
-      return { periodo: p, valorBase, topeBase, cumple: valorBase <= topeBase }
-    })
-    const actual = historial[historial.length - 1]
-    const previos = historial.slice(0, -1)
-    const promedioPrevioBase = previos.length ? previos.reduce((a, h) => a + h.valorBase, 0) / previos.length : null
-    return {
-      meta,
-      actualBase: actual.valorBase,
-      topeBase: actual.topeBase,
-      pct: actual.topeBase > 0 ? (actual.valorBase / actual.topeBase) * 100 : actual.valorBase > 0 ? Infinity : 0,
-      cumple: actual.cumple,
-      historial,
-      cumplidos: historial.filter((h) => h.cumple).length,
-      promedioPrevioBase,
-      ahorroMensualBase: promedioPrevioBase !== null ? Math.max(promedioPrevioBase - actual.topeBase, 0) : null,
-    }
-  })
-}
-
-/** Etiquetas para el editor de metas */
-export const TIPO_META: Record<MetaResumen['tipo'], { nombre: string; ayuda: string }> = {
-  comercios: { nombre: 'Comercios', ayuda: 'Lo gastado en los comercios que contienen alguna palabra (rappi, uber…), propinas incluidas.' },
-  categoria: { nombre: 'Categoría', ayuda: 'Lo gastado en una categoría o en un grupo entero.' },
-  financiacion: { nombre: 'Costo de financiarse', ayuda: 'Intereses (también los de las refinanciaciones) más su IVA. Tope 0 = pagar siempre el total.' },
-  total: { nombre: 'Total de consumos', ayuda: 'Todos los consumos de los resúmenes del mes.' },
-}
-
-/** Opciones de categoría para una meta: grupos y subcategorías activas */
-export function opcionesCategoriaMeta(s: Settings): { id: string; nombre: string }[] {
-  const out: { id: string; nombre: string }[] = []
-  for (const g of s.categoriasGasto) {
-    if (!g.activa) continue
-    out.push({ id: g.id, nombre: `${g.nombre} (todo el grupo)` })
-    for (const c of g.subcategorias.filter((x) => x.activa)) out.push({ id: c.id, nombre: `${g.nombre} › ${c.nombre}` })
-  }
-  return out
-}
-
-/** Guarda las metas (configuración compartida) y actualiza el store */
-export async function guardarMetas(metas: MetaResumen[]) {
-  await updateSettings(SHARED_USER_ID, { metasResumen: metas })
-  const st = useSettingsStore.getState()
-  if (st.settings) st.setSettings({ ...st.settings, metasResumen: metas })
-}
-
-/** Resumen de una línea de la meta ("Rappi, Uber · hasta ARS 300.000") */
-export function describirMeta(m: MetaResumen, s: Settings): string {
-  const que = m.tipo === 'comercios' ? (m.palabras ?? []).join(', ')
-    : m.tipo === 'categoria' ? opcionesCategoriaMeta(s).find((c) => c.id === m.categoria)?.nombre ?? 'categoría'
-    : TIPO_META[m.tipo].nombre
-  return `${que} · hasta ${m.moneda} ${Math.round(m.tope).toLocaleString('es-AR')}`
-}
-
-/** Metas sugeridas para empezar */
-export const METAS_SUGERIDAS: Omit<MetaResumen, 'id'>[] = [
-  { nombre: 'Delivery y Uber', tipo: 'comercios', palabras: ['rappi', 'pedidosya', 'uber'], tope: 300000, moneda: 'ARS' },
-  { nombre: 'Cero intereses', tipo: 'financiacion', tope: 0, moneda: 'ARS' },
-]

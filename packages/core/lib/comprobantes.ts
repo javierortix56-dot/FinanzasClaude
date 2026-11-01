@@ -1,17 +1,14 @@
-// Gastos leídos de una foto de ticket o de una captura de movimientos (app del
-// banco, Mercado Pago). La Edge Function `leer-comprobante` los extrae con IA;
-// acá se completan con lo que la app ya sabe (categoría aprendida de los
-// resúmenes, tarjeta) y se marcan los que ya están registrados.
+// Consumos leídos de una foto de ticket o de una captura de movimientos (app
+// del banco, Mercado Pago). La Edge Function `leer-comprobante` los extrae con
+// IA; acá se completan con lo que la app ya sabe (categoría aprendida de los
+// resúmenes, tarjeta) y se marcan los que ya están registrados. Se guardan
+// como consumos reales (no como movimientos).
 import { supabase } from './supabase'
 import { categoriasDeGasto } from './resumenes'
 import { Reglas, reglaParaNombre } from './comercioReglas'
-import { addTransaction, deleteTransaction } from './transactions'
-import { programarSyncPagos } from './tarjetas'
-import { offerUndo } from './undo'
-import { SHARED_USER_ID, toLocalDateString } from './constants'
-import { Currency, Settings, Tarjeta, Transaction } from '../types'
-
-export type MedioPago = 'credito' | 'debito' | 'efectivo' | 'transferencia' | 'otro'
+import { agregarConsumos } from './consumos'
+import { toLocalDateString } from './constants'
+import { Consumo, Currency, MedioPago, Settings, Tarjeta } from '../types'
 
 export interface GastoLeido {
   /** id local para la lista de revisión */
@@ -26,8 +23,8 @@ export interface GastoLeido {
   /** id de la tarjeta de crédito (solo si medio = crédito) */
   tarjetaId: string | null
   cuotas: number | null
-  /** Movimiento de la app que parece ser el mismo (mismo monto y fecha cercana) */
-  duplicado: Transaction | null
+  /** Consumo ya registrado que parece ser el mismo (mismo monto y fecha cercana) */
+  duplicado: Consumo | null
 }
 
 const LADO_MAX = 2000
@@ -67,22 +64,22 @@ function tarjetaPorNombre(nombre: string | null, tarjetas: Tarjeta[]): Tarjeta |
 
 const DIA = 86400000
 
-/** Egreso ya registrado con el mismo monto (±1 %) y fecha (±1 día) */
-export function buscarDuplicado(g: { fecha: string; monto: number; moneda: Currency }, txs: Transaction[], usados = new Set<string>()): Transaction | null {
+/** Consumo ya registrado con el mismo monto (±1 %) y fecha (±1 día) */
+export function buscarDuplicado(g: { fecha: string; monto: number; moneda: Currency }, consumos: Consumo[], usados = new Set<string>()): Consumo | null {
   const f = new Date(g.fecha + 'T12:00:00').getTime()
   const tol = Math.max(1, g.monto * 0.01)
-  return txs.find((t) =>
-    t.tipo === 'egreso' && !usados.has(t.id!) && !t.pagoTarjeta && t.moneda === g.moneda &&
-    Math.abs(t.monto - g.monto) <= tol && Math.abs(t.fecha.toDate().getTime() - f) <= 1.5 * DIA,
+  return consumos.find((c) =>
+    !usados.has(c.id!) && c.moneda === g.moneda && Math.abs(c.monto - g.monto) <= tol &&
+    Math.abs(new Date(c.fecha + 'T12:00:00').getTime() - f) <= 1.5 * DIA,
   ) ?? null
 }
 
 /**
- * Lee el ticket o la captura y devuelve los gastos listos para revisar.
- * `txs` son los movimientos ya cargados (para marcar duplicados).
+ * Lee el ticket o la captura y devuelve los consumos listos para revisar.
+ * `existentes` son los consumos ya registrados (para marcar duplicados).
  */
 export async function leerComprobante(
-  file: File, modo: 'ticket' | 'movimientos', s: Settings, reglas: Reglas, txs: Transaction[],
+  file: File, modo: 'ticket' | 'movimientos', s: Settings, reglas: Reglas, existentes: Consumo[],
 ): Promise<GastoLeido[]> {
   const tarjetas = s.tarjetas ?? []
   const hoy = toLocalDateString(new Date())
@@ -118,7 +115,7 @@ export async function leerComprobante(
       const fecha = /^\d{4}-\d{2}-\d{2}$/.test(m.fecha ?? '') ? m.fecha : hoy
       const moneda: Currency = ['ARS', 'USD', 'COP'].includes(m.moneda) ? m.moneda : 'ARS'
       const monto = Math.round(Number(m.monto) * 100) / 100
-      const duplicado = buscarDuplicado({ fecha, monto, moneda }, txs, usados)
+      const duplicado = buscarDuplicado({ fecha, monto, moneda }, existentes, usados)
       if (duplicado) usados.add(duplicado.id!)
       return {
         key: `${k}-${fecha}-${monto}`,
@@ -131,34 +128,13 @@ export async function leerComprobante(
     })
 }
 
-/** Guarda los gastos elegidos como egresos (con tarjeta si corresponde) y ofrece deshacer */
-export async function guardarGastosLeidos(gastos: GastoLeido[], categoriaFallback: string, creadoPor: string): Promise<number> {
-  const ids: string[] = []
-  for (const g of gastos) {
-    ids.push(await addTransaction({
-      userId: SHARED_USER_ID,
-      tipo: 'egreso',
-      monto: g.monto,
-      moneda: g.moneda,
-      categoria: g.categoria ?? categoriaFallback,
-      descripcion: g.comercio,
-      nota: g.descripcion !== g.comercio ? `Leído: ${g.descripcion}` : '',
-      tags: [],
-      fecha: { toDate: () => new Date(g.fecha + 'T12:00:00') },
-      ejecutado: true,
-      asignaciones: [],
-      creadoPor,
-      recurrente: false,
-      tarjetaId: g.tarjetaId,
-    }))
-  }
-  if (gastos.some((g) => g.tarjetaId)) programarSyncPagos()
-  if (ids.length > 0) {
-    offerUndo(`${ids.length} gasto${ids.length !== 1 ? 's' : ''} cargado${ids.length !== 1 ? 's' : ''}`, async () => {
-      for (const id of ids) await deleteTransaction(id)
-    })
-  }
-  return ids.length
+/** Guarda los elegidos como consumos reales (con deshacer) */
+export async function guardarGastosLeidos(gastos: GastoLeido[], fuente: Consumo['fuente'], creadoPor: string): Promise<number> {
+  return agregarConsumos(gastos.map((g) => ({
+    fecha: g.fecha, monto: g.monto, moneda: g.moneda, categoria: g.categoria!,
+    comercio: g.comercio, descripcion: g.descripcion, medio: g.medio,
+    tarjetaId: g.medio === 'credito' ? g.tarjetaId : null, fuente, creadoPor,
+  })))
 }
 
 /** Categoría para un gasto sin sugerencia: la primera subcategoría de "Otros" */

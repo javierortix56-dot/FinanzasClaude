@@ -16,9 +16,9 @@ import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { addCompraCuotas, deleteCompraCuotas, restoreCompraCuotas, updateCompraCuotas } from '@finanzas/core/lib/cuotas'
 import { offerUndo } from '@finanzas/core/lib/undo'
 import { getCatFromSettings, monthLabel } from '@finanzas/core/lib/constants'
-import { CompraCuotas, Currency, Resumen, ResumenItem, Settings, Tarjeta, Transaction } from '@finanzas/core/types'
+import { CompraCuotas, Consumo, Currency, Resumen, ResumenItem, Settings, Tarjeta } from '@finanzas/core/types'
 import { toBase } from '@finanzas/core/lib/currency'
-import { AnalisisFinanciacion, Comparativa, EstadoMeta, Variacion } from '@finanzas/core/lib/resumenExtras'
+import { AnalisisFinanciacion, Comparativa, Variacion } from '@finanzas/core/lib/resumenExtras'
 import type { ConciliacionResumen } from '@finanzas/core/lib/useResumenes'
 import { CompromisoMes, ETIQUETA_CARGO, conciliacion, mesCorto, montoCorto } from '@finanzas/core/lib/resumenAnalisis'
 import { Card } from '@/components/ui/card'
@@ -146,13 +146,11 @@ export default function ResumenesPage() {
             <ConciliacionSeccion key={c.resumen.id} c={c} tarjetas={s.tarjetas ?? []} s={s}
               onElegir={(id) => r.elegirTarjeta(c.resumen.emisor, id)}
               onAgregar={(items, t) => r.agregarFaltantes(items, t)}
-              onCargos={(t) => r.agregarCargos(c.resumen, c.resultado!.cargos, t)}
-              onPasar={(txs, t) => r.pasarGastos(txs, t)} />
+              onPasar={(cs, t) => r.pasarConsumos(cs, t)} />
           ))}
 
           {r.extras && (
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-              <MetasSeccion metas={r.extras.metas} base={base} />
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
               <ComparativaSeccion c={r.extras.comparativa} base={base} />
               <FinanciacionSeccion f={r.extras.financiacion} base={base} />
             </div>
@@ -538,20 +536,18 @@ function Vacio({ texto, ok }: { texto: string; ok?: boolean }) {
 const signo = (n: number) => (n > 0 ? '+' : '')
 const pctTxt = (n: number | null) => (n === null ? '—' : `${signo(n)}${n.toFixed(0)}%`)
 
-function ConciliacionSeccion({ c, tarjetas, s, onElegir, onAgregar, onCargos, onPasar }: {
+function ConciliacionSeccion({ c, tarjetas, s, onElegir, onAgregar, onPasar }: {
   c: ConciliacionResumen; tarjetas: Tarjeta[]; s: Settings
   onElegir: (tarjetaId: string) => void
   onAgregar: (items: ResumenItem[], t: Tarjeta) => Promise<void>
-  onCargos: (t: Tarjeta) => Promise<void>
-  onPasar: (txs: Transaction[], t: Tarjeta) => Promise<void>
+  onPasar: (cs: Consumo[], t: Tarjeta) => Promise<void>
 }) {
   const [busy, setBusy] = useState(false)
   const correr = async (fn: () => Promise<void>) => { setBusy(true); try { await fn() } finally { setBusy(false) } }
   const res = c.resultado
   const t = c.tarjeta
   const cat = (id: string | null) => (id ? getCatFromSettings(id, s)?.nombre : undefined) ?? 'sin categoría'
-  const totalCargos = res?.cargos.reduce((a, x) => a + x.monto, 0) ?? 0
-  const sub = res ? <>Del {fechaCorta(res.desde)} al {fechaCorta(res.hasta)} · solo gastos con tarjeta de crédito (efectivo, débito y transferencias no figuran en el resumen)</> : 'Gastos registrados con la tarjeta contra los consumos del resumen'
+  const sub = res ? <>Del {fechaCorta(res.desde)} al {fechaCorta(res.hasta)} · consumos registrados con tarjeta de crédito (efectivo, débito y transferencias no figuran en el resumen)</> : 'Consumos registrados con la tarjeta contra los del resumen'
   return (
     <Seccion icon={ListChecks} titulo={`Contraste con lo registrado · ${c.resumen.emisor}`} sub={sub} delay={0.025}>
       {tarjetas.length === 0 ? (
@@ -581,10 +577,10 @@ function ConciliacionSeccion({ c, tarjetas, s, onElegir, onAgregar, onCargos, on
                 <div className="py-2">
                   <div className="flex items-center justify-between gap-2">
                     <div className="eyebrow !text-[10px]">Registrados con otro medio · agregarlos los duplicaría</div>
-                    <Button size="sm" variant="secondary" disabled={busy} onClick={() => correr(() => onPasar(res.otroMedio.map((x) => x.tx), t))}>Pasar todos a {t.nombre}</Button>
+                    <Button size="sm" variant="secondary" disabled={busy} onClick={() => correr(() => onPasar(res.otroMedio.map((x) => x.consumo), t))}>Pasar todos a {t.nombre}</Button>
                   </div>
-                  {res.otroMedio.map(({ item, tx }) => (
-                    <Fila key={tx.id} titulo={tx.descripcion || item.comercio} meta={<>{fechaCorta(item.fecha)} · en el resumen: {item.comercio}</>}
+                  {res.otroMedio.map(({ item, consumo }) => (
+                    <Fila key={consumo.id} titulo={consumo.comercio || item.comercio} meta={<>{fechaCorta(item.fecha)} · en el resumen: {item.comercio}</>}
                       derecha={<span className="font-semibold tnum"><MoneyText amount={item.monto} currency={item.moneda} /></span>} />
                   ))}
                 </div>
@@ -599,26 +595,17 @@ function ConciliacionSeccion({ c, tarjetas, s, onElegir, onAgregar, onCargos, on
                     <Fila key={i.id ?? k} titulo={i.comercio} meta={<>{fechaCorta(i.fecha)} · {cat(i.categoria)}</>}
                       derecha={<span className="flex items-center gap-2">
                         <span className="font-semibold tnum"><MoneyText amount={i.monto} currency={i.moneda} /></span>
-                        <Button size="sm" variant="ghost" disabled={busy} onClick={() => correr(() => onAgregar([i], t))} title="Agregar como gasto con la tarjeta"><Plus className="h-3.5 w-3.5" /></Button>
+                        <Button size="sm" variant="ghost" disabled={busy} onClick={() => correr(() => onAgregar([i], t))} title="Agregar como consumo con la tarjeta"><Plus className="h-3.5 w-3.5" /></Button>
                       </span>} />
                   ))}
-                </div>
-              )}
-              {res.cargos.length > 0 && (
-                <div className="my-2 flex items-center justify-between gap-3 rounded-xl bg-surface-2 px-3 py-2.5">
-                  <div className="text-sm">
-                    <span className="font-medium">Intereses, impuestos y comisiones</span>
-                    <span className="ml-2 text-xs text-muted">{res.cargos.length} renglones · <MoneyText amount={totalCargos} currency={c.resumen.moneda} /></span>
-                  </div>
-                  <Button size="sm" variant="secondary" disabled={busy} onClick={() => correr(() => onCargos(t))}>Agregar como gasto</Button>
                 </div>
               )}
               {res.sobran.length > 0 && (
                 <div className="py-2">
                   <div className="eyebrow !text-[10px]">Registrados con {t.nombre} que no aparecen · revisar duplicados, otra tarjeta o imputación tardía</div>
-                  {res.sobran.map((tx) => (
-                    <Fila key={tx.id} titulo={tx.descripcion || 'Sin descripción'} meta={fechaCorta(tx.fecha.toDate().toISOString().slice(0, 10))}
-                      derecha={<span className="font-semibold tnum"><MoneyText amount={tx.monto} currency={tx.moneda} /></span>} />
+                  {res.sobran.map((x) => (
+                    <Fila key={x.id} titulo={x.comercio || 'Sin comercio'} meta={fechaCorta(x.fecha)}
+                      derecha={<span className="font-semibold tnum"><MoneyText amount={x.monto} currency={x.moneda} /></span>} />
                   ))}
                 </div>
               )}
@@ -634,46 +621,6 @@ function ConciliacionSeccion({ c, tarjetas, s, onElegir, onAgregar, onCargos, on
           )}
         </>
       )}
-    </Seccion>
-  )
-}
-
-function MetasSeccion({ metas, base }: { metas: EstadoMeta[]; base: Currency }) {
-  return (
-    <Seccion icon={Target} titulo="Metas" sub="Topes mensuales configurados en Ajustes → Metas de resúmenes" delay={0.02}>
-      {metas.length === 0 ? (
-        <div className="py-3 text-sm text-muted">
-          Todavía no hay metas. Configúrelas en <Link href="/ajustes" className="font-semibold text-primary">Ajustes → Metas de resúmenes</Link> (por ejemplo, delivery y Uber, o cero intereses).
-        </div>
-      ) : metas.map((m) => (
-        <div key={m.meta.id} className="py-3">
-          <div className="flex items-center justify-between gap-2">
-            <span className="truncate text-sm font-medium">{m.meta.nombre}</span>
-            <span className={cn('shrink-0 rounded-full px-2 py-px text-[11px] font-semibold', m.cumple ? 'bg-income-soft text-income' : 'bg-expense-soft text-expense')}>
-              {m.cumple ? 'Cumplida' : 'Excedida'}
-            </span>
-          </div>
-          <div className="mt-0.5 text-xs text-muted tnum">
-            <b className="text-foreground"><MoneyText amount={m.actualBase} currency={base} /></b> de <MoneyText amount={m.topeBase} currency={base} />
-            {!m.cumple && <> · se pasó por <MoneyText amount={m.actualBase - m.topeBase} currency={base} /></>}
-          </div>
-          <ProgressBar value={m.topeBase > 0 ? m.pct : 100} className="mt-1.5" height={6} color={m.cumple ? 'var(--income)' : 'var(--expense)'} />
-          {m.historial.length > 1 && (
-            <div className="mt-2 flex gap-1">
-              {m.historial.map((h) => (
-                <span key={h.periodo} title={`${monthLabel(h.periodo)}: ${montoCorto(h.valorBase)}`}
-                  className={cn('flex-1 rounded-md py-0.5 text-center text-[10px] font-semibold', h.cumple ? 'bg-income-soft text-income' : 'bg-expense-soft text-expense')}>
-                  {mesCorto(h.periodo).split(' ')[0]}
-                </span>
-              ))}
-            </div>
-          )}
-          <div className="mt-1.5 text-[11px] text-muted-2">
-            Cumplida {m.cumplidos} de {m.historial.length} {m.historial.length === 1 ? 'mes' : 'meses'}
-            {m.ahorroMensualBase !== null && m.ahorroMensualBase > 0 && <> · cumplirla libera ≈ <MoneyText amount={m.ahorroMensualBase} currency={base} />/mes contra su promedio</>}
-          </div>
-        </div>
-      ))}
     </Seccion>
   )
 }

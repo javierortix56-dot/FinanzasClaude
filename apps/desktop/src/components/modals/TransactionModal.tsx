@@ -23,7 +23,7 @@ import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { CategoryIcon } from '@finanzas/core/lib/categoryIcons'
 import { Asignacion, Currency, Transaction, TransactionType } from '@finanzas/core/types'
 import { SHARED_USERS, getParentGroup, toLocalDateString, monthLabel, shiftMonth } from '@finanzas/core/lib/constants'
-import { registrarAbono, detallePago, tarjetaDe, type DetallePago } from '@finanzas/core/lib/tarjetas'
+import { registrarAbono, detallePago, presentarPago, tarjetaDe, type DetallePago } from '@finanzas/core/lib/tarjetas'
 import { cn } from '@finanzas/core/lib/utils'
 
 interface Props {
@@ -552,11 +552,7 @@ function PagoTarjetaForm({ pago, onClose }: { pago: Transaction; onClose: () => 
     }
   }
 
-  const lineas = [
-    { label: `Consumos de ${monthLabel(previo)}`, monto: p.consumos },
-    { label: `Cuotas de ${monthLabel(p.mes)}`, monto: p.cuotas },
-    { label: `Saldo impago de ${monthLabel(previo)}`, monto: p.saldoAnterior },
-  ]
+  const { lineas, estado, confirmado, saldoPasa, planificado } = presentarPago(p, abonoValido ? abonoNum : pago.monto)
 
   return (
     <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); handleSave() }}>
@@ -581,6 +577,14 @@ function PagoTarjetaForm({ pago, onClose }: { pago: Transaction; onClose: () => 
           <span>Total a pagar</span>
           <MoneyText amount={p.total} currency={p.moneda} />
         </div>
+        <div className={cn('text-[11px] font-semibold', confirmado ? 'text-income' : 'text-muted-2')}>{estado}</div>
+        {planificado !== null && <div className="text-[11px] text-muted">Planificó pagar <MoneyText amount={planificado} currency={p.moneda} /></div>}
+        {saldoPasa && (
+          <div className="text-[11px] text-unassigned">
+            Pasan <b><MoneyText amount={saldoPasa.monto} currency={p.moneda} /></b> a {saldoPasa.mes}
+            {saldoPasa.intereses !== null && <> y generan ≈ <b><MoneyText amount={saldoPasa.intereses} currency={p.moneda} /></b> de intereses con IVA ({saldoPasa.tem} % mensual)</>}.
+          </div>
+        )}
       </div>
 
       <div>

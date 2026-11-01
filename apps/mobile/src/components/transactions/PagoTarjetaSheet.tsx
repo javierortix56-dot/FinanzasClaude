@@ -8,7 +8,7 @@ import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { updateTransaction } from '@finanzas/core/lib/transactions'
-import { registrarAbono, detallePago, tarjetaDe, type DetallePago } from '@finanzas/core/lib/tarjetas'
+import { registrarAbono, detallePago, presentarPago, tarjetaDe, type DetallePago } from '@finanzas/core/lib/tarjetas'
 import { formatAmount, getCatFromSettings, monthLabel, shiftMonth } from '@finanzas/core/lib/constants'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { toBase, txToBase, txMonth } from '@finanzas/core/lib/currency'
@@ -100,11 +100,7 @@ export default function PagoTarjetaSheet({ open, pago, onClose }: { open: boolea
     }
   }
 
-  const lineas = [
-    { label: `Consumos de ${monthLabel(previo)}`, monto: p.consumos },
-    { label: `Cuotas de ${monthLabel(p.mes)}`, monto: p.cuotas },
-    { label: `Saldo impago de ${monthLabel(previo)}`, monto: p.saldoAnterior },
-  ]
+  const { lineas, estado, confirmado, saldoPasa, planificado } = presentarPago(p, abonoValido ? abonoNum : pago.monto)
 
   const footer = (
     <div className="flex gap-2">
@@ -142,6 +138,14 @@ export default function PagoTarjetaSheet({ open, pago, onClose }: { open: boolea
           <span>Total a pagar</span>
           <span className={`tabular-nums ${blur}`}>{formatAmount(p.total, p.moneda)}</span>
         </div>
+        <p className={`text-[11px] font-semibold ${confirmado ? 'text-emerald-600' : 'text-gray-400'}`}>{estado}</p>
+        {planificado !== null && <p className="text-[11px] text-gray-500">Planificó pagar <span className={blur}>{formatAmount(planificado, p.moneda)}</span></p>}
+        {saldoPasa && (
+          <p className="text-[11px] text-amber-600 leading-snug">
+            Pasan <b className={blur}>{formatAmount(saldoPasa.monto, p.moneda)}</b> a {saldoPasa.mes}
+            {saldoPasa.intereses !== null && <> y generan ≈ <b className={blur}>{formatAmount(saldoPasa.intereses, p.moneda)}</b> de intereses con IVA ({saldoPasa.tem} % mensual)</>}.
+          </p>
+        )}
       </div>
 
       <div>

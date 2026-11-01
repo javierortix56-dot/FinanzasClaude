@@ -1,16 +1,16 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Sparkles } from 'lucide-react'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
-import { useTransactionStore } from '@finanzas/core/store/useTransactionStore'
 import { useUIStore } from '@finanzas/core/store/useUIStore'
 import { useAuthStore } from '@finanzas/core/store/useAuthStore'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
-import { categoriasDeGasto, usuarioId } from '@finanzas/core/lib/resumenes'
+import { usuarioId } from '@finanzas/core/lib/resumenes'
 import { fetchReglas } from '@finanzas/core/lib/comercioReglas'
-import { GastoLeido, MedioPago, categoriaPorDefecto, guardarGastosLeidos, leerComprobante } from '@finanzas/core/lib/comprobantes'
-import { Settings } from '@finanzas/core/types'
+import { GastoLeido, guardarGastosLeidos, leerComprobante } from '@finanzas/core/lib/comprobantes'
+import { Consumo, MedioPago, Settings } from '@finanzas/core/types'
+import CategoriaSelect from '@/components/consumos/CategoriaSelect'
 import Sheet from '@/components/ui/Sheet'
 import { Money } from '@/components/ui/AnimatedNumber'
 import { haptic } from '@/lib/haptics'
@@ -21,20 +21,20 @@ const selectCls = 'h-8 min-w-0 rounded-lg bg-gray-500/[0.06] px-2 text-[11.5px] 
 const medioValor = (g: GastoLeido) => (g.tarjetaId ? `t:${g.tarjetaId}` : g.medio && g.medio !== 'credito' ? g.medio : '')
 
 /**
- * Lee una captura de movimientos (o un ticket) con IA y muestra los gastos para
- * revisar: categoría, medio de pago y cuáles guardar. Los que parecen ya
- * cargados quedan destildados.
+ * Lee una captura de movimientos (o un ticket) con IA y muestra los consumos
+ * para revisar: categoría (obligatoria; se puede crear una nueva), medio de
+ * pago y cuáles guardar. Los que parecen ya registrados quedan destildados.
+ * Se guardan como consumos reales: llenan el cupo de lo planificado.
  */
-export default function CapturaSheet({ archivo, modo, onClose }: {
+export default function CapturaSheet({ archivo, modo, existentes, onClose }: {
   archivo: File | null
   modo: 'ticket' | 'movimientos'
+  existentes: Consumo[]
   onClose: (guardados: number) => void
 }) {
   const s = (useSettingsStore((st) => st.settings) ?? DEFAULT_SETTINGS) as Settings
-  const txs = useTransactionStore((st) => st.transactions)
   const showToast = useUIStore((st) => st.showToast)
   const { user } = useAuthStore()
-  const cats = useMemo(() => categoriasDeGasto(s), [s])
   const tarjetas = s.tarjetas ?? []
 
   const [estado, setEstado] = useState<'leyendo' | 'revisar' | 'guardando' | 'error'>('leyendo')
@@ -49,7 +49,7 @@ export default function CapturaSheet({ archivo, modo, onClose }: {
     ;(async () => {
       try {
         const reglas = await fetchReglas().catch(() => new Map())
-        const leidos = await leerComprobante(archivo, modo, s, reglas, txs)
+        const leidos = await leerComprobante(archivo, modo, s, reglas, existentes)
         if (cancel) return
         setGastos(leidos)
         setElegidos(new Set(leidos.filter((g) => !g.duplicado).map((g) => g.key)))
@@ -74,13 +74,14 @@ export default function CapturaSheet({ archivo, modo, onClose }: {
   }
 
   const seleccion = gastos.filter((g) => elegidos.has(g.key))
+  const sinCategoria = seleccion.filter((g) => !g.categoria).length
 
   async function guardar() {
     setEstado('guardando')
     try {
-      const n = await guardarGastosLeidos(seleccion, categoriaPorDefecto(s), usuarioId(user))
+      const n = await guardarGastosLeidos(seleccion, modo === 'ticket' ? 'ticket' : 'captura', usuarioId(user))
       haptic('success')
-      showToast(`${n} gasto${n !== 1 ? 's' : ''} guardado${n !== 1 ? 's' : ''}`)
+      showToast(`${n} consumo${n !== 1 ? 's' : ''} registrado${n !== 1 ? 's' : ''}`)
       onClose(n)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -92,15 +93,15 @@ export default function CapturaSheet({ archivo, modo, onClose }: {
     <Sheet
       open={archivo !== null}
       onClose={() => onClose(0)}
-      title={modo === 'ticket' ? 'Gasto del ticket' : 'Gastos de la captura'}
-      subtitle={estado === 'revisar' ? 'Revise categoría y medio de pago antes de guardar' : undefined}
+      title={modo === 'ticket' ? 'Consumo del ticket' : 'Consumos de la captura'}
+      subtitle={estado === 'revisar' ? 'Elija la categoría de cada uno: llena el cupo de lo planificado' : undefined}
       zIndex={70}
       footer={estado === 'revisar' || estado === 'guardando' ? (
         <div className="grid grid-cols-2 gap-2 px-5 pb-5 pt-2">
           <button onClick={() => onClose(0)} className="h-11 rounded-2xl glass text-sm font-semibold text-gray-700">Cancelar</button>
-          <button onClick={guardar} disabled={seleccion.length === 0 || estado === 'guardando'}
+          <button onClick={guardar} disabled={seleccion.length === 0 || sinCategoria > 0 || estado === 'guardando'}
             className="h-11 rounded-2xl bg-brand text-white text-sm font-bold shadow-soft disabled:opacity-60">
-            {estado === 'guardando' ? 'Guardando…' : `Guardar ${seleccion.length || ''}`}
+            {estado === 'guardando' ? 'Guardando…' : sinCategoria > 0 ? `Falta categoría (${sinCategoria})` : `Guardar ${seleccion.length || ''}`}
           </button>
         </div>
       ) : undefined}
@@ -143,14 +144,11 @@ export default function CapturaSheet({ archivo, modo, onClose }: {
                     </p>
                     {g.duplicado && (
                       <p className="mt-1 flex items-center gap-1 text-[10.5px] font-semibold text-amber-600">
-                        <CheckCircle2 size={11} /> Parece ya cargado: “{g.duplicado.descripcion || 'sin descripción'}”
+                        <CheckCircle2 size={11} /> Parece ya registrado: “{g.duplicado.comercio || 'sin nombre'}”
                       </p>
                     )}
                     <div className="mt-1.5 grid grid-cols-2 gap-1.5">
-                      <select value={g.categoria ?? ''} onChange={(e) => editar(g.key, { categoria: e.target.value || null })} className={selectCls} aria-label="Categoría">
-                        <option value="">Sin categoría</option>
-                        {cats.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                      </select>
+                      <CategoriaSelect value={g.categoria} onChange={(id) => editar(g.key, { categoria: id })} s={s} className={selectCls} />
                       <select value={medioValor(g)} onChange={(e) => cambiarMedio(g, e.target.value)} className={selectCls} aria-label="Medio de pago">
                         <option value="">Medio sin indicar</option>
                         {tarjetas.map((t) => <option key={t.id} value={`t:${t.id}`}>{t.nombre}</option>)}
@@ -165,7 +163,7 @@ export default function CapturaSheet({ archivo, modo, onClose }: {
             )
           })}
           <p className="pt-1 text-[10.5px] text-gray-400 leading-relaxed">
-            Los gastos con tarjeta de crédito se suman al pago de la tarjeta y se contrastan con el resumen. Los de débito, efectivo o transferencia quedan para asignar a un ingreso.
+            No suman como gasto nuevo: llenan el cupo planificado de su categoría. Los de tarjeta de crédito se contrastan con el resumen cuando lo suba.
           </p>
         </div>
       )}
