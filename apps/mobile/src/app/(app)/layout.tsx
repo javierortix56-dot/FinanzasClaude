@@ -15,11 +15,11 @@ import AgregarSheet from '@/components/consumos/AgregarSheet'
 import Toast from '@/components/ui/Toast'
 import Onboarding from '@/components/Onboarding'
 import { spring, springPop } from '@/components/ui/motion'
-import { LayoutDashboard, Wallet, BarChart2, Settings, Plus, type LucideIcon } from 'lucide-react'
+import { LayoutDashboard, Target, BarChart2, Settings, Plus, type LucideIcon } from 'lucide-react'
 
 const NAV_ITEMS = [
   { href: '/dashboard',  icon: LayoutDashboard, label: 'Resumen'   },
-  { href: '/patrimonio', icon: Wallet,           label: 'Cuentas'  },
+  { href: '/plan',       icon: Target,           label: 'Plan'     },
   { href: '/analisis',   icon: BarChart2,        label: 'Análisis' },
   { href: '/ajustes',    icon: Settings,         label: 'Ajustes'  },
 ]
@@ -85,7 +85,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <nav className="fixed bottom-[max(12px,env(safe-area-inset-bottom))] inset-x-0 mx-auto w-[calc(100%-24px)] max-w-[366px] z-40">
         <div className="glass-strong rounded-[24px] h-[58px] flex items-stretch px-1">
           {leftNav.map((item) => (
-            <NavItem key={item.href} {...item} active={pathname.startsWith(item.href)} />
+            <NavItem key={item.href} {...item} active={pathname.startsWith(item.href) || (item.href === '/ajustes' && pathname.startsWith('/patrimonio'))} />
           ))}
 
           {/* FAB */}
@@ -109,7 +109,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           {rightNav.map((item) => (
-            <NavItem key={item.href} {...item} active={pathname.startsWith(item.href)} />
+            <NavItem key={item.href} {...item} active={pathname.startsWith(item.href) || (item.href === '/ajustes' && pathname.startsWith('/patrimonio'))} />
           ))}
         </div>
       </nav>

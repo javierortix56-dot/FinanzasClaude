@@ -110,7 +110,7 @@ async function payloadsCupos(): Promise<Payload[]> {
       ? `Superó lo planificado: lleva ${fmt(actual, base)} de ${fmt(tope, base)} (${fmt(actual - tope, base)} de más).`
       : `Lleva ${fmt(actual, base)} de ${fmt(tope, base)} planificado. A este ritmo cierra el mes en ${fmt(proyeccion, base)}.` +
         (porDia !== null ? ` Para no pasarse le quedan ${fmt(porDia, base)} por día.` : "");
-    out.push({ title: `${nivel === 2 ? "🔴" : "🟠"} ${nombre}`, body, url: "/dashboard", tag: `finanzas-cupo-${cat}` });
+    out.push({ title: `${nivel === 2 ? "🔴" : "🟠"} ${nombre}`, body, url: "/plan", tag: `finanzas-cupo-${cat}` });
     nuevos.push({ clave: k, nivel, enviado_at: new Date().toISOString() });
   }
   if (nuevos.length > 0) await supabase.from("alertas_enviadas").upsert(nuevos, { onConflict: "clave" });

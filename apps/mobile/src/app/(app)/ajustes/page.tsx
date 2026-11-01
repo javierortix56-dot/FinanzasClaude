@@ -6,7 +6,7 @@ import {
   ChevronRight, ChevronLeft, Plus, Pencil,
   Copy, RotateCcw, Lock, Trash2, Check, Download, Upload, LogOut,
   UserRound, Bell, ArrowLeftRight, Tags, Coins, Layers, PiggyBank, CalendarCog, DatabaseBackup,
-  Palette, Sparkles, RefreshCw, Bug, CreditCard,
+  Palette, Sparkles, RefreshCw, Bug, CreditCard, Wallet,
 } from 'lucide-react'
 import { AnimatePresence, motion, type PanInfo } from 'motion/react'
 import PageHeader from '@/components/ui/PageHeader'
@@ -36,6 +36,7 @@ import {
 import { exportBackup, downloadBackup, importBackup, parseBackupFile } from '@finanzas/core/lib/backup'
 import { monthLabel, SHARED_USER_ID } from '@finanzas/core/lib/constants'
 import dynamic from 'next/dynamic'
+import Link from 'next/link'
 import { Category, CategoryGroup, AhorroLink, Currency, FuenteCambio, Settings } from '@finanzas/core/types'
 import { HORMIGA_DEFAULT } from '@finanzas/core/lib/resumenAnalisis'
 
@@ -513,6 +514,19 @@ export default function AjustesPage() {
           </motion.div>
 
           <SectionGroup title="General">
+
+          {/* ── Cuentas y patrimonio (antes en la barra inferior) ── */}
+          <Link href="/patrimonio" className="w-full flex items-center gap-3 px-3.5 py-3 text-left active:bg-gray-500/[0.05] transition-colors">
+            <span className="w-8 h-8 rounded-[10px] flex items-center justify-center flex-shrink-0 text-white shadow-sm"
+              style={{ background: 'linear-gradient(135deg, #3f6b5acc, #3f6b5a)' }}>
+              <Wallet size={15} />
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm font-semibold text-gray-900 leading-tight">Cuentas y patrimonio</span>
+              <span className="block text-[11px] text-gray-400 truncate mt-0.5">Activos, pasivos y evolución</span>
+            </span>
+            <ChevronRight size={17} className="text-gray-300" />
+          </Link>
 
           {/* ── Cuenta ── */}
           <Section

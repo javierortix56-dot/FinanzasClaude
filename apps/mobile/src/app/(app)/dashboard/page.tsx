@@ -17,7 +17,6 @@ import { MonthSwitcher, PrivacyToggle } from '@/components/ui/PageHeader'
 import { easeOut } from '@/components/ui/motion'
 import Collapse from '@/components/ui/Collapse'
 import { cuentaEnCaja } from '@finanzas/core/lib/tarjetas'
-import CuposDelMes from '@/components/consumos/CuposDelMes'
 import AvisoCierre from '@/components/consumos/AvisoCierre'
 
 type MainTab = 'movimientos' | 'asignacion'
@@ -134,10 +133,9 @@ export default function DashboardPage() {
         </Collapse>
       </motion.section>
 
-      {/* Planificado vs real del mes */}
+      {/* Aviso de cierre del mes anterior (solo los primeros días) */}
       <Collapse open={!compact} className="flex-shrink-0">
         <AvisoCierre />
-        <CuposDelMes transactions={transactions} month={currentMonth} base={base} />
       </Collapse>
 
       {/* ── Contenedor glass: tabs + contenido ── */}
