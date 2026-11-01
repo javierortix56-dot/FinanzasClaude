@@ -6,9 +6,8 @@
 //      renglones estructurados.
 //   3. La app guarda el resultado (tablas resumenes / resumen_items, con RLS).
 import { supabase } from './supabase'
-import { addTransaction, deleteTransaction } from './transactions'
 import { offerUndo } from './undo'
-import { SHARED_USER_ID, SHARED_USERS, shiftMonth } from './constants'
+import { SHARED_USERS, shiftMonth } from './constants'
 import { Currency, Resumen, ResumenDetalle, ResumenItem, ResumenItemTipo, ResumenTipo, Settings } from '../types'
 
 const MAX_BYTES = 15 * 1024 * 1024
@@ -272,27 +271,6 @@ export async function borrarResumen(r: Resumen) {
   const { error } = await supabase.from('resumenes').delete().eq('id', r.id!)
   if (error) throw error
   offerUndo(`Resumen ${r.emisor} eliminado`, async () => { await guardarResumen(r) })
-}
-
-/** Crea un egreso en la app a partir de un renglón del resumen (con deshacer) */
-export async function cargarComoMovimiento(item: ResumenItem, categoriaFallback: string, creadoPor: string) {
-  const id = await addTransaction({
-    userId: SHARED_USER_ID,
-    tipo: 'egreso',
-    monto: Math.abs(item.monto),
-    moneda: item.moneda,
-    categoria: item.categoria ?? categoriaFallback,
-    descripcion: item.comercio,
-    nota: `Desde resumen: ${item.descripcion}`,
-    tags: [],
-    fecha: { toDate: () => new Date(item.fecha + 'T12:00:00') },
-    ejecutado: true,
-    asignaciones: [],
-    creadoPor,
-    recurrente: false,
-  })
-  offerUndo(`"${item.comercio}" cargado`, async () => { await deleteTransaction(id) })
-  return id
 }
 
 /** id de SHARED_USERS ('javier' | 'mary') del usuario logueado */
