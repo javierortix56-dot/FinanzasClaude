@@ -742,7 +742,7 @@ export default function AjustesPage() {
             label="Gastos hormiga"
             icon={<Bug size={15} />}
             tint="#b8873b"
-            hint={`Hasta USD ${(s.hormiga ?? HORMIGA_DEFAULT).topeUsd} · hábito desde ${(s.hormiga ?? HORMIGA_DEFAULT).minCompras} compras`}
+            hint={`Compras de hasta USD ${(s.hormiga ?? HORMIGA_DEFAULT).topeUsd}`}
             open={openSection === 'hormiga'}
             onToggle={() => toggle('hormiga')}
           >
@@ -1196,20 +1196,18 @@ function Section({ label, icon, tint, hint, open, onToggle, children }: {
 }
 
 /** Criterio de gastos hormiga del análisis de Resúmenes */
-function HormigaAjustes({ s, onGuardar }: { s: Settings; onGuardar: (h: { topeUsd: number; minCompras: number }) => Promise<void> }) {
+function HormigaAjustes({ s, onGuardar }: { s: Settings; onGuardar: (h: { topeUsd: number }) => Promise<void> }) {
   const actual = { ...HORMIGA_DEFAULT, ...s.hormiga }
   const [tope, setTope] = useState(String(actual.topeUsd))
-  const [min, setMin] = useState(String(actual.minCompras))
   const [estado, setEstado] = useState<'idle' | 'guardando' | 'ok' | 'error'>('idle')
   const topeN = parseFloat(tope.replace(',', '.'))
-  const minN = parseInt(min, 10)
-  const valido = topeN > 0 && minN >= 2
+  const valido = topeN > 0
 
   async function guardar() {
     if (!valido) return
     setEstado('guardando')
     try {
-      await onGuardar({ topeUsd: topeN, minCompras: minN })
+      await onGuardar({ topeUsd: topeN })
       setEstado('ok')
     } catch {
       setEstado('error')
@@ -1219,10 +1217,9 @@ function HormigaAjustes({ s, onGuardar }: { s: Settings; onGuardar: (h: { topeUs
   return (
     <div className="space-y-3 pt-1">
       <p className="text-[11px] text-gray-500 leading-snug">
-        Hábitos: comercios con muchas compras en el mes (las propinas se suman al comercio). Compras chicas: sueltas hasta un tope en dólares, así la inflación no cambia el criterio.
+        Gasto hormiga = cada compra suelta de hasta este monto (sin cuotas ni suscripciones). Se fija en dólares para que la inflación no cambie el criterio.
       </p>
       <RateInput label="Compra chica: hasta USD" value={tope} onChange={(v) => { setTope(v); setEstado('idle') }} />
-      <RateInput label="Hábito: desde N compras/mes" value={min} onChange={(v) => { setMin(v); setEstado('idle') }} />
       <button onClick={guardar} disabled={!valido || estado === 'guardando'}
         className={`w-full h-11 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2 text-white shadow-soft disabled:opacity-60 ${estado === 'ok' ? 'bg-emerald-500' : 'bg-brand'}`}>
         {estado === 'ok' ? <><Check size={14} /> Guardado</> : estado === 'guardando' ? 'Guardando…' : 'Guardar criterio'}

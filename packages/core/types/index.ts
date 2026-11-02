@@ -179,7 +179,7 @@ export interface Settings {
   mesesCerrados?: string[]
   ahorroLinks?: AhorroLink[]
   /** Criterio de gastos hormiga en Resúmenes */
-  hormiga?: { topeUsd: number; minCompras: number }
+  hormiga?: { topeUsd: number }
   /**
    * Categorías de gasto que se controlan con cupo: lo planificado es un tope
    * que se llena con cada compra registrada (Mercado, Uber, Salud). El resto

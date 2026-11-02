@@ -1,12 +1,13 @@
 // Análisis de resúmenes importados (compartido por mobile y desktop).
 // Todo se calcula en el cliente sobre los renglones guardados: suscripciones
-// (cobros que se repiten mes a mes), gastos hormiga, comercios principales,
+// (categoría Suscripciones, débitos automáticos y cobros que se repiten),
+// gastos hormiga (compras chicas sueltas), comercios principales,
 // cuotas y refinanciaciones en curso, cargos bancarios (impuestos, percepciones,
 // intereses, comisiones) y gasto por categoría y por titular. La cabecera que informa el banco (saldos, cuotas a
 // vencer, tasas, avisos) va en Resumen.detalle y tiene prioridad sobre lo
 // calculado cuando existe.
 import { toBase } from './currency'
-import { shiftMonth } from './constants'
+import { getParentGroup, shiftMonth } from './constants'
 import { cuotaEnMes } from './cuotas'
 import { CompraCuotas, Currency, Resumen, ResumenItem, Settings } from '../types'
 
@@ -40,48 +41,49 @@ export interface Suscripcion {
   meses: string[]
   /** true si el banco lo marca como débito automático */
   debito: boolean
-  /** 'confirmada' (se repite) o 'posible' (débito automático visto una vez) */
-  confianza: 'confirmada' | 'posible'
+  /**
+   * Por qué está en la lista: 'categoria' (el comercio está en la categoría
+   * Suscripciones), 'debito' (el banco lo marca como débito automático) o
+   * 'detectada' (sin categoría, se repite mes a mes: se sugiere marcarla)
+   */
+  origen: 'categoria' | 'debito' | 'detectada'
   categoria: string | null
 }
 
 export interface ComercioTotal { clave: string; comercio: string; veces: number; totalBase: number; pct: number }
 
-/** Comercio al que se le compra seguido (propinas incluidas) */
-export interface Habito {
-  clave: string
-  comercio: string
-  veces: number
-  totalBase: number
-  /** Ticket promedio */
-  ticketBase: number
-  anualBase: number
-  pct: number
-}
-
 /**
- * Gastos hormiga: lo que se va sin darse cuenta. Dos partes que no se pisan:
- * hábitos (comercios con muchas compras en el mes, sin importar el monto) y
- * compras chicas sueltas (hasta un tope en dólares, para que la inflación no
- * mueva el criterio). Quedan afuera cuotas y suscripciones.
+ * Gastos hormiga: compras chicas sueltas (cada una de hasta un tope en
+ * dólares, así la inflación no mueve el criterio) que de a una parecen poco y
+ * juntas suman. Quedan afuera las cuotas y las suscripciones.
  */
 export interface Hormiga {
   topeUsd: number
   topeBase: number
-  minCompras: number
-  habitos: Habito[]
-  chicas: { cantidad: number; totalBase: number; comercios: ComercioTotal[] }
+  cantidad: number
+  /** Por comercio, de mayor a menor (veces = cantidad de compras) */
+  comercios: ComercioTotal[]
   totalBase: number
   pctDelPeriodo: number
   anualBase: number
 }
 
-export const HORMIGA_DEFAULT = { topeUsd: 10, minCompras: 4 }
+export const HORMIGA_DEFAULT = { topeUsd: 10 }
 
 /** Las propinas se suman al comercio ("Rappi (propina)" → Rappi) */
 function claveHabito(nombre: string): string {
   const k = claveComercio(nombre)
   return k.replace(/\bpropinas?\b/g, ' ').replace(/\s+/g, ' ').trim() || k
+}
+
+/** Ids de las categorías de suscripciones (por nombre; vale el grupo o la subcategoría) */
+export function categoriasSuscripcion(s: Settings): Set<string> {
+  const ids = new Set<string>()
+  for (const g of s.categoriasGasto) {
+    if (/suscrip/i.test(g.nombre)) ids.add(g.id)
+    for (const c of g.subcategorias ?? []) if (/suscrip/i.test(c.nombre)) ids.add(c.id)
+  }
+  return ids
 }
 
 export interface CuotaEnCurso {
@@ -178,6 +180,8 @@ export function analizarPeriodo(
   for (const r of historico) {
     periodosPorEmisor.set(r.emisor, (periodosPorEmisor.get(r.emisor) ?? new Set()).add(r.periodo))
   }
+  const idsSusc = categoriasSuscripcion(s)
+  const enCatSusc = (cat: string | null) => !!cat && (idsSusc.has(cat) || idsSusc.has(getParentGroup(cat, s.categoriasGasto)?.id ?? ''))
   type Acum = { comercio: string; moneda: Currency; emisor: string; porMes: Map<string, number>; vecesMax: Map<string, number>; debito: boolean; categoria: string | null }
   const grupos = new Map<string, Acum>()
   for (const r of historico) {
@@ -188,7 +192,8 @@ export function analizarPeriodo(
       g.porMes.set(r.periodo, (g.porMes.get(r.periodo) ?? 0) + i.monto)
       g.vecesMax.set(r.periodo, (g.vecesMax.get(r.periodo) ?? 0) + 1)
       g.debito ||= i.tipo === 'debito_automatico'
-      if (r.periodo === periodo) g.comercio = i.comercio
+      // Nombre y categoría: los del período elegido (la última elección del usuario)
+      if (r.periodo === periodo) { g.comercio = i.comercio; g.categoria = i.categoria }
       grupos.set(k, g)
     }
   }
@@ -211,8 +216,14 @@ export function analizarPeriodo(
     }
     const dosIguales = meses.length === 2 && seguidos(meses[0], meses[1]) && Math.abs(montos[1] - montos[0]) <= montos[0] * 0.05
     const repetida = pocasVeces && sinSaltos && (meses.length >= 3 || dosIguales) && meses.length >= 0.6 * disponibles
-    const posible = !repetida && g.debito
-    if (!repetida && !posible) continue
+    // Manda la categoría que eligió el usuario: en Suscripciones, entra; en
+    // otra categoría, solo si el banco lo marca como débito automático; sin
+    // categoría, si se repite (sugerencia para marcarla)
+    const origen: Suscripcion['origen'] | null = enCatSusc(g.categoria) ? 'categoria'
+      : g.debito ? 'debito'
+      : !g.categoria && repetida ? 'detectada'
+      : null
+    if (!origen) continue
     const ultimo = montos[montos.length - 1]
     const anterior = montos.length > 1 ? montos[montos.length - 2] : null
     suscripciones.push({
@@ -225,7 +236,7 @@ export function analizarPeriodo(
       variacionPct: anterior ? ((ultimo - anterior) / anterior) * 100 : null,
       meses,
       debito: g.debito,
-      confianza: repetida ? 'confirmada' : 'posible',
+      origen,
       categoria: g.categoria,
     })
   }
@@ -248,48 +259,25 @@ export function analizarPeriodo(
   // ── Gastos hormiga (ver interfaz Hormiga)
   const cfg = { ...HORMIGA_DEFAULT, ...s.hormiga }
   const clavesSusc = new Set(suscripciones.map((x) => x.clave.split('|')[0]))
-  const sueltas = gastos.filter((i) => !esCuota(i) && !clavesSusc.has(claveComercio(i.comercio)))
-  const porHabito = new Map<string, typeof sueltas>()
-  for (const i of sueltas) {
-    const k = claveHabito(i.comercio)
-    porHabito.set(k, [...(porHabito.get(k) ?? []), i])
-  }
-  const habitos: Habito[] = []
-  const enHabito = new Set<string>()
-  for (const [k, xs] of porHabito) {
-    if (xs.length < cfg.minCompras) continue
-    enHabito.add(k)
-    const totalBase = xs.reduce((a, i) => a + enBase(i), 0)
-    // Nombre: el de una compra que no sea propina, si la hay
-    const nombre = (xs.find((i) => claveComercio(i.comercio) === k) ?? xs[0]).comercio
-    habitos.push({
-      clave: k, comercio: nombre, veces: xs.length, totalBase, ticketBase: totalBase / xs.length,
-      anualBase: totalBase * 12, pct: pct(totalBase),
-    })
-  }
-  habitos.sort((a, b) => b.totalBase - a.totalBase)
   const topeBase = toBase(cfg.topeUsd, 'USD', base, s, periodo)
-  const chicas = sueltas.filter((i) => !enHabito.has(claveHabito(i.comercio)) && enBase(i) <= topeBase)
+  const chicas = gastos.filter((i) => !esCuota(i) && !clavesSusc.has(claveComercio(i.comercio)) && enBase(i) <= topeBase)
   const chicasPorComercio = new Map<string, ComercioTotal>()
   for (const i of chicas) {
     const k = claveHabito(i.comercio)
-    const c = chicasPorComercio.get(k) ?? { clave: k, comercio: i.comercio, veces: 0, totalBase: 0, pct: 0 }
+    // "Rappi (propina)" se muestra como Rappi
+    const nombre = i.comercio.replace(/\s*\(?\bpropinas?\b\)?/i, '').trim() || i.comercio
+    const c = chicasPorComercio.get(k) ?? { clave: k, comercio: nombre, veces: 0, totalBase: 0, pct: 0 }
     c.veces += 1
     c.totalBase += enBase(i)
     chicasPorComercio.set(k, c)
   }
-  const chicasTotal = chicas.reduce((a, i) => a + enBase(i), 0)
-  const hormigaTotal = chicasTotal + habitos.reduce((a, h) => a + h.totalBase, 0)
+  const hormigaTotal = chicas.reduce((a, i) => a + enBase(i), 0)
   const hormiga: Hormiga = {
     topeUsd: cfg.topeUsd,
     topeBase,
-    minCompras: cfg.minCompras,
-    habitos,
-    chicas: {
-      cantidad: chicas.length,
-      totalBase: chicasTotal,
-      comercios: [...chicasPorComercio.values()].map((c) => ({ ...c, pct: pct(c.totalBase) })).sort((a, b) => b.totalBase - a.totalBase),
-    },
+    cantidad: chicas.length,
+    comercios: [...chicasPorComercio.values()].map((c) => ({ ...c, pct: pct(c.totalBase) }))
+      .sort((a, b) => b.totalBase - a.totalBase || b.veces - a.veces),
     totalBase: hormigaTotal,
     pctDelPeriodo: pct(hormigaTotal),
     anualBase: hormigaTotal * 12,
