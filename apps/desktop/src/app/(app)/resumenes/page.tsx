@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
-  Upload, FileText, Repeat, Bug, Store, CreditCard, Landmark, AlertCircle, Trash2,
+  Upload, FileText, Repeat, Bug, CreditCard, Landmark, AlertCircle, Trash2,
   Plus, Sparkles, TrendingUp, Loader2, CheckCircle2, CalendarClock, Megaphone, PieChart, Tags, Percent, GitCompareArrows, ListChecks,
 } from 'lucide-react'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
@@ -15,12 +15,12 @@ import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { addCompraCuotas, deleteCompraCuotas, restoreCompraCuotas, updateCompraCuotas } from '@finanzas/core/lib/cuotas'
 import { offerUndo } from '@finanzas/core/lib/undo'
 import { getCatFromSettings, monthLabel } from '@finanzas/core/lib/constants'
-import { CompraCuotas, Currency, Resumen, ResumenItem, Settings, Tarjeta } from '@finanzas/core/types'
+import { CompraCuotas, Currency, Resumen, Settings, Tarjeta } from '@finanzas/core/types'
 import { toBase } from '@finanzas/core/lib/currency'
 import { AnalisisFinanciacion, Comparativa, Variacion } from '@finanzas/core/lib/resumenExtras'
 import type { ConciliacionResumen } from '@finanzas/core/lib/useResumenes'
 import type { GastoRegistrado } from '@finanzas/core/lib/conciliacion'
-import { CompromisoMes, ETIQUETA_CARGO, conciliacion, mesCorto, montoCorto } from '@finanzas/core/lib/resumenAnalisis'
+import { CompromisoMes, ETIQUETA_CARGO, categoriasSuscripcion, conciliacion, mesCorto, montoCorto } from '@finanzas/core/lib/resumenAnalisis'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
@@ -121,7 +121,7 @@ export default function ResumenesPage() {
           <Card className="px-6 py-5">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <div className="eyebrow">Gastos en resúmenes · {mesLabel(a.periodo)}</div>
+                <div className="eyebrow">Consumos del resumen · {mesLabel(a.periodo)}</div>
                 <div className="mt-2 text-[28px] font-semibold tnum leading-none"><MoneyText amount={a.totalGastosBase} currency={base} animated /></div>
                 <div className="mt-2 text-xs text-muted">
                   {a.resumenes.length} {a.resumenes.length === 1 ? 'resumen' : 'resúmenes'} · {a.resumenes.reduce((n, x) => n + x.items.length, 0)} renglones
@@ -131,21 +131,13 @@ export default function ResumenesPage() {
                 {a.resumenes.map((res) => <ResumenChip key={res.id} r={res} onBorrar={() => r.borrar(res)} />)}
               </div>
             </div>
-            <div className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-3">
-              <Kpi icon={Repeat} tone="primary" label="Suscripciones / año" value={<MoneyText amount={a.suscripciones.reduce((t, x) => t + x.anualBase, 0)} currency={base} />} sub={`${a.suscripciones.length} detectadas`} />
-              <Kpi icon={Bug} tone="warning" label="Gastos hormiga" value={<MoneyText amount={a.hormiga.totalBase} currency={base} />} sub={`${a.hormiga.pctDelPeriodo.toFixed(1)}% del mes · ${a.hormiga.habitos.length} hábitos`} />
-              <Kpi icon={CreditCard} tone="expense" label="Cuotas del próximo resumen" value={<MoneyText amount={a.compromiso[0]?.totalBase ?? 0} currency={base} />}
-                sub={a.compromiso[0]?.cantidad != null ? `${a.compromiso[0].cantidad} cuotas · ya comprometido` : 'ya comprometido'} />
-              <Kpi icon={Landmark} tone="neutral" label="Impuestos y cargos" value={<MoneyText amount={a.cargos.totalBase} currency={base} />} sub={`${a.cargos.items.length} renglones`} />
-            </div>
           </Card>
 
           {a.resumenes.filter((res) => res.detalle).map((res) => <EstadoCuenta key={res.id} r={res} />)}
 
           {r.conciliaciones.map((c) => (
-            <ConciliacionSeccion key={c.resumen.id} c={c} tarjetas={s.tarjetas ?? []} s={s}
+            <ConciliacionSeccion key={c.resumen.id} c={c} tarjetas={s.tarjetas ?? []}
               onElegir={(id) => r.elegirTarjeta(c.resumen.emisor, id)}
-              onAgregar={(items, t) => r.agregarFaltantes(items, t)}
               onPasar={(cs, t) => r.pasarConsumos(cs, t)} />
           ))}
 
@@ -157,69 +149,53 @@ export default function ResumenesPage() {
           )}
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-            <Seccion icon={Repeat} titulo="Suscripciones y débitos" sub="Cobros que se repiten mes a mes" delay={0.04}>
+            <Seccion icon={Repeat} titulo="Suscripciones y débitos"
+              sub={categoriasSuscripcion(s).size > 0 ? 'Comercios de la categoría Suscripciones y débitos automáticos (se suman o sacan cambiando la categoría)' : 'Cree una categoría "Suscripciones" y asígnela a sus comercios'} delay={0.04}>
               {a.suscripciones.length === 0 ? (
-                <Vacio texto={r.periodos.length < 3 ? 'Con 3 meses de resúmenes se detectan con confianza.' : 'No se detectaron cobros recurrentes.'} />
-              ) : a.suscripciones.map((x) => (
-                <Fila key={x.clave}
-                  titulo={x.comercio}
-                  meta={<>{x.meses.length} {x.meses.length === 1 ? 'mes' : 'meses'}{x.debito ? ' · débito automático' : ''}{x.confianza === 'posible' ? ' · posible' : ''}</>}
-                  derecha={<>
-                    <div className="font-semibold tnum"><MoneyText amount={x.ultimo} currency={x.moneda} /><span className="text-muted-2 font-normal">/mes</span></div>
-                    <div className="text-[11px] text-muted tnum flex items-center justify-end gap-1.5">
-                      {x.variacionPct !== null && Math.abs(x.variacionPct) >= 1 && (
-                        <span className={cn('rounded-full px-1.5 py-px font-semibold', x.variacionPct > 0 ? 'bg-expense-soft text-expense' : 'bg-income-soft text-income')}>
-                          {x.variacionPct > 0 ? '+' : ''}{x.variacionPct.toFixed(0)}%
-                        </span>
+                <Vacio texto="No hay suscripciones este mes." />
+              ) : a.suscripciones.map((x) => {
+                const ids = [...categoriasSuscripcion(s)]
+                const destino = ids.find((id) => !s.categoriasGasto.some((g) => g.id === id)) ?? ids[0]
+                return (
+                  <Fila key={x.clave}
+                    titulo={x.comercio}
+                    meta={x.origen === 'debito' ? 'débito automático' : x.origen === 'detectada' ? `se repite ${x.meses.length} meses · sin categoría` : `${x.meses.length} ${x.meses.length === 1 ? 'mes' : 'meses'}`}
+                    derecha={<div className="flex items-center gap-3">
+                      {x.origen === 'detectada' && destino && (
+                        <Button size="sm" variant="secondary" onClick={() => r.recategorizar(x.clave.split('|')[0], x.comercio, destino)}>Es suscripción</Button>
                       )}
-                      <MoneyText amount={x.anualBase} currency={base} />/año
-                    </div>
-                  </>}
-                />
-              ))}
+                      <div>
+                        <div className="font-semibold tnum"><MoneyText amount={x.ultimo} currency={x.moneda} /><span className="text-muted-2 font-normal">/mes</span></div>
+                        <div className="text-[11px] text-muted tnum flex items-center justify-end gap-1.5">
+                          {x.variacionPct !== null && Math.abs(x.variacionPct) >= 1 && (
+                            <span className={cn('rounded-full px-1.5 py-px font-semibold', x.variacionPct > 0 ? 'bg-expense-soft text-expense' : 'bg-income-soft text-income')}>
+                              {x.variacionPct > 0 ? '+' : ''}{x.variacionPct.toFixed(0)}%
+                            </span>
+                          )}
+                          <MoneyText amount={x.anualBase} currency={base} />/año
+                        </div>
+                      </div>
+                    </div>}
+                  />
+                )
+              })}
             </Seccion>
 
             <Seccion icon={Bug} titulo="Gastos hormiga"
-              sub={<>Hábitos ({a.hormiga.minCompras}+ compras en el mes, propinas incluidas) y compras sueltas de hasta USD {a.hormiga.topeUsd} (≈ <MoneyText amount={a.hormiga.topeBase} currency={base} />)</>}
+              sub={<>Cada compra suelta de hasta USD {a.hormiga.topeUsd} (≈ <MoneyText amount={a.hormiga.topeBase} currency={base} />), sin cuotas ni suscripciones. El tope se cambia en Ajustes.</>}
               delay={0.12}>
-              {a.hormiga.totalBase === 0 ? <Vacio texto="Sin hábitos ni compras chicas este mes." ok /> : (
+              {a.hormiga.cantidad === 0 ? <Vacio texto="No hubo compras chicas este mes." ok /> : (
                 <>
                   <div className="mb-3 rounded-xl bg-unassigned-tint px-3 py-2.5 text-sm">
-                    Suman <b><MoneyText amount={a.hormiga.totalBase} currency={base} /></b>: el <b>{a.hormiga.pctDelPeriodo.toFixed(1)}%</b> del gasto del mes
+                    <b>{a.hormiga.cantidad} compras</b> por <b><MoneyText amount={a.hormiga.totalBase} currency={base} /></b>: el <b>{a.hormiga.pctDelPeriodo.toFixed(1)}%</b> del gasto del mes
                     {' '}(≈ <MoneyText amount={a.hormiga.anualBase} currency={base} /> al año).
                   </div>
-                  {a.hormiga.habitos.length > 0 && <div className="eyebrow !text-[10px] pt-1">Hábitos</div>}
-                  {a.hormiga.habitos.map((h) => (
-                    <Fila key={h.clave} titulo={h.comercio}
-                      meta={<>{h.veces} compras · ticket promedio <MoneyText amount={h.ticketBase} currency={base} /> · {h.pct.toFixed(1)}% del mes</>}
-                      derecha={<>
-                        <div className="font-semibold tnum"><MoneyText amount={h.totalBase} currency={base} /></div>
-                        <div className="text-[11px] text-muted tnum"><MoneyText amount={h.anualBase} currency={base} />/año</div>
-                      </>} />
+                  {a.hormiga.comercios.slice(0, 6).map((c) => (
+                    <Fila key={c.clave} titulo={c.comercio} meta={`${c.veces} ${c.veces === 1 ? 'compra' : 'compras'}`}
+                      derecha={<div className="font-semibold tnum"><MoneyText amount={c.totalBase} currency={base} /></div>} />
                   ))}
-                  {a.hormiga.chicas.cantidad > 0 && (
-                    <>
-                      <div className="eyebrow !text-[10px] pt-3">Compras chicas sueltas · {a.hormiga.chicas.cantidad} por <MoneyText amount={a.hormiga.chicas.totalBase} currency={base} /></div>
-                      {a.hormiga.chicas.comercios.slice(0, 6).map((c) => (
-                        <Fila key={c.clave} titulo={c.comercio} meta={`${c.veces} ${c.veces === 1 ? 'compra' : 'compras'}`}
-                          derecha={<div className="font-semibold tnum"><MoneyText amount={c.totalBase} currency={base} /></div>} />
-                      ))}
-                    </>
-                  )}
                 </>
               )}
-            </Seccion>
-
-            <Seccion icon={Store} titulo="Dónde se va la plata" sub="Comercios con más gasto en el período" delay={0.16}>
-              {a.topComercios.slice(0, 8).map((c, i) => (
-                <div key={c.clave} className="py-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="truncate font-medium">{c.comercio}<span className="ml-2 text-xs text-muted-2">{c.veces}×</span></span>
-                    <span className="tnum font-semibold"><MoneyText amount={c.totalBase} currency={base} /></span>
-                  </div>
-                  <ProgressBar value={c.pct} className="mt-1.5" height={5} color={i === 0 ? 'var(--primary)' : 'color-mix(in srgb, var(--primary) 55%, transparent)'} />
-                </div>
-              ))}
             </Seccion>
 
             <Seccion icon={CreditCard} titulo="Cuotas en curso"
@@ -475,26 +451,6 @@ function ResumenChip({ r, onBorrar }: { r: Resumen; onBorrar: () => void }) {
   )
 }
 
-const KPI_TONES = {
-  primary: 'bg-primary/12 text-primary', warning: 'bg-unassigned-soft text-unassigned',
-  expense: 'bg-expense-soft text-expense', neutral: 'bg-surface-2 text-muted',
-}
-
-function Kpi({ icon: Icon, tone, label, value, sub }: {
-  icon: React.ComponentType<{ className?: string }>; tone: keyof typeof KPI_TONES; label: string; value: React.ReactNode; sub: string
-}) {
-  return (
-    <div className="rounded-2xl bg-surface-2 px-4 py-3">
-      <div className="flex items-center gap-2">
-        <span className={cn('h-7 w-7 rounded-lg inline-flex items-center justify-center', KPI_TONES[tone])}><Icon className="h-3.5 w-3.5" /></span>
-        <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">{label}</span>
-      </div>
-      <div className="mt-2 text-lg font-semibold tnum truncate">{value}</div>
-      <div className="text-[11px] text-muted">{sub}</div>
-    </div>
-  )
-}
-
 function Seccion({ icon: Icon, titulo, sub, delay, children }: {
   icon: React.ComponentType<{ className?: string }>; titulo: string; sub: React.ReactNode; delay?: number; children: React.ReactNode
 }) {
@@ -536,18 +492,16 @@ function Vacio({ texto, ok }: { texto: string; ok?: boolean }) {
 const signo = (n: number) => (n > 0 ? '+' : '')
 const pctTxt = (n: number | null) => (n === null ? '—' : `${signo(n)}${n.toFixed(0)}%`)
 
-function ConciliacionSeccion({ c, tarjetas, s, onElegir, onAgregar, onPasar }: {
-  c: ConciliacionResumen; tarjetas: Tarjeta[]; s: Settings
+function ConciliacionSeccion({ c, tarjetas, onElegir, onPasar }: {
+  c: ConciliacionResumen; tarjetas: Tarjeta[]
   onElegir: (tarjetaId: string) => void
-  onAgregar: (items: ResumenItem[], t: Tarjeta) => Promise<void>
   onPasar: (cs: GastoRegistrado[], t: Tarjeta) => Promise<void>
 }) {
   const [busy, setBusy] = useState(false)
   const correr = async (fn: () => Promise<void>) => { setBusy(true); try { await fn() } finally { setBusy(false) } }
   const res = c.resultado
   const t = c.tarjeta
-  const cat = (id: string | null) => (id ? getCatFromSettings(id, s)?.nombre : undefined) ?? 'sin categoría'
-  const sub = res ? <>Del {fechaCorta(res.desde)} al {fechaCorta(res.hasta)} · gastos registrados con tarjeta de crédito (efectivo, débito y transferencias no figuran en el resumen)</> : 'Consumos registrados con la tarjeta contra los del resumen'
+  const sub = <>Control de lo registrado con la tarjeta contra el resumen{res && <> (del {fechaCorta(res.desde)} al {fechaCorta(res.hasta)})</>}. No agrega nada: el gasto ya lo cubre el pago de la tarjeta.</>
   return (
     <Seccion icon={ListChecks} titulo={`Contraste con lo registrado · ${c.resumen.emisor}`} sub={sub} delay={0.025}>
       {tarjetas.length === 0 ? (
@@ -565,7 +519,6 @@ function ConciliacionSeccion({ c, tarjetas, s, onElegir, onAgregar, onPasar }: {
             {res && (
               <div className="flex gap-2 text-xs">
                 <span className="rounded-full bg-income-soft px-2 py-0.5 font-semibold text-income">{res.coinciden.length} coinciden</span>
-                <span className="rounded-full bg-expense-soft px-2 py-0.5 font-semibold text-expense">{res.faltan.length} sin registrar</span>
                 <span className="rounded-full bg-unassigned-soft px-2 py-0.5 font-semibold text-unassigned">{res.otroMedio.length} con otro medio</span>
               </div>
             )}
@@ -576,27 +529,12 @@ function ConciliacionSeccion({ c, tarjetas, s, onElegir, onAgregar, onPasar }: {
               {res.otroMedio.length > 0 && (
                 <div className="py-2">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="eyebrow !text-[10px]">Registrados con otro medio · agregarlos los duplicaría</div>
+                    <div className="eyebrow !text-[10px]">Registrados con otro medio (débito, efectivo o transferencia)</div>
                     <Button size="sm" variant="secondary" disabled={busy} onClick={() => correr(() => onPasar(res.otroMedio.map((x) => x.consumo), t))}>Pasar todos a {t.nombre}</Button>
                   </div>
                   {res.otroMedio.map(({ item, consumo }) => (
                     <Fila key={consumo.id} titulo={consumo.comercio || item.comercio} meta={<>{fechaCorta(item.fecha)} · en el resumen: {item.comercio}</>}
                       derecha={<span className="font-semibold tnum"><MoneyText amount={item.monto} currency={item.moneda} /></span>} />
-                  ))}
-                </div>
-              )}
-              {res.faltan.length > 0 && (
-                <div className="py-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="eyebrow !text-[10px]">En el resumen, sin registrar</div>
-                    <Button size="sm" variant="secondary" disabled={busy} onClick={() => correr(() => onAgregar(res.faltan, t))}><Plus className="h-3.5 w-3.5" /> Agregar todos</Button>
-                  </div>
-                  {res.faltan.map((i, k) => (
-                    <Fila key={i.id ?? k} titulo={i.comercio} meta={<>{fechaCorta(i.fecha)} · {cat(i.categoria)}</>}
-                      derecha={<span className="flex items-center gap-2">
-                        <span className="font-semibold tnum"><MoneyText amount={i.monto} currency={i.moneda} /></span>
-                        <Button size="sm" variant="ghost" disabled={busy} onClick={() => correr(() => onAgregar([i], t))} title="Agregar como consumo con la tarjeta"><Plus className="h-3.5 w-3.5" /></Button>
-                      </span>} />
                   ))}
                 </div>
               )}
@@ -614,8 +552,8 @@ function ConciliacionSeccion({ c, tarjetas, s, onElegir, onAgregar, onPasar }: {
                   {res.proximo.length} gasto{res.proximo.length !== 1 ? 's' : ''} con {t.nombre} posterior{res.proximo.length !== 1 ? 'es' : ''} al cierre: entra{res.proximo.length !== 1 ? 'n' : ''} en el próximo resumen.
                 </div>
               )}
-              {res.faltan.length === 0 && res.otroMedio.length === 0 && res.sobran.length === 0 && (
-                <Vacio texto="Todo lo registrado con la tarjeta coincide con el resumen." ok />
+              {res.otroMedio.length === 0 && res.sobran.length === 0 && (
+                <Vacio texto="Nada para revisar." ok />
               )}
             </>
           )}
@@ -658,7 +596,6 @@ function ComparativaSeccion({ c, base }: { c: Comparativa | null; base: Currency
         </div>
       </div>
       {lista('Categorías que más cambiaron', c.categorias)}
-      {lista('Comercios que más subieron', c.subas)}
       {c.nuevos.length > 0 && (
         <>
           <div className="eyebrow !text-[10px] pt-3">Nuevos este mes</div>

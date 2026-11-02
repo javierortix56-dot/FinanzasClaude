@@ -69,8 +69,8 @@ function rowToSettings(row: Record<string, any>): Settings {
     tarjetas: Array.isArray(appSettings.tarjetas)
       ? appSettings.tarjetas.filter((t: Tarjeta) => t && typeof t.id === 'string' && typeof t.nombre === 'string')
       : [],
-    hormiga: appSettings.hormiga && appSettings.hormiga.topeUsd > 0 && appSettings.hormiga.minCompras > 1
-      ? { topeUsd: Number(appSettings.hormiga.topeUsd), minCompras: Number(appSettings.hormiga.minCompras) }
+    hormiga: appSettings.hormiga && appSettings.hormiga.topeUsd > 0
+      ? { topeUsd: Number(appSettings.hormiga.topeUsd) }
       : undefined,
     categoriasCupo: Array.isArray(appSettings.categoriasCupo)
       ? appSettings.categoriasCupo.filter((c: unknown) => typeof c === 'string')

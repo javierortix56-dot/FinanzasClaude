@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
-  Upload, FileText, Repeat, Bug, Store, CreditCard, Landmark, AlertCircle, Trash2,
+  Upload, FileText, CreditCard, Landmark, AlertCircle, Trash2,
   Plus, Sparkles, CheckCircle2, Loader2, Megaphone,
 } from 'lucide-react'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
@@ -13,8 +13,8 @@ import { categoriasDeGasto, usuarioId } from '@finanzas/core/lib/resumenes'
 import { GrupoComercio } from '@finanzas/core/lib/comercioReglas'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { getCatFromSettings, monthLabel } from '@finanzas/core/lib/constants'
-import { CompraCuotas, Currency, Resumen, ResumenItem, Settings, Tarjeta } from '@finanzas/core/types'
-import { CompromisoMes, ETIQUETA_CARGO, conciliacion, mesCorto, montoCorto } from '@finanzas/core/lib/resumenAnalisis'
+import { CompraCuotas, Currency, Resumen, Settings, Tarjeta } from '@finanzas/core/types'
+import { AnalisisPeriodo, CompromisoMes, ETIQUETA_CARGO, Suscripcion, categoriasSuscripcion, conciliacion, mesCorto, montoCorto } from '@finanzas/core/lib/resumenAnalisis'
 import { toBase } from '@finanzas/core/lib/currency'
 import { AnalisisFinanciacion, Comparativa, Variacion } from '@finanzas/core/lib/resumenExtras'
 import type { ConciliacionResumen } from '@finanzas/core/lib/useResumenes'
@@ -118,195 +118,117 @@ export default function ResumenesTab() {
       ) : (
         <>
           <Card>
-            <p className="eyebrow">Gastos en resúmenes</p>
+            <p className="eyebrow">Consumos del resumen</p>
             <p className="mt-1.5 text-[24px] font-bold text-gray-900"><Money value={a.totalGastosBase} currency={base} /></p>
             <div className="mt-2.5 flex flex-wrap gap-1.5">
               {a.resumenes.map((res) => <ResumenChip key={res.id} r={res} onBorrar={() => r.borrar(res)} />)}
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <Kpi icon={Repeat} label="Suscrip. / año" value={<Money value={a.suscripciones.reduce((t, x) => t + x.anualBase, 0)} currency={base} />} />
-              <Kpi icon={Bug} label="Hormiga" value={<Money value={a.hormiga.totalBase} currency={base} />} />
-              <Kpi icon={CreditCard} label="Cuotas próx. mes" value={<Money value={a.compromiso[0]?.totalBase ?? 0} currency={base} />} />
-              <Kpi icon={Landmark} label="Impuestos y cargos" value={<Money value={a.cargos.totalBase} currency={base} />} />
             </div>
           </Card>
 
           <IndiceResumen />
 
-          <div id="r-estado" className="scroll-mt-2 space-y-3">{a.resumenes.filter((res) => res.detalle).map((res) => <EstadoCuenta key={res.id} r={res} />)}</div>
-
-          <div id="r-contraste" className="scroll-mt-2 space-y-3">{r.conciliaciones.map((c) => (
-            <ConciliacionCard key={c.resumen.id} c={c} tarjetas={s.tarjetas ?? []} s={s}
-              onElegir={(id) => r.elegirTarjeta(c.resumen.emisor, id)}
-              onAgregar={(items, t) => { haptic('success'); return r.agregarFaltantes(items, t) }}
-              onPasar={(cs, t) => { haptic('success'); return r.pasarConsumos(cs, t) }} />
-          ))}</div>
-
-          <div id="r-comparar" className="scroll-mt-2 space-y-3">
-            {r.extras && <ComparativaCard c={r.extras.comparativa} base={base} />}
+          <div id="r-estado" className="scroll-mt-12 space-y-3">
+            {a.resumenes.filter((res) => res.detalle).map((res) => <EstadoCuenta key={res.id} r={res} />)}
             {r.extras && <FinanciacionCard f={r.extras.financiacion} base={base} />}
           </div>
 
-          <div id="r-suscripciones" className="scroll-mt-2" />
-          <Card title="Suscripciones y débitos" delay={0.04}>
-            {a.suscripciones.length === 0 ? (
-              <Vacio texto={r.periodos.length < 3 ? 'Con 3 meses de resúmenes se detectan con confianza.' : 'No se detectaron cobros recurrentes.'} />
-            ) : a.suscripciones.map((x) => (
-              <Fila key={x.clave} titulo={x.comercio}
-                meta={`${x.meses.length} ${x.meses.length === 1 ? 'mes' : 'meses'}${x.debito ? ' · débito aut.' : ''}${x.confianza === 'posible' ? ' · posible' : ''}`}
-                derecha={<>
-                  <p className="text-[13px] font-bold text-gray-900"><Money value={x.ultimo} currency={x.moneda} /></p>
-                  <p className="text-[10.5px] text-gray-400 flex items-center justify-end gap-1">
-                    {x.variacionPct !== null && Math.abs(x.variacionPct) >= 1 && (
-                      <span className={`rounded-full px-1.5 font-bold ${x.variacionPct > 0 ? 'bg-rose-500/12 text-rose-500' : 'bg-emerald-500/12 text-emerald-600'}`}>
-                        {x.variacionPct > 0 ? '+' : ''}{x.variacionPct.toFixed(0)}%
-                      </span>
-                    )}
-                    <Money value={x.anualBase} currency={base} animated={false} />/año
+          <div id="r-comparar" className="scroll-mt-12">
+            {r.extras && <ComparativaCard c={r.extras.comparativa} base={base} />}
+          </div>
+
+          <div id="r-categorias" className="scroll-mt-12">
+            <CategoriasCard a={a} comercios={r.comercios} s={s} base={base}
+              onCambiar={(clave, nombre, categoria) => { haptic(); return r.recategorizar(clave, nombre, categoria) }} />
+          </div>
+
+          <div id="r-suscripciones" className="scroll-mt-12">
+            <SuscripcionesCard subs={a.suscripciones} s={s} base={base} pocosMeses={r.periodos.length < 3}
+              onMarcar={(clave, nombre, categoria) => { haptic('success'); return r.recategorizar(clave, nombre, categoria) }} />
+          </div>
+
+          <div id="r-hormiga" className="scroll-mt-12">
+            <Card title="Gastos hormiga" delay={0.12}>
+              <p className="mb-2 text-xs text-gray-500 leading-relaxed">
+                Compras sueltas de hasta <b className="text-gray-800">USD {a.hormiga.topeUsd}</b> (≈ <Money value={a.hormiga.topeBase} currency={base} animated={false} />) cada una,
+                sin cuotas ni suscripciones: kiosco, café, delivery, Uber corto, apps. De a una parecen poco; juntas suman. El tope se cambia en Ajustes.
+              </p>
+              {a.hormiga.cantidad === 0 ? <Vacio texto="No hubo compras chicas este mes." ok /> : (
+                <>
+                  <p className="mb-1.5 rounded-2xl bg-amber-500/10 px-3 py-2.5 text-xs text-gray-700 leading-relaxed">
+                    <b>{a.hormiga.cantidad} compras</b> por <b><Money value={a.hormiga.totalBase} currency={base} animated={false} /></b>:
+                    el {a.hormiga.pctDelPeriodo.toFixed(1)}% del mes (≈ <Money value={a.hormiga.anualBase} currency={base} animated={false} /> al año).
                   </p>
-                </>} />
-            ))}
-          </Card>
+                  {a.hormiga.comercios.slice(0, 5).map((c) => (
+                    <Fila key={c.clave} titulo={c.comercio} meta={`${c.veces} ${c.veces === 1 ? 'compra' : 'compras'}`}
+                      derecha={<p className="text-[13px] font-bold text-gray-900"><Money value={c.totalBase} currency={base} animated={false} /></p>} />
+                  ))}
+                </>
+              )}
+            </Card>
+          </div>
 
-          <div id="r-hormiga" className="scroll-mt-2" />
-          <Card title="Gastos hormiga" delay={0.12}>
-            {a.hormiga.totalBase === 0 ? <Vacio texto="Sin hábitos ni compras chicas este mes." ok /> : (
-              <>
-                <p className="mb-2 rounded-2xl bg-amber-500/10 px-3 py-2.5 text-xs text-gray-700 leading-relaxed">
-                  Suman <b><Money value={a.hormiga.totalBase} currency={base} /></b>: el <b>{a.hormiga.pctDelPeriodo.toFixed(1)}%</b> del mes
-                  (≈ <Money value={a.hormiga.anualBase} currency={base} /> al año).
-                </p>
-                {a.hormiga.habitos.length > 0 && <p className="eyebrow mt-1">Hábitos ({a.hormiga.minCompras}+ compras, con propinas)</p>}
-                {a.hormiga.habitos.map((h) => (
-                  <div key={h.clave} className="flex items-center justify-between gap-3 py-2 border-b border-hairline last:border-0">
-                    <div className="min-w-0">
-                      <p className="truncate text-[13px] font-semibold text-gray-900">{h.comercio}</p>
-                      <p className="truncate text-[11px] text-gray-400">{h.veces} compras · ticket <Money value={h.ticketBase} currency={base} animated={false} /></p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-[13px] font-bold text-gray-900"><Money value={h.totalBase} currency={base} /></p>
-                      <p className="text-[10.5px] text-gray-400"><Money value={h.anualBase} currency={base} animated={false} />/año</p>
-                    </div>
-                  </div>
-                ))}
-                {a.hormiga.chicas.cantidad > 0 && (
-                  <>
-                    <p className="eyebrow mt-3">Compras chicas sueltas (hasta USD {a.hormiga.topeUsd}) · {a.hormiga.chicas.cantidad}</p>
-                    {a.hormiga.chicas.comercios.slice(0, 5).map((c) => (
-                      <Fila key={c.clave} titulo={c.comercio} meta={`${c.veces} ${c.veces === 1 ? 'compra' : 'compras'}`}
-                        derecha={<p className="text-[13px] font-bold text-gray-900"><Money value={c.totalBase} currency={base} /></p>} />
-                    ))}
-                  </>
-                )}
-              </>
-            )}
-          </Card>
-
-          <Card title="Dónde se va la plata" delay={0.16}>
-            {a.topComercios.slice(0, 6).map((c, i) => (
-              <div key={c.clave} className="py-1.5">
-                <div className="flex items-center justify-between gap-2 text-[13px]">
-                  <span className="truncate font-semibold text-gray-900"><Store size={12} className="inline mr-1 text-gray-400" />{c.comercio}</span>
-                  <span className="font-bold text-gray-900 shrink-0"><Money value={c.totalBase} currency={base} /></span>
-                </div>
-                <ProgressBar value={c.pct} className="mt-1" height={5} color={i === 0 ? 'var(--primary)' : 'color-mix(in srgb, var(--primary) 55%, transparent)'} />
-              </div>
-            ))}
-          </Card>
-
-          <div id="r-cuotas" className="scroll-mt-2" />
+          <div id="r-cuotas" className="scroll-mt-12">
           <Card title="Cuotas en curso" delay={0.2}
               action={
                 <button onClick={() => { haptic(); setCuotaManual('nueva') }} className="text-[11px] font-bold text-primary inline-flex items-center gap-1">
                   <Plus size={12} /> Agregar cuota
                 </button>
               }>
-              <p className="mb-2 text-xs text-gray-500 leading-relaxed">
-                Falta pagar <b className="text-gray-900"><Money value={a.cuotas.reduce((t, c) => t + toBase(c.restante, c.moneda, base, s), 0)} currency={base} /></b>
-                {a.libreDesde && <> · la última cuota vence en <b className="text-gray-900">{monthLabel(a.libreDesde)}</b></>}
-              </p>
-              {a.compromiso.length > 0 && <CompromisoChart meses={a.compromiso} resto={a.compromisoResto} base={base} />}
-              {a.manualesDuplicadas.length > 0 && (
-                <p className="mb-2 rounded-2xl bg-gray-500/[0.06] px-3 py-2 text-[11px] text-gray-500 leading-relaxed">
-                  {a.manualesDuplicadas.map((d) => d.manual.descripcion).join(', ')} también {a.manualesDuplicadas.length === 1 ? 'está cargada' : 'están cargadas'} a mano:
-                  se {a.manualesDuplicadas.length === 1 ? 'cuenta' : 'cuentan'} una sola vez, con el dato del resumen.
-                </p>
+              {a.cuotas.length === 0 ? <Vacio texto="No hay cuotas en curso en este período." ok /> : (
+                <>
+                  <p className="mb-2 text-xs text-gray-500 leading-relaxed">
+                    Falta pagar <b className="text-gray-900"><Money value={a.cuotas.reduce((t, c) => t + toBase(c.restante, c.moneda, base, s), 0)} currency={base} /></b>
+                    {a.libreDesde && <> · la última cuota vence en <b className="text-gray-900">{monthLabel(a.libreDesde)}</b></>}
+                  </p>
+                  {a.compromiso.length > 0 && <CompromisoChart meses={a.compromiso} resto={a.compromisoResto} base={base} />}
+                  {a.manualesDuplicadas.length > 0 && (
+                    <p className="mb-2 text-[11px] text-gray-400 leading-relaxed">
+                      {a.manualesDuplicadas.map((d) => d.manual.descripcion).join(', ')}: cargada{a.manualesDuplicadas.length === 1 ? '' : 's'} a mano y en el resumen, se cuenta{a.manualesDuplicadas.length === 1 ? '' : 'n'} una vez.
+                    </p>
+                  )}
+                  <details>
+                    <summary className="py-1 text-[12px] font-semibold text-primary">Ver las {a.cuotas.length} cuotas</summary>
+                    {a.cuotas.map((c, k) => {
+                      const cuota = c.actual === 0 ? `empieza ${mesCorto(c.manual!.primerMes)}` : `${c.actual}/${c.total}`
+                      const fila = (
+                        <Fila key={k} titulo={c.comercio}
+                          meta={c.manual ? `manual · ${c.emisor} · ${cuota}` : c.refinanciacion ? `refinanciación · ${cuota}` : `${c.emisor} · ${cuota}`}
+                          derecha={<>
+                            <p className="text-[13px] font-bold text-gray-900"><Money value={c.montoCuota} currency={c.moneda} animated={false} /></p>
+                            <p className="text-[10.5px] text-gray-400">{c.restantes === 0 ? 'última cuota' : `hasta ${mesCorto(c.finMes)}`}</p>
+                          </>} />
+                      )
+                      return c.manual ? (
+                        <button key={k} type="button" onClick={() => { haptic(); setCuotaManual(c.manual!) }} className="block w-full text-left">{fila}</button>
+                      ) : fila
+                    })}
+                  </details>
+                </>
               )}
-              {a.cuotas.map((c, k) => {
-                const cat = c.categoria ? getCatFromSettings(c.categoria, s) : undefined
-                const cuota = c.actual === 0 ? `empieza ${mesCorto(c.manual!.primerMes)}` : `${c.actual}/${c.total}`
-                const fila = (
-                  <Fila key={k} titulo={c.comercio}
-                    meta={c.manual ? `manual · ${c.emisor} · ${cuota}`
-                      : c.refinanciacion ? `refinanciación · ${c.emisor} · ${cuota} · con intereses`
-                      : `${c.emisor} · ${cuota} · ${cat?.nombre ?? 'sin categoría'}`}
-                    derecha={<>
-                      <p className="text-[13px] font-bold text-gray-900"><Money value={c.montoCuota} currency={c.moneda} /></p>
-                      <p className="text-[10.5px] text-gray-400">
-                        {c.restantes === 0 ? 'última cuota' : <>hasta {mesCorto(c.finMes)} · restan <Money value={c.restante} currency={c.moneda} animated={false} /></>}
-                      </p>
-                    </>} />
-                )
-                return c.manual ? (
-                  <button key={k} type="button" onClick={() => { haptic(); setCuotaManual(c.manual!) }} className="block w-full text-left">{fila}</button>
-                ) : fila
-              })}
-              {a.cuotas.length === 0 && <Vacio texto="No hay cuotas en curso en este período." ok />}
           </Card>
+          </div>
 
-          <div id="r-categorias" className="scroll-mt-2" />
-          <Card title="Gasto por categoría" delay={0.22}>
-            {a.porCategoria.slice(0, 8).map((c) => {
-              const cat = c.clave ? getCatFromSettings(c.clave, s) : undefined
-              return (
-                <div key={c.clave ?? '-'} className="py-1.5">
-                  <div className="flex items-center justify-between gap-2 text-[13px]">
-                    <span className="truncate font-semibold text-gray-900">{cat?.nombre ?? 'Sin categoría'} <span className="text-[11px] font-normal text-gray-400">{c.pct.toFixed(0)}%</span></span>
-                    <span className="font-bold text-gray-900 shrink-0"><Money value={c.totalBase} currency={base} /></span>
-                  </div>
-                  <ProgressBar value={c.pct} className="mt-1" height={5} color={cat?.color ?? '#94a3b8'} />
-                </div>
-              )
-            })}
-            {a.porTitular.length > 0 && (
-              <div className="pt-2 grid grid-cols-2 gap-1.5">
-                {a.porTitular.map((t) => (
-                  <div key={t.clave ?? '-'} className="rounded-2xl bg-gray-500/[0.06] px-2.5 py-2">
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400 truncate">{t.clave ?? 'Sin titular'}</p>
-                    <p className="mt-1 text-[12.5px] font-bold text-gray-900 truncate"><Money value={t.totalBase} currency={base} /></p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-
-          <Card title="Comercios y categorías" delay={0.23}>
-            <p className="mb-1 text-xs text-gray-500">Cambie nombre o categoría: se aplica a todos los resúmenes y a los próximos.</p>
-            {r.comercios.map((g) => (
-              <EditorComercio key={g.clave} g={g} s={s} etiquetaNuevo="sin revisar"
-                onCambiar={(nombre, categoria) => { haptic(); return r.recategorizar(g.clave, nombre, categoria) }} />
-            ))}
-          </Card>
-
-          <div id="r-cargos" className="scroll-mt-2" />
+          <div id="r-cargos" className="scroll-mt-12">
           {a.cargos.items.length > 0 && (
-            <Card title="Impuestos, intereses y comisiones" delay={0.24}>
+            <Card title="Impuestos y cargos" delay={0.24}>
               <p className="mb-2 text-xs text-gray-500 leading-relaxed">
                 <b className="text-gray-900"><Money value={a.cargos.totalBase} currency={base} /></b> además de los consumos ({a.cargos.pctDelTotal.toFixed(1)}% de lo cobrado)
               </p>
-              <div className="mb-2 grid grid-cols-2 gap-1.5">
+              <div className="grid grid-cols-2 gap-1.5">
                 {a.cargos.porTipo.map((t) => (
                   <div key={t.tipo} className="rounded-2xl bg-gray-500/[0.06] px-2.5 py-2">
                     <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{ETIQUETA_CARGO[t.tipo].plural}</p>
-                    <p className="mt-1 text-[12.5px] font-bold text-gray-900 truncate"><Money value={t.totalBase} currency={base} /></p>
-                    <p className="text-[10px] text-gray-400">{t.cantidad} {t.cantidad === 1 ? 'renglón' : 'renglones'}</p>
+                    <p className="mt-1 text-[12.5px] font-bold text-gray-900 truncate"><Money value={t.totalBase} currency={base} animated={false} /></p>
                   </div>
                 ))}
               </div>
-              {a.cargos.items.map((c, k) => (
-                <Fila key={k} titulo={c.descripcion} meta={ETIQUETA_CARGO[c.tipo].singular}
-                  derecha={<p className={`text-[13px] font-bold ${c.montoBase < 0 ? 'text-emerald-600' : 'text-rose-500'}`}><Money value={c.montoBase} currency={base} /></p>} />
-              ))}
+              <details className="mt-2">
+                <summary className="py-1 text-[12px] font-semibold text-primary">Ver los {a.cargos.items.length} renglones</summary>
+                {a.cargos.items.map((c, k) => (
+                  <Fila key={k} titulo={c.descripcion} meta={ETIQUETA_CARGO[c.tipo].singular}
+                    derecha={<p className={`text-[13px] font-bold ${c.montoBase < 0 ? 'text-emerald-600' : 'text-gray-900'}`}><Money value={c.montoBase} currency={base} animated={false} /></p>} />
+                ))}
+              </details>
               {a.cargos.porTipo.some((t) => t.tipo === 'percepcion') && (
                 <p className="pt-2 text-[11px] text-gray-400 leading-relaxed">
                   Las percepciones (RG 5617) son a cuenta de Ganancias o Bienes Personales: se pueden computar o pedir la devolución a ARCA.
@@ -314,6 +236,13 @@ export default function ResumenesTab() {
               )}
             </Card>
           )}
+          </div>
+
+          <div id="r-contraste" className="scroll-mt-12 space-y-3">{r.conciliaciones.map((c) => (
+            <ConciliacionCard key={c.resumen.id} c={c} tarjetas={s.tarjetas ?? []}
+              onElegir={(id) => r.elegirTarjeta(c.resumen.emisor, id)}
+              onPasar={(cs, t) => { haptic('success'); return r.pasarConsumos(cs, t) }} />
+          ))}</div>
         </>
       )}
 
@@ -344,8 +273,8 @@ export default function ResumenesTab() {
 }
 
 const SECCIONES: [string, string][] = [
-  ['r-estado', 'Estado'], ['r-contraste', 'Contraste'], ['r-cuotas', 'Cuotas'], ['r-comparar', 'Comparar'],
-  ['r-suscripciones', 'Suscripciones'], ['r-hormiga', 'Hormiga'], ['r-categorias', 'Categorías'], ['r-cargos', 'Cargos'],
+  ['r-estado', 'Estado'], ['r-comparar', 'Comparar'], ['r-categorias', 'Categorías'], ['r-suscripciones', 'Suscripciones'],
+  ['r-hormiga', 'Hormiga'], ['r-cuotas', 'Cuotas'], ['r-cargos', 'Cargos'], ['r-contraste', 'Contraste'],
 ]
 
 /** Índice para saltar a cada sección del resumen (la pestaña es larga) */
@@ -375,15 +304,6 @@ function ResumenChip({ r, onBorrar }: { r: Resumen; onBorrar: () => void }) {
   )
 }
 
-function Kpi({ icon: Icon, label, value }: { icon: React.ComponentType<{ size?: number; className?: string }>; label: string; value: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl bg-gray-500/[0.06] px-3 py-2.5">
-      <p className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-gray-400"><Icon size={11} />{label}</p>
-      <p className="mt-1 text-[14px] font-bold text-gray-900 truncate">{value}</p>
-    </div>
-  )
-}
-
 function Fila({ titulo, meta, derecha }: { titulo: string; meta: string; derecha: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-3 py-2 border-b border-hairline last:border-0">
@@ -407,10 +327,9 @@ function Vacio({ texto, ok }: { texto: string; ok?: boolean }) {
 const signo = (n: number) => (n > 0 ? '+' : '')
 const pctTxt = (n: number | null) => (n === null ? '—' : `${signo(n)}${n.toFixed(0)}%`)
 
-function ConciliacionCard({ c, tarjetas, s, onElegir, onAgregar, onPasar }: {
-  c: ConciliacionResumen; tarjetas: Tarjeta[]; s: Settings
+function ConciliacionCard({ c, tarjetas, onElegir, onPasar }: {
+  c: ConciliacionResumen; tarjetas: Tarjeta[]
   onElegir: (tarjetaId: string) => void
-  onAgregar: (items: ResumenItem[], t: Tarjeta) => Promise<void>
   onPasar: (cs: GastoRegistrado[], t: Tarjeta) => Promise<void>
 }) {
   const [busy, setBusy] = useState(false)
@@ -418,11 +337,13 @@ function ConciliacionCard({ c, tarjetas, s, onElegir, onAgregar, onPasar }: {
   const res = c.resultado
   const t = c.tarjeta
   const fecha = (iso: string) => fechaCorta(iso)
-  const cat = (id: string | null) => (id ? getCatFromSettings(id, s)?.nombre : undefined) ?? 'sin categoría'
   return (
-    <Card title={`Contraste con lo registrado · ${c.resumen.emisor}`} delay={0.025}>
+    <Card title={`Contraste con lo registrado · ${c.resumen.emisor}`} delay={0.25}>
+      <p className="-mt-1 mb-2 text-[11px] text-gray-500 leading-relaxed">
+        Control de lo que registró con la tarjeta (a mano, ticket o captura) contra el resumen. No agrega nada: el gasto ya lo cubre el pago de la tarjeta.
+      </p>
       {tarjetas.length === 0 ? (
-        <Vacio texto="Cree la tarjeta en Ajustes → Tarjetas de crédito para contrastar el resumen con sus gastos." />
+        <Vacio texto="Cree la tarjeta en Ajustes → Tarjetas de crédito para contrastar." />
       ) : (
         <>
           <div className="flex items-center justify-between gap-2 pb-1">
@@ -435,45 +356,21 @@ function ConciliacionCard({ c, tarjetas, s, onElegir, onAgregar, onPasar }: {
           </div>
           {!t ? null : !res ? <div className="skeleton h-16 rounded-2xl" /> : (
             <>
-              <div className="grid grid-cols-3 gap-1.5 py-1.5">
-                <Kpi icon={CheckCircle2} label="Coinciden" value={String(res.coinciden.length)} />
-                <Kpi icon={AlertCircle} label="Sin registrar" value={String(res.faltan.length)} />
-                <Kpi icon={Repeat} label="Otro medio" value={String(res.otroMedio.length)} />
-              </div>
-              <p className="text-[11px] text-gray-400">Del {fecha(res.desde)} al {fecha(res.hasta)} · gastos registrados con tarjeta de crédito</p>
+              <p className="text-[12px] text-gray-700">
+                <b>{res.coinciden.length}</b> registrado{res.coinciden.length !== 1 ? 's' : ''} coincide{res.coinciden.length !== 1 ? 'n' : ''} con el resumen
+                <span className="text-gray-400"> · del {fecha(res.desde)} al {fecha(res.hasta)}</span>
+              </p>
 
               {res.otroMedio.length > 0 && (
                 <>
                   <div className="mt-3 flex items-center justify-between gap-2">
                     <p className="eyebrow">Registrados con otro medio</p>
-                    <button disabled={busy} onClick={() => correr(() => onPasar(res.otroMedio.map((x) => x.consumo), t))} className="text-[11px] font-bold text-primary disabled:opacity-50">Pasar todos a {t.nombre}</button>
+                    <button disabled={busy} onClick={() => correr(() => onPasar(res.otroMedio.map((x) => x.consumo), t))} className="text-[11px] font-bold text-primary disabled:opacity-50">Pasar a {t.nombre}</button>
                   </div>
-                  <p className="text-[11px] text-gray-500">Figuran en el resumen pero los registró con otro medio. Agregarlos los duplicaría.</p>
+                  <p className="text-[11px] text-gray-500">Están en el resumen pero los registró como débito, efectivo o transferencia.</p>
                   {res.otroMedio.map(({ item, consumo }) => (
                     <Fila key={consumo.id} titulo={consumo.comercio || item.comercio} meta={`${fecha(item.fecha)} · en el resumen: ${item.comercio}`}
                       derecha={<p className="text-[13px] font-bold text-gray-900"><Money value={item.monto} currency={item.moneda} animated={false} /></p>} />
-                  ))}
-                </>
-              )}
-
-              {res.faltan.length > 0 && (
-                <>
-                  <div className="mt-3 flex items-center justify-between gap-2">
-                    <p className="eyebrow">En el resumen, sin registrar como consumo</p>
-                    <button disabled={busy} onClick={() => correr(() => onAgregar(res.faltan, t))} className="text-[11px] font-bold text-primary disabled:opacity-50">Agregar todos</button>
-                  </div>
-                  {res.faltan.map((i, k) => (
-                    <div key={i.id ?? k} className="flex items-center justify-between gap-2 py-2 border-b border-hairline last:border-0">
-                      <div className="min-w-0">
-                        <p className="truncate text-[13px] font-semibold text-gray-900">{i.comercio}</p>
-                        <p className="truncate text-[11px] text-gray-400">{fecha(i.fecha)} · {cat(i.categoria)}</p>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-[13px] font-bold text-gray-900"><Money value={i.monto} currency={i.moneda} animated={false} /></span>
-                        <button disabled={busy} onClick={() => correr(() => onAgregar([i], t))} aria-label={`Agregar ${i.comercio}`}
-                          className="h-7 w-7 rounded-lg glass inline-flex items-center justify-center text-primary disabled:opacity-50"><Plus size={13} /></button>
-                      </div>
-                    </div>
                   ))}
                 </>
               )}
@@ -491,14 +388,130 @@ function ConciliacionCard({ c, tarjetas, s, onElegir, onAgregar, onPasar }: {
 
               {res.proximo.length > 0 && (
                 <p className="mt-3 text-[11px] text-gray-500">
-                  {res.proximo.length} gasto{res.proximo.length !== 1 ? 's' : ''} con {t.nombre} posterior{res.proximo.length !== 1 ? 'es' : ''} al cierre: entra{res.proximo.length !== 1 ? 'n' : ''} en el próximo resumen.
+                  {res.proximo.length} gasto{res.proximo.length !== 1 ? 's' : ''} posterior{res.proximo.length !== 1 ? 'es' : ''} al cierre: entra{res.proximo.length !== 1 ? 'n' : ''} en el próximo resumen.
                 </p>
               )}
-              {res.faltan.length === 0 && res.otroMedio.length === 0 && res.sobran.length === 0 && (
-                <Vacio texto="Todo lo registrado con la tarjeta coincide con el resumen." ok />
+              {res.otroMedio.length === 0 && res.sobran.length === 0 && (
+                <Vacio texto="Nada para revisar." ok />
               )}
             </>
           )}
+        </>
+      )}
+    </Card>
+  )
+}
+
+/**
+ * Gasto por categoría: tocar una categoría muestra sus comercios, donde se
+ * cambia el nombre o la categoría (se aplica a todos los resúmenes).
+ */
+function CategoriasCard({ a, comercios, s, base, onCambiar }: {
+  a: AnalisisPeriodo; comercios: GrupoComercio[]; s: Settings; base: Currency
+  onCambiar: (clave: string, nombre: string, categoria: string | null) => unknown
+}) {
+  const [abierta, setAbierta] = useState<string | null>(null)
+  const sinRevisar = comercios.filter((g) => !g.categoria).length
+  return (
+    <Card title="Gasto por categoría" delay={0.06}>
+      <p className="-mt-1 mb-1.5 text-[11px] text-gray-500">
+        Toque una categoría para ver sus comercios y cambiarlos de categoría.
+        {sinRevisar > 0 && <b className="text-amber-600"> {sinRevisar} comercio{sinRevisar !== 1 ? 's' : ''} sin categoría.</b>}
+      </p>
+      {a.porCategoria.map((c) => {
+        const cat = c.clave ? getCatFromSettings(c.clave, s) : undefined
+        const k = c.clave ?? '__sin'
+        const abierto = abierta === k
+        const delGrupo = comercios.filter((g) => (g.categoria ?? null) === c.clave).sort((x, y) => y.total - x.total)
+        return (
+          <div key={k} className="border-b border-hairline last:border-0">
+            <button type="button" onClick={() => { haptic('light'); setAbierta(abierto ? null : k) }} className="w-full py-2 text-left">
+              <div className="flex items-center justify-between gap-2 text-[13px]">
+                <span className="truncate font-semibold text-gray-900">
+                  {cat?.nombre ?? 'Sin categoría'} <span className="text-[11px] font-normal text-gray-400">{c.pct.toFixed(0)}% · {delGrupo.length} comercio{delGrupo.length !== 1 ? 's' : ''}</span>
+                </span>
+                <span className="font-bold text-gray-900 shrink-0"><Money value={c.totalBase} currency={base} animated={false} /></span>
+              </div>
+              <ProgressBar value={c.pct} className="mt-1" height={5} color={cat?.color ?? '#94a3b8'} />
+            </button>
+            {abierto && (
+              <div className="mb-2 rounded-2xl bg-gray-500/[0.05] px-2.5">
+                {delGrupo.map((g) => <EditorComercio key={g.clave} g={g} s={s} onCambiar={(n, cat2) => onCambiar(g.clave, n, cat2)} />)}
+              </div>
+            )}
+          </div>
+        )
+      })}
+      {a.porTitular.length > 0 && (
+        <div className="pt-2 grid grid-cols-2 gap-1.5">
+          {a.porTitular.map((t) => (
+            <div key={t.clave ?? '-'} className="rounded-2xl bg-gray-500/[0.06] px-2.5 py-2">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400 truncate">{t.clave ?? 'Sin titular'}</p>
+              <p className="mt-1 text-[12.5px] font-bold text-gray-900 truncate"><Money value={t.totalBase} currency={base} animated={false} /></p>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+/**
+ * Suscripciones: los comercios de la categoría Suscripciones, los débitos
+ * automáticos y, como sugerencia, lo que se repite y no tiene categoría.
+ */
+function SuscripcionesCard({ subs, s, base, pocosMeses, onMarcar }: {
+  subs: Suscripcion[]; s: Settings; base: Currency; pocosMeses: boolean
+  onMarcar: (clave: string, nombre: string, categoria: string) => unknown
+}) {
+  const ids = [...categoriasSuscripcion(s)]
+  // Preferir la subcategoría (la que se usa en los movimientos)
+  const destino = ids.find((id) => !s.categoriasGasto.some((g) => g.id === id)) ?? ids[0]
+  const confirmadas = subs.filter((x) => x.origen !== 'detectada')
+  const sugeridas = subs.filter((x) => x.origen === 'detectada')
+  const anual = confirmadas.reduce((t, x) => t + x.anualBase, 0)
+  const fila = (x: Suscripcion) => (
+    <Fila key={x.clave} titulo={x.comercio}
+      meta={x.origen === 'debito' ? `débito automático · ${getCatFromSettings(x.categoria ?? '', s)?.nombre ?? 'sin categoría'}`
+        : x.origen === 'detectada' ? `se repite ${x.meses.length} meses · sin categoría` : `${x.meses.length} ${x.meses.length === 1 ? 'mes' : 'meses'}`}
+      derecha={<>
+        <p className="text-[13px] font-bold text-gray-900"><Money value={x.ultimo} currency={x.moneda} animated={false} /></p>
+        <p className="text-[10.5px] text-gray-400 flex items-center justify-end gap-1">
+          {x.variacionPct !== null && Math.abs(x.variacionPct) >= 1 && (
+            <span className={`rounded-full px-1.5 font-bold ${x.variacionPct > 0 ? 'bg-rose-500/12 text-rose-500' : 'bg-emerald-500/12 text-emerald-600'}`}>
+              {x.variacionPct > 0 ? '+' : ''}{x.variacionPct.toFixed(0)}%
+            </span>
+          )}
+          <Money value={x.anualBase} currency={base} animated={false} />/año
+        </p>
+      </>} />
+  )
+  return (
+    <Card title="Suscripciones y débitos" delay={0.1}>
+      <p className="-mt-1 mb-1.5 text-[11px] text-gray-500 leading-relaxed">
+        {ids.length > 0
+          ? 'Los comercios de la categoría Suscripciones y los débitos automáticos. Para sumar o sacar uno, cambie su categoría en Gasto por categoría.'
+          : 'Cree una categoría "Suscripciones" (Ajustes → Categorías de gasto) y asígnela a sus comercios: aparecen acá.'}
+      </p>
+      {confirmadas.length > 0 && (
+        <p className="mb-1 text-xs text-gray-700">Total ≈ <b><Money value={anual} currency={base} animated={false} /></b> al año</p>
+      )}
+      {confirmadas.map(fila)}
+      {confirmadas.length === 0 && sugeridas.length === 0 && (
+        <Vacio texto={pocosMeses ? 'Asigne la categoría a sus suscripciones; con 3 meses también se detectan solas.' : 'No hay suscripciones este mes.'} />
+      )}
+      {sugeridas.length > 0 && (
+        <>
+          <p className="eyebrow mt-3">¿Son suscripciones?</p>
+          {sugeridas.map((x) => (
+            <div key={x.clave} className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">{fila(x)}</div>
+              {destino && (
+                <button type="button" onClick={() => onMarcar(x.clave.split('|')[0], x.comercio, destino)}
+                  className="shrink-0 h-7 px-2.5 rounded-full bg-primary/12 text-primary text-[11px] font-bold">Sí</button>
+              )}
+            </div>
+          ))}
         </>
       )}
     </Card>
@@ -519,7 +532,7 @@ function ComparativaCard({ c, base }: { c: Comparativa | null; base: Currency })
   const lista = (titulo: string, xs: Variacion[]) => xs.length > 0 && (
     <>
       <p className="eyebrow mt-3">{titulo}</p>
-      {xs.slice(0, 4).map((v) => (
+      {xs.slice(0, 3).map((v) => (
         <Fila key={v.clave ?? '-'} titulo={v.nombre} meta={`antes ${montoCorto(v.referenciaBase)} · ahora ${montoCorto(v.actualBase)}`}
           derecha={<p className={`text-[13px] font-bold ${v.difBase > 0 ? 'text-rose-500' : 'text-emerald-600'}`}>{signo(v.difBase)}<Money value={v.difBase} currency={base} animated={false} /></p>} />
       ))}
@@ -537,11 +550,10 @@ function ComparativaCard({ c, base }: { c: Comparativa | null; base: Currency })
         {base !== 'USD' && t.vsPromedioUsdPct !== null && <> · en dólares {pctTxt(t.vsPromedioUsdPct)}</>}
       </p>
       {lista('Categorías que más cambiaron', c.categorias)}
-      {lista('Comercios que más subieron', c.subas)}
       {c.nuevos.length > 0 && (
         <>
           <p className="eyebrow mt-3">Nuevos este mes</p>
-          {c.nuevos.slice(0, 4).map((n) => (
+          {c.nuevos.slice(0, 3).map((n) => (
             <Fila key={n.comercio} titulo={n.comercio} meta="no aparecía antes"
               derecha={<p className="text-[13px] font-bold text-gray-900"><Money value={n.totalBase} currency={base} animated={false} /></p>} />
           ))}
@@ -554,7 +566,6 @@ function ComparativaCard({ c, base }: { c: Comparativa | null; base: Currency })
 function FinanciacionCard({ f, base }: { f: AnalisisFinanciacion; base: Currency }) {
   const a = f.actual
   if (a.totalBase === 0 && !f.siPagaMinimo) return null
-  const max = Math.max(...f.historial.map((h) => h.totalBase), 1)
   return (
     <Card title="Costo de financiarse" delay={0.035}>
       {a.totalBase > 0 ? (
@@ -575,25 +586,6 @@ function FinanciacionCard({ f, base }: { f: AnalisisFinanciacion; base: Currency
           Si paga solo el mínimo quedan <b><Money value={f.siPagaMinimo.financiadoBase} currency={base} animated={false} /></b> financiados
           al {pctFmt(f.siPagaMinimo.tem)} mensual: el mes que viene son ≈ <b><Money value={f.siPagaMinimo.interesBase} currency={base} animated={false} /></b> de intereses con IVA.
           Pagar el total los evita.
-        </p>
-      )}
-      {f.historial.length > 1 && (
-        <div className="mt-3">
-          <p className="eyebrow mb-1.5">Por mes</p>
-          <div className="flex items-end gap-1 h-16">
-            {f.historial.map((h) => (
-              <div key={h.periodo} className="h-full flex-1 min-w-0 flex flex-col items-center justify-end gap-0.5">
-                <span className="text-[9px] font-semibold text-gray-500 tnum">{h.totalBase > 0 ? montoCorto(h.totalBase) : '0'}</span>
-                <div className={`w-full rounded-t-md ${h.periodo === a.periodo ? 'bg-rose-500/80' : 'bg-rose-500/35'}`} style={{ height: `${Math.max((h.totalBase / max) * 70, 3)}%` }} />
-                <span className="text-[9px] text-gray-400">{mesCorto(h.periodo).split(' ')[0]}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      {(f.tna !== null || f.cftea !== null) && (
-        <p className="mt-2 text-[10.5px] text-gray-400">
-          {f.tna !== null && <>TNA {pctFmt(f.tna)}</>}{f.tna !== null && f.cftea !== null && ' · '}{f.cftea !== null && <>CFTEA con IVA {pctFmt(f.cftea)}</>}
         </p>
       )}
     </Card>
@@ -852,19 +844,6 @@ function EstadoCuenta({ r }: { r: Resumen }) {
         </div>
       )}
       <div className="mt-3"><Conciliacion r={r} /></div>
-      {d.planesOfrecidos.length > 0 && (
-        <div className="mt-3">
-          <p className="eyebrow mb-1.5">Refinanciación que ofrece el banco</p>
-          <div className="grid grid-cols-2 gap-1.5">
-            {d.planesOfrecidos.map((p) => (
-              <div key={p.cuotas} className="rounded-2xl bg-gray-500/[0.06] px-2.5 py-2">
-                <p className="text-[12.5px] font-bold text-gray-900">{p.cuotas} × <Money value={p.montoCuota} currency={r.moneda} animated={false} /></p>
-                <p className="text-[10px] text-gray-400">total <Money value={p.cuotas * p.montoCuota} currency={r.moneda} animated={false} /></p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
       {d.avisos.length > 0 && (
         <div className="mt-3 space-y-1.5">
           {d.avisos.map((av, k) => (

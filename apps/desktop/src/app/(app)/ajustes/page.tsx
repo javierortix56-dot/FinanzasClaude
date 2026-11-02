@@ -201,7 +201,7 @@ export default function AjustesPage() {
         <CuposAjustes settings={settings} onGuardado={() => showToast('Gastos con cupo guardados')} onError={() => showToast('Error al guardar', 'error')} />
       </Section>
 
-      <Section title="Gastos hormiga" sub="Criterio que usa el análisis de Resúmenes." delay={0.06}>
+      <Section title="Gastos hormiga" sub="Cada compra suelta de hasta este monto cuenta como gasto hormiga en el análisis de Resúmenes (sin cuotas ni suscripciones)." delay={0.06}>
         <HormigaAjustes settings={settings} onGuardado={() => showToast('Criterio de gastos hormiga guardado')} onError={() => showToast('Error al guardar', 'error')} />
       </Section>
 
@@ -369,17 +369,15 @@ function TarjetasAjustes({ settings }: { settings: Settings }) {
 function HormigaAjustes({ settings, onGuardado, onError }: { settings: Settings; onGuardado: () => void; onError: () => void }) {
   const actual = { ...HORMIGA_DEFAULT, ...settings.hormiga }
   const [tope, setTope] = useState(String(actual.topeUsd))
-  const [min, setMin] = useState(String(actual.minCompras))
   const [guardando, setGuardando] = useState(false)
   const topeN = parseFloat(tope.replace(',', '.'))
-  const minN = parseInt(min, 10)
-  const valido = topeN > 0 && minN >= 2
-  const cambiado = topeN !== actual.topeUsd || minN !== actual.minCompras
+  const valido = topeN > 0
+  const cambiado = topeN !== actual.topeUsd
 
   async function guardar() {
     setGuardando(true)
     try {
-      const hormiga = { topeUsd: topeN, minCompras: minN }
+      const hormiga = { topeUsd: topeN }
       await updateSettings('shared', { hormiga })
       useSettingsStore.getState().setSettings({ ...settings, hormiga })
       onGuardado()
@@ -392,9 +390,8 @@ function HormigaAjustes({ settings, onGuardado, onError }: { settings: Settings;
 
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (valido && cambiado) guardar() }}
-      className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] items-end gap-4">
+      className="grid grid-cols-1 sm:grid-cols-[1fr_auto] items-end gap-4">
       <RateInput id="hormiga-tope" label="Compra chica: hasta (USD)" value={tope} onChange={setTope} invalid={!(topeN > 0)} />
-      <RateInput id="hormiga-min" label="Hábito: desde (compras/mes)" value={min} onChange={setMin} invalid={!(minN >= 2)} />
       <Button type="submit" disabled={guardando || !valido || !cambiado}>
         <Save className="h-4 w-4" /> {guardando ? 'Guardando…' : 'Guardar'}
       </Button>
