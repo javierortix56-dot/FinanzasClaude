@@ -81,7 +81,8 @@ export default function AssignmentTab({ onScrollY }: { onScrollY?: (y: number) =
   const progressPercent    = totalEgresos > 0 ? (assignedCount / totalEgresos) * 100 : 0
   const allAssigned        = realUnassigned === 0 && totalEgresos > 0
 
-  // Auto-asignar: el plan (capacidad + cercanía por fecha) vive en core y lo
+  // Auto-asignar: el plan (capacidad + cercanía por fecha; divide un egreso en
+  // la menor cantidad de ingresos si uno solo no alcanza) vive en core y lo
   // comparten mobile y desktop.
   async function autoAssign() {
     const plan = planAutoAssign(ingresos, egresos, base, s)
@@ -89,10 +90,8 @@ export default function AssignmentTab({ onScrollY }: { onScrollY?: (y: number) =
     setAutoLoading(true)
     const previas = plan.map(({ exp }) => ({ id: exp.id!, asignaciones: exp.asignaciones }))
     try {
-      for (const { exp, ingresoId } of plan) {
-        await updateTransaction(exp.id!, {
-          asignaciones: [{ ingresoId, monto: exp.monto }],
-        })
+      for (const { exp, asignaciones } of plan) {
+        await updateTransaction(exp.id!, { asignaciones })
       }
       haptic('success')
       offerUndo(`${plan.length} egreso${plan.length !== 1 ? 's' : ''} asignado${plan.length !== 1 ? 's' : ''}`, async () => {
