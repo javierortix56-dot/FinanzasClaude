@@ -15,7 +15,7 @@ import { LineChart } from '@/components/charts/LineChart'
 import { InsightsList } from '@/components/InsightsList'
 import { fetchLastNMonths } from '@finanzas/core/lib/analytics'
 import { txToBase } from '@finanzas/core/lib/currency'
-import { cuentaEnCaja, cuentaEnCategorias } from '@finanzas/core/lib/tarjetas'
+import { aCategorias, cuentaEnCaja } from '@finanzas/core/lib/tarjetas'
 import { DEFAULT_SETTINGS } from '@finanzas/core/lib/settings'
 import { getCatFromSettings, monthLabel, shiftMonth } from '@finanzas/core/lib/constants'
 import { computeInsights } from '@finanzas/core/lib/insights'
@@ -66,8 +66,8 @@ export default function AnalisisPage() {
   const egresosPrev  = sumByType(prevTxs, 'egreso')
   const balancePrev  = ingresosPrev - egresosPrev
 
-  // Por categoría: el consumo cuenta en su categoría real; el pago de tarjeta no
-  const target = transactions.filter((t) => t.tipo === (tabCat === 'gastos' ? 'egreso' : 'ingreso') && cuentaEnCategorias(t))
+  // Por categoría: el consumo cuenta en su categoría real; del pago de tarjeta, solo lo que no son consumos (cuotas, saldo anterior, intereses)
+  const target = aCategorias(transactions).filter((t) => t.tipo === (tabCat === 'gastos' ? 'egreso' : 'ingreso'))
   const totalCat = target.reduce((s, t) => s + txToBase(t, base, settings), 0)
   const byCat = new Map<string, number>()
   for (const t of target) {

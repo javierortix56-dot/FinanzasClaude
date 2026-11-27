@@ -167,7 +167,7 @@ export default function PagoTarjetaSheet({ open, pago, onClose }: { open: boolea
                 ))}
                 {detalle.cuotas.map((c, i) => (
                   <div key={i} className="flex justify-between gap-3">
-                    <span className="truncate text-gray-500">{c.descripcion} · cuota {c.numero}/{c.totalCuotas}</span>
+                    <span className="truncate text-gray-500">{c.descripcion}{c.numero ? ` · cuota ${c.numero}/${c.totalCuotas}` : ''}</span>
                     <span className={`tabular-nums text-gray-700 ${blur}`}>{formatAmount(c.monto, p.moneda)}</span>
                   </div>
                 ))}
