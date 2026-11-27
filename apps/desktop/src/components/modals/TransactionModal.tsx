@@ -513,8 +513,10 @@ function PagoTarjetaForm({ pago, onClose }: { pago: Transaction; onClose: () => 
   }, [verDetalle, detalle, p, s])
 
   const abonoNum = evalExpr(abono) ?? NaN
-  const abonoValido = abonoNum >= 0 && abonoNum <= p.total + 0.005
+  // El total es una estimación: se puede pagar más
+  const abonoValido = abonoNum >= 0
   const pasa = abonoValido ? Math.max(p.total - abonoNum, 0) : 0
+  const demas = abonoValido ? Math.max(abonoNum - p.total, 0) : 0
 
   const ingresoOptions = useMemo(() => transactions
     .filter((t) => t.tipo === 'ingreso')
@@ -529,7 +531,7 @@ function PagoTarjetaForm({ pago, onClose }: { pago: Transaction; onClose: () => 
     }), [transactions, pago.id, base, s])
 
   async function handleSave() {
-    if (!abonoValido) return showToast(`El abono debe estar entre 0 y ${formatNum(p.total)}`, 'error')
+    if (!abonoValido) return showToast('El abono no puede ser negativo', 'error')
     const monto = Math.round(abonoNum * 100) / 100
     setSaving(true)
     try {
@@ -627,9 +629,11 @@ function PagoTarjetaForm({ pago, onClose }: { pago: Transaction; onClose: () => 
             className={cn('tnum', !abonoValido && 'border-expense/50 ring-4 ring-expense/10')}
           />
           <div className="mt-1.5 flex items-center justify-between text-[11px]">
-            {pasa > 0
+            {pasa > 0.005
               ? <span className="text-unassigned font-medium">Pasan <MoneyText amount={pasa} currency={p.moneda} /> a {monthLabel(siguiente)}</span>
-              : <span className="text-muted">Se paga el total</span>}
+              : demas > 0.005
+                ? <span className="text-muted">Pagás <MoneyText amount={demas} currency={p.moneda} /> más que el total</span>
+                : <span className="text-muted">Se paga el total</span>}
             {abonoNum !== p.total && (
               <button type="button" className="font-semibold text-primary" onClick={() => setAbono(String(p.total))}>Pagar total</button>
             )}

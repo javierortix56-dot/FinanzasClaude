@@ -60,8 +60,10 @@ export default function PagoTarjetaSheet({ open, pago, onClose }: { open: boolea
   }, [verDetalle, detalle, p, s])
 
   const abonoNum = evalExpr(abono) ?? NaN
-  const abonoValido = abonoNum >= 0 && abonoNum <= p.total + 0.005
+  // El total es una estimación: se puede pagar más
+  const abonoValido = abonoNum >= 0
   const pasa = abonoValido ? Math.max(p.total - abonoNum, 0) : 0
+  const demas = abonoValido ? Math.max(abonoNum - p.total, 0) : 0
   const dividido = pago.asignaciones.length > 1
 
   const ingresos = useMemo(() => transactions
@@ -179,7 +181,7 @@ export default function PagoTarjetaSheet({ open, pago, onClose }: { open: boolea
       </div>
 
       <div>
-        <FieldLabel hint={`— hasta ${formatAmount(p.total, p.moneda)}`}>Abono ({p.moneda})</FieldLabel>
+        <FieldLabel hint={`— total ${formatAmount(p.total, p.moneda)}`}>Abono ({p.moneda})</FieldLabel>
         <input
           inputMode="decimal"
           value={abono}
@@ -188,9 +190,11 @@ export default function PagoTarjetaSheet({ open, pago, onClose }: { open: boolea
           className={`${fieldClass} tabular-nums ${!abonoValido ? 'ring-2 ring-rose-500/40' : ''}`}
         />
         <div className="mt-1.5 flex items-center justify-between px-1 text-[11px]">
-          {pasa > 0
+          {pasa > 0.005
             ? <span className={`font-semibold text-amber-600 ${blur}`}>Pasan {formatAmount(pasa, p.moneda)} a {monthLabel(siguiente)}</span>
-            : <span className="text-gray-500">Se paga el total</span>}
+            : demas > 0.005
+              ? <span className={`text-gray-500 ${blur}`}>Pagás {formatAmount(demas, p.moneda)} más que el total</span>
+              : <span className="text-gray-500">Se paga el total</span>}
           {abonoNum !== p.total && (
             <button type="button" onClick={() => setAbono(String(p.total))} className="font-semibold text-primary">Pagar total</button>
           )}

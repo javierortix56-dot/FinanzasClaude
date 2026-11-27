@@ -327,11 +327,12 @@ export function planificarPagos(s: Settings, d: DatosPagos, mesVisto?: string, h
         }
 
         // Lo planificado a mano es lo que se va a PAGAR (el abono), no el total:
-        // si el resumen trae más, la diferencia pasa al mes siguiente
+        // si el resumen trae más, la diferencia pasa al mes siguiente. El total es una
+        // estimación (o el saldo del resumen): se puede pagar más, y eso no se recorta.
         const recienUnida = !!manualDelMes && actual === manualDelMes && !manualDelMes.pagoTarjeta
         const manual = recienUnida || !!actual?.pagoTarjeta?.abonoManual
-        const abono = manual ? Math.min(Math.max(actual!.monto, 0), total) : total
-        const pasa = r2(total - abono)
+        const abono = manual ? Math.max(actual!.monto, 0) : total
+        const pasa = r2(Math.max(total - abono, 0))
         // Lo que pasa genera intereses: con la tasa del resumen (TEM + IVA), estimados
         const temUltimo = [...misResumenes].sort((a, b) => b.periodo.localeCompare(a.periodo)).find((r) => r.detalle?.tem != null)?.detalle?.tem ?? null
         const tem = resumen?.detalle?.tem ?? temUltimo
@@ -346,7 +347,7 @@ export function planificarPagos(s: Settings, d: DatosPagos, mesVisto?: string, h
           consumos: consumosMes, cuotas: cuotasMes,
           saldoAnterior: r2(Math.max(total - consumosMes - cuotasMes, 0)),
           total,
-          abonoManual: manual && abono < total,
+          abonoManual: manual && Math.abs(abono - total) > 0.005,
           ...(planificado !== undefined ? { planificado } : {}),
           resumen: resumen ? { id: resumen.id, periodo: resumen.periodo, total: totalResumen!, tem } : null,
           ...(delCuadro !== undefined ? { cuotasDelResumen: ultimo!.periodo } : {}),
@@ -478,13 +479,14 @@ export function programarSyncPagos(delayMs = 1200) {
 
 /**
  * Fija cuánto se abona de un pago. Si es menos que el total, la diferencia
- * pasa al pago del mes siguiente.
+ * pasa al pago del mes siguiente. Se puede abonar más que el total (es una
+ * estimación): lo pagado de más no se recorta ni se arrastra.
  */
 export async function registrarAbono(tx: Transaction, abono: number): Promise<void> {
   const p = tx.pagoTarjeta
   if (!p || !tx.id) throw new Error('No es un pago de tarjeta')
-  const monto = r2(Math.min(Math.max(abono, 0), p.total))
-  const pagoTarjeta: PagoTarjeta = { ...p, abonoManual: monto < p.total }
+  const monto = r2(Math.max(abono, 0))
+  const pagoTarjeta: PagoTarjeta = { ...p, abonoManual: Math.abs(monto - p.total) > 0.005 }
   const asignaciones = reescalar(tx.asignaciones, monto)
   const { data: current } = await supabase.from('movimientos').select('children').eq('id', tx.id).single()
   const { error } = await supabase.from('movimientos').update({
