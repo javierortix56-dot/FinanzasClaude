@@ -604,7 +604,7 @@ function PagoTarjetaForm({ pago, onClose }: { pago: Transaction; onClose: () => 
                 ))}
                 {detalle.cuotas.map((c, i) => (
                   <div key={i} className="flex justify-between gap-3">
-                    <span className="truncate text-muted">{c.descripcion} · cuota {c.numero}/{c.totalCuotas}</span>
+                    <span className="truncate text-muted">{c.descripcion}{c.numero ? ` · cuota ${c.numero}/${c.totalCuotas}` : ''}</span>
                     <MoneyText amount={c.monto} currency={p.moneda} />
                   </div>
                 ))}

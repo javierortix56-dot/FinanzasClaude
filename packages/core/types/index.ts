@@ -100,6 +100,8 @@ export interface PagoTarjeta {
   resumen?: { id: string; periodo: string; total: number; tem?: number | null } | null
   /** Intereses estimados incluidos en saldoAnterior (por lo que pasó sin pagar el mes anterior) */
   interesesEstimados?: number
+  /** Período del resumen cuyo cuadro de "cuotas a vencer" dio las cuotas (sin él: las cargadas a mano) */
+  cuotasDelResumen?: string
 }
 
 export interface AssetSnapshot {

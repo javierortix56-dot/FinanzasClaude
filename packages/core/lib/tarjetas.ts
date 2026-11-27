@@ -349,6 +349,7 @@ export function planificarPagos(s: Settings, d: DatosPagos, mesVisto?: string, h
           abonoManual: manual && abono < total,
           ...(planificado !== undefined ? { planificado } : {}),
           resumen: resumen ? { id: resumen.id, periodo: resumen.periodo, total: totalResumen!, tem } : null,
+          ...(delCuadro !== undefined ? { cuotasDelResumen: ultimo!.periodo } : {}),
           ...(interesesDeEste > 0 && !resumen ? { interesesEstimados: interesesDeEste } : {}),
         }
         const deseado: Transaction = {
@@ -572,7 +573,8 @@ export async function eliminarTarjeta(s: Settings, id: string): Promise<number> 
 export interface DetallePago {
   /** Gastos del mes anterior que componen el pago */
   consumos: Transaction[]
-  cuotas: { descripcion: string; numero: number; totalCuotas: number; monto: number }[]
+  /** Sin número: el monto del mes según el cuadro del resumen (no detalla compra por compra) */
+  cuotas: { descripcion: string; numero?: number; totalCuotas?: number; monto: number }[]
 }
 
 export async function detallePago(p: PagoTarjeta, s: Settings): Promise<DetallePago> {
@@ -589,7 +591,10 @@ export async function detallePago(p: PagoTarjeta, s: Settings): Promise<DetalleP
   const t = tarjetaDe(p.tarjetaId, s)
   return {
     consumos: (consRes.data ?? []).map(rowToTx).filter(esConsumoTarjeta),
-    cuotas: t && p.mes >= t.desde
+    // Las cuotas salen del cuadro del banco: se muestra ese dato, no la lista cargada a mano
+    cuotas: p.cuotasDelResumen
+      ? (p.cuotas > 0 ? [{ descripcion: `Cuadro de cuotas del resumen de ${nombreMes(p.cuotasDelResumen)}`, monto: p.cuotas }] : [])
+      : t && p.mes >= t.desde
       ? cuotas
           .filter((c) => esDeTarjeta(c, t) && c.moneda === p.moneda && cuotaEnMes(c, p.mes) !== null)
           .map((c) => ({ descripcion: c.descripcion, numero: cuotaEnMes(c, p.mes)!, totalCuotas: c.totalCuotas, monto: c.montoCuota }))
@@ -603,25 +608,30 @@ const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', '
 const nombreMes = (mes: string) => MESES[Number(mes.slice(5, 7)) - 1] ?? mes
 
 /**
- * Desglose del pago para mostrar: si un resumen lo confirmó, el total es el
- * del banco; si no, es la estimación (lo usado con la tarjeta, cuotas y saldo
- * anterior). Con lo planificado a mano, el desvío.
+ * Desglose del pago: cuotas del mes + consumos del mes anterior + lo que quedó
+ * pendiente del mes anterior (+ sus intereses). Sin resumen, el total es la
+ * estimación; con resumen, el total es el del banco y el pendiente es lo que
+ * falta para llegar a él (incluye intereses, comisiones e impuestos).
+ * Las líneas siempre suman el total.
  */
 export function presentarPago(p: PagoTarjeta, abono: number) {
   const previo = shiftMonth(p.mes, -1)
   const siguiente = shiftMonth(p.mes, 1)
-  const lineas = p.resumen
-    ? [{ label: `Saldo del resumen de ${nombreMes(p.resumen.periodo)}`, monto: p.total }]
-    : [
-        { label: `Usado con la tarjeta en ${nombreMes(previo)}`, monto: p.consumos },
-        { label: `Cuotas de ${nombreMes(p.mes)}`, monto: p.cuotas },
-        {
-          label: p.interesesEstimados
-            ? `Lo que pasó de ${nombreMes(previo)} + intereses estimados`
-            : `Saldo impago de ${nombreMes(previo)}`,
-          monto: p.saldoAnterior,
-        },
-      ]
+  const intereses = p.resumen ? 0 : r2(p.interesesEstimados ?? 0)
+  const lineas: { label: string; monto: number }[] = [
+    { label: `Cuotas de ${nombreMes(p.mes)}`, monto: p.cuotas },
+    { label: `Consumos de ${nombreMes(previo)}`, monto: p.consumos },
+    {
+      label: p.resumen
+        ? `Pendiente de ${nombreMes(previo)} (con intereses y cargos del banco)`
+        : `Pendiente de ${nombreMes(previo)}`,
+      monto: r2(p.saldoAnterior - intereses),
+    },
+  ]
+  if (intereses > 0) lineas.push({ label: 'Intereses estimados del pendiente', monto: intereses })
+  // Con resumen: si el banco trae menos que cuotas + consumos registrados, la diferencia se ve
+  const ajuste = r2(p.total - lineas.reduce((a, l) => a + l.monto, 0))
+  if (Math.abs(ajuste) >= 0.01) lineas.push({ label: 'Ajuste según el resumen del banco', monto: ajuste })
   const estado = p.resumen
     ? `Total confirmado por el resumen de ${nombreMes(p.resumen.periodo)}`
     : 'Total estimado: se confirma al subir el resumen'
