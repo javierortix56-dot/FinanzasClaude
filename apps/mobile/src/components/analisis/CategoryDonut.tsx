@@ -13,7 +13,7 @@ import DonutChart, { DonutSlice } from './DonutChart'
 import { useSettingsStore } from '@finanzas/core/store/useSettingsStore'
 import Segmented from '@/components/ui/Segmented'
 import { Money } from '@/components/ui/AnimatedNumber'
-import { cuentaEnCategorias } from '@finanzas/core/lib/tarjetas'
+import { aCategorias } from '@finanzas/core/lib/tarjetas'
 import { CategoryIcon } from '@/lib/categoryIcons'
 
 // High-contrast palette: colours spaced across the full hue wheel
@@ -53,8 +53,8 @@ export default function CategoryDonut({ transactions, settings, monedaBase }: Pr
   const [selectedGroup,  setSelectedGroup]  = useState<string | null>(null)
   const [selectedSub,    setSelectedSub]    = useState<string | null>(null)
 
-  // Los pagos de tarjeta no son una categoría de gasto: sus consumos ya cuentan
-  const filtered = transactions.filter((t) => t.tipo === tipoTab && cuentaEnCategorias(t))
+  // Del pago de tarjeta cuenta solo lo que no son consumos (esos ya están en su categoría)
+  const filtered = aCategorias(transactions).filter((t) => t.tipo === tipoTab)
 
   // Árbol de grupos activos según el tipo seleccionado
   const groups: CategoryGroup[] = useMemo(() => {

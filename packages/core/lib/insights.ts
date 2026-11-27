@@ -1,6 +1,6 @@
 import { Budget, Currency, Settings, Transaction } from '../types'
 import { toBase, txToBase } from './currency'
-import { cuentaEnCaja, cuentaEnCategorias } from './tarjetas'
+import { aCategorias, cuentaEnCaja } from './tarjetas'
 import { getCatFromSettings, getParentGroup, monthLabel, shiftMonth } from './constants'
 
 // Insights en lenguaje natural (compartidos por mobile y desktop): frases
@@ -39,8 +39,8 @@ function sum(txs: Transaction[], tipo: 'ingreso' | 'egreso', base: Currency, s: 
 
 function porGrupo(txs: Transaction[], base: Currency, s: Settings) {
   const map = new Map<string, number>()
-  for (const t of txs) {
-    if (t.tipo !== 'egreso' || !cuentaEnCategorias(t)) continue
+  for (const t of aCategorias(txs)) {
+    if (t.tipo !== 'egreso') continue
     const id = getParentGroup(t.categoria, s.categoriasGasto)?.id ?? t.categoria
     map.set(id, (map.get(id) ?? 0) + txToBase(t, base, s))
   }
@@ -100,8 +100,8 @@ export function computeInsights({ transactions, prevTransactions, budgets, setti
   // 4. Presupuestos superados
   const superados = budgets.filter((b) => {
     if (b.mes !== month || b.limite <= 0) return false
-    const gastado = transactions
-      .filter((t) => t.tipo === 'egreso' && cuentaEnCategorias(t) && (t.categoria === b.categoria || getParentGroup(t.categoria, s.categoriasGasto)?.id === b.categoria))
+    const gastado = aCategorias(transactions)
+      .filter((t) => t.tipo === 'egreso' && (t.categoria === b.categoria || getParentGroup(t.categoria, s.categoriasGasto)?.id === b.categoria))
       .reduce((acc, t) => acc + txToBase(t, base, s), 0)
     return toBase(gastado, base, b.moneda as Currency, s, b.mes) > b.limite
   })

@@ -317,7 +317,8 @@ export default function TransactionModal() {
     })
   }
 
-  const canSave = montoValido && (tipo === 'ingreso' || payTab !== 'ingreso' || asigOk)
+  // Todo movimiento lleva categoría
+  const canSave = montoValido && !!categoria && (tipo === 'ingreso' || payTab !== 'ingreso' || asigOk)
 
   // ── Escanear ticket: con IA (comercio, total, fecha, categoría y tarjeta);
   // si la IA no responde, lectura en el dispositivo (solo total, fecha y comercio)

@@ -27,7 +27,7 @@ import { fetchLastNMonths } from '@finanzas/core/lib/analytics'
 import { computeInsights } from '@finanzas/core/lib/insights'
 import { calcularCupos, Cupo } from '@finanzas/core/lib/planVsReal'
 import { useConsumos } from '@finanzas/core/lib/useConsumos'
-import { cuentaEnCaja, cuentaEnCategorias, esConsumoTarjeta, necesitaRespaldo, saldoQuePasa } from '@finanzas/core/lib/tarjetas'
+import { aCategorias, cuentaEnCaja, esConsumoTarjeta, necesitaRespaldo, saldoQuePasa } from '@finanzas/core/lib/tarjetas'
 import { CategoryIcon } from '@finanzas/core/lib/categoryIcons'
 import { Currency, Transaction, Settings } from '@finanzas/core/types'
 import { PageScroll } from '@/components/shell/PageScroll'
@@ -144,8 +144,8 @@ export default function DashboardPage() {
   const ingresos = transactions.filter((t) => t.tipo === 'ingreso')
   // Caja: los consumos con tarjeta salen el mes siguiente (en el pago)
   const egresos = transactions.filter((t) => t.tipo === 'egreso' && cuentaEnCaja(t))
-  // Categorías y presupuestos: los consumos sí, los pagos de tarjeta no
-  const gastos = transactions.filter((t) => t.tipo === 'egreso' && cuentaEnCategorias(t))
+  // Categorías y presupuestos: los consumos sí; del pago de tarjeta, solo lo que no son consumos
+  const gastos = aCategorias(transactions).filter((t) => t.tipo === 'egreso')
   const totalGastos = gastos.reduce((sum, t) => sum + txToBase(t, base, s), 0)
   const totalIngresos = ingresos.reduce((sum, t) => sum + txToBase(t, base, s), 0)
   const totalEgresos = egresos.reduce((sum, t) => sum + txToBase(t, base, s), 0)

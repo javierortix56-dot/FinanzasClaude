@@ -28,7 +28,7 @@ const INSIGHT_ICONS: Record<InsightIcon, React.ReactNode> = {
   clock: <Clock size={15} />,
 }
 import { CategoryIcon } from '@/lib/categoryIcons'
-import { cuentaEnCaja, cuentaEnCategorias } from '@finanzas/core/lib/tarjetas'
+import { aCategorias, cuentaEnCaja } from '@finanzas/core/lib/tarjetas'
 import { Money } from '@/components/ui/AnimatedNumber'
 
 const MONTH_ABBR = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
@@ -117,10 +117,10 @@ export default function HistoricoTab() {
 
   // Gasto por grupo de categoría (mes visible) para "top categoría"
   const gruposMes = new Map<string, number>()
-  // Por categoría: los consumos con tarjeta sí, los pagos de tarjeta no
+  // Por categoría: los consumos con tarjeta sí; del pago de tarjeta, solo lo que no son consumos
   let gastoCatMes = 0
-  for (const t of transactions) {
-    if (t.tipo !== 'egreso' || !cuentaEnCategorias(t)) continue
+  for (const t of aCategorias(transactions)) {
+    if (t.tipo !== 'egreso') continue
     const grp = getParentGroup(t.categoria, s.categoriasGasto)
     const id = grp?.id ?? t.categoria
     gastoCatMes += txToBase(t, base, s)
@@ -137,8 +137,8 @@ export default function HistoricoTab() {
       const m   = shiftMonth(currentMonth, -i)
       const txs = i === 0 ? transactions : (monthlyData[m] ?? [])
       const idx = 5 - i
-      for (const t of txs) {
-        if (t.tipo !== 'egreso' || !cuentaEnCategorias(t)) continue
+      for (const t of aCategorias(txs)) {
+        if (t.tipo !== 'egreso') continue
         const grp = getParentGroup(t.categoria, s.categoriasGasto)
         const id = grp?.id ?? t.categoria
         if (!porGrupo.has(id)) porGrupo.set(id, Array(6).fill(0))
@@ -157,8 +157,8 @@ export default function HistoricoTab() {
   })()
 
   // ── Top 5 gastos del mes ──────────────────────────────────────────────────
-  const topGastos = [...transactions]
-    .filter((t) => t.tipo === 'egreso' && cuentaEnCategorias(t))
+  const topGastos = aCategorias(transactions)
+    .filter((t) => t.tipo === 'egreso')
     .map((t) => ({ t, montoBase: txToBase(t, base, s) }))
     .sort((a, b) => b.montoBase - a.montoBase)
     .slice(0, 5)

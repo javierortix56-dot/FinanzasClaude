@@ -46,9 +46,37 @@ export function cuentaEnCaja(t: Transaction): boolean {
   return !esConsumoTarjeta(t)
 }
 
-/** Cuenta para análisis por categoría y presupuestos (excluye pagos de tarjeta) */
+/**
+ * Cuenta para el plan por categoría (cupos) y el cierre: los pagos de tarjeta
+ * quedan afuera porque se muestran aparte. Para sumar gasto por categoría
+ * (análisis, inicio, presupuestos) usar `aCategorias`.
+ */
 export function cuentaEnCategorias(t: Transaction): boolean {
   return !esPagoTarjeta(t)
+}
+
+/**
+ * Lo que un movimiento aporta al gasto por categoría, en su moneda. Un pago de
+ * tarjeta aporta solo lo que no está en otra categoría: los consumos del mes
+ * ya cuentan en la suya (mercado, nafta…), así que al pago le toca lo demás
+ * (cuotas, saldo anterior e intereses) → la categoría de la tarjeta (Deudas).
+ * Se asume que el abono cubre primero los consumos.
+ */
+export function montoEnCategorias(t: Transaction): number {
+  const p = t.pagoTarjeta
+  if (!p) return t.monto
+  return r2(Math.max(t.monto - p.consumos, 0))
+}
+
+/** Movimientos tal como cuentan en las categorías (pagos de tarjeta con su parte de deuda) */
+export function aCategorias(txs: Transaction[]): Transaction[] {
+  const out: Transaction[] = []
+  for (const t of txs) {
+    if (!t.pagoTarjeta) { out.push(t); continue }
+    const monto = montoEnCategorias(t)
+    if (monto > 0) out.push({ ...t, monto })
+  }
+  return out
 }
 
 /**

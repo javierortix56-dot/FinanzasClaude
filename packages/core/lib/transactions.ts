@@ -130,6 +130,7 @@ export function subscribeToTransactions(
 }
 
 export async function addTransaction(data: Omit<Transaction, 'id'>): Promise<string> {
+  if (!data.categoria?.trim()) throw new Error('Falta la categoría')
   const { data: row, error } = await supabase
     .from('movimientos')
     .insert(txToRow(data))
@@ -144,6 +145,7 @@ export async function addTransaction(data: Omit<Transaction, 'id'>): Promise<str
 }
 
 export async function updateTransaction(id: string, data: Partial<Omit<Transaction, 'id'>>) {
+  if (data.categoria !== undefined && !data.categoria.trim()) throw new Error('Falta la categoría')
   const partial: Record<string, unknown> = {}
   if (data.tipo !== undefined) partial.type = data.tipo
   if (data.monto !== undefined) partial.amount = data.monto
