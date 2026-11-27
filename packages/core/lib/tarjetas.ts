@@ -575,7 +575,7 @@ export async function eliminarTarjeta(s: Settings, id: string): Promise<number> 
 export interface DetallePago {
   /** Gastos del mes anterior que componen el pago */
   consumos: Transaction[]
-  /** Sin número: el monto del mes según el cuadro del resumen (no detalla compra por compra) */
+  /** Sin número: monto del cuadro del resumen que no se puede atribuir a una compra */
   cuotas: { descripcion: string; numero?: number; totalCuotas?: number; monto: number }[]
 }
 
@@ -593,14 +593,63 @@ export async function detallePago(p: PagoTarjeta, s: Settings): Promise<DetalleP
   const t = tarjetaDe(p.tarjetaId, s)
   return {
     consumos: (consRes.data ?? []).map(rowToTx).filter(esConsumoTarjeta),
-    // Las cuotas salen del cuadro del banco: se muestra ese dato, no la lista cargada a mano
+    // Las cuotas salen del cuadro del banco: se muestran compra por compra con
+    // las del resumen; si no se pueden detallar, el monto del cuadro tal cual
     cuotas: p.cuotasDelResumen
-      ? (p.cuotas > 0 ? [{ descripcion: `Cuadro de cuotas del resumen de ${nombreMes(p.cuotasDelResumen)}`, monto: p.cuotas }] : [])
+      ? await cuotasDelCuadro(p, t)
       : t && p.mes >= t.desde
       ? cuotas
           .filter((c) => esDeTarjeta(c, t) && c.moneda === p.moneda && cuotaEnMes(c, p.mes) !== null)
           .map((c) => ({ descripcion: c.descripcion, numero: cuotaEnMes(c, p.mes)!, totalCuotas: c.totalCuotas, monto: c.montoCuota }))
       : [],
+  }
+}
+
+/** Meses entre dos 'YYYY-MM' (b − a) */
+const mesesEntre = (a: string, b: string) =>
+  (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(5, 7)) - Number(a.slice(5, 7))
+
+/**
+ * Las cuotas del pago compra por compra. El cuadro "cuotas a vencer" del banco
+ * solo trae el total por mes, pero el resumen lista cada compra en cuotas
+ * (cuota 5 de 12): la que corresponde al pago es la del resumen más los meses
+ * que pasaron, mientras no supere el total. La suma da el cuadro; si no, la
+ * diferencia se muestra aparte para que el detalle siempre cierre.
+ */
+async function cuotasDelCuadro(p: PagoTarjeta, t: Tarjeta | undefined): Promise<DetallePago['cuotas']> {
+  const respaldo = p.cuotas > 0
+    ? [{ descripcion: `Cuadro de cuotas del resumen de ${nombreMes(p.cuotasDelResumen!)}`, monto: p.cuotas }]
+    : []
+  if (!t || !p.cuotasDelResumen || p.cuotas <= 0) return respaldo
+  try {
+    const { data: res } = await supabase.from('resumenes').select('id, emisor')
+      .eq('tipo', 'tarjeta').eq('periodo', p.cuotasDelResumen)
+    const resumen = (res ?? []).find((r) => resumenEsDe(r.emisor as string, t))
+    if (!resumen) return respaldo
+    const { data: items, error } = await supabase.from('resumen_items')
+      .select('comercio, descripcion, monto, moneda, cuota_actual, cuota_total')
+      .eq('resumen_id', resumen.id).eq('moneda', p.moneda).gt('cuota_total', 0)
+    if (error || !items) return respaldo
+
+    // El cuadro del mes M−1 se paga en M; el resumen es del período `cuotasDelResumen`
+    const avance = mesesEntre(p.cuotasDelResumen, shiftMonth(p.mes, -1))
+    const lineas = items
+      .map((i) => ({
+        descripcion: ((i.comercio as string) || (i.descripcion as string) || 'Cuota').trim(),
+        numero: Number(i.cuota_actual) + avance,
+        totalCuotas: Number(i.cuota_total),
+        monto: Number(i.monto),
+      }))
+      .filter((l) => l.numero <= l.totalCuotas)
+      .sort((a, b) => b.monto - a.monto)
+    if (lineas.length === 0) return respaldo
+
+    const resto = r2(p.cuotas - lineas.reduce((a, l) => a + l.monto, 0))
+    // Cuotas de otras compras que el resumen no detalla
+    if (Math.abs(resto) >= 1) lineas.push({ descripcion: resto > 0 ? 'Otras cuotas del cuadro' : 'Ajuste del cuadro', numero: 0, totalCuotas: 0, monto: resto })
+    return lineas.map((l) => (l.numero ? l : { descripcion: l.descripcion, monto: l.monto }))
+  } catch {
+    return respaldo
   }
 }
 
