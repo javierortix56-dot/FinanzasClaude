@@ -119,7 +119,7 @@ export default function AsignacionesPage() {
     setBusy(true)
     try {
       await updateAsignacionesWithUndo(
-        plan.map(({ exp, ingresoId }) => ({ tx: exp, asignaciones: [{ ingresoId, monto: exp.monto }], tarjetaId: null })),
+        plan.map(({ exp, asignaciones }) => ({ tx: exp, asignaciones, tarjetaId: null })),
         `${plural(plan.length, 'egreso')} asignado${plan.length !== 1 ? 's' : ''}`,
       )
     } finally {
